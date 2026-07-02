@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Palette, Trash2, MoreHorizontal, Clock, Zap, Layers, Sparkles, Package, Megaphone, Search } from "lucide-react";
+import { Plus, Palette, Trash2, MoreHorizontal, Clock, Zap, Layers, Sparkles, Package, Megaphone, Search, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PromoteThisSheet } from "@/components/PromoteThisSheet";
 import {
@@ -58,16 +58,28 @@ function DesignCard({
   isNew,
   onDelete,
   onDuplicate,
+  onRename,
 }: {
   design: SelectDesign;
   isNew?: boolean;
   onDelete: (id: string) => void;
   onDuplicate: (design: SelectDesign) => void;
+  onRename: (id: string, newTitle: string) => void;
 }) {
   const router = useRouter();
   const data = design.data as DesignData;
   const aspect = data.width / data.height;
   const previewH = Math.round(140 / aspect);
+  const [renaming, setRenaming] = useState(false);
+  const [renameVal, setRenameVal] = useState(design.title);
+  const renameRef = useRef<HTMLInputElement>(null);
+
+  function commitRename(e: React.MouseEvent | React.FocusEvent | React.KeyboardEvent) {
+    e.stopPropagation();
+    const v = renameVal.trim();
+    if (v && v !== design.title) onRename(design.id, v);
+    setRenaming(false);
+  }
 
   return (
     <motion.div
@@ -80,11 +92,20 @@ function DesignCard({
           ? "border-orange-400 dark:border-orange-500 ring-2 ring-orange-400/30 dark:ring-orange-500/20"
           : "border-gray-200 dark:border-white/10"
       }`}
-      onClick={() => router.push(`/dashboard/design-studio/${design.id}`)}
+      onClick={() => !renaming && router.push(`/dashboard/design-studio/${design.id}`)}
     >
       {isNew && (
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
           <Sparkles className="w-2.5 h-2.5" /> NEW
+        </div>
+      )}
+
+      {/* Format badge */}
+      {data.presetName && (
+        <div className="absolute top-2 right-2 z-10">
+          <span className="text-[9px] font-bold uppercase tracking-wider bg-black/50 text-white px-1.5 py-0.5 rounded">
+            {data.presetName}
+          </span>
         </div>
       )}
 
@@ -98,18 +119,32 @@ function DesignCard({
           <img src={design.previewUrl} alt={design.title} className="w-full h-full object-cover" />
         ) : (
           <div
-            className="flex items-center justify-center text-gray-300 dark:text-gray-600 text-xs font-medium"
+            className="flex flex-col items-center justify-center gap-1 text-gray-400 dark:text-gray-600"
             style={{ width: "100%", height: "100%", background: data.background ?? "#fff" }}
           >
-            {data.presetName ?? "Design"}
+            <Palette className="w-6 h-6 opacity-40" />
+            <span className="text-[10px] font-medium opacity-60">{data.width}×{data.height}</span>
           </div>
         )}
       </div>
 
       {/* Info */}
-      <div className="p-3 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold truncate text-gray-900 dark:text-white">{design.title}</p>
+      <div className="p-3 flex items-start justify-between gap-2" onClick={e => renaming && e.stopPropagation()}>
+        <div className="min-w-0 flex-1">
+          {renaming ? (
+            <input
+              ref={renameRef}
+              autoFocus
+              value={renameVal}
+              onChange={e => setRenameVal(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={e => { if (e.key === "Enter") commitRename(e); if (e.key === "Escape") { setRenaming(false); setRenameVal(design.title); } }}
+              onClick={e => e.stopPropagation()}
+              className="w-full text-sm font-semibold bg-transparent border-b border-orange-400 outline-none text-gray-900 dark:text-white"
+            />
+          ) : (
+            <p className="text-sm font-semibold truncate text-gray-900 dark:text-white">{design.title}</p>
+          )}
           <p className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
             <Clock className="w-3 h-3" /> {timeAgo(design.updatedAt.toString())}
           </p>
@@ -121,6 +156,11 @@ function DesignCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={(e) => { e.stopPropagation(); setRenameVal(design.title); setRenaming(true); setTimeout(() => renameRef.current?.select(), 50); }}
+            >
+              <Pencil className="w-4 h-4 mr-2" /> Rename
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={(e) => { e.stopPropagation(); onDuplicate(design); }}
             >
@@ -257,6 +297,8 @@ export function DesignStudioLanding() {
   const [userProducts, setUserProducts] = useState<{ id: string; title: string }[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [promoteOpen, setPromoteOpen] = useState(false);
+  const [designSearch, setDesignSearch] = useState("");
+  const [designSort, setDesignSort] = useState<"newest" | "oldest" | "name">("newest");
 
   useEffect(() => {
     Promise.all([
@@ -308,6 +350,15 @@ export function DesignStudioLanding() {
   async function deleteDesign(id: string) {
     await fetch(`/api/designs/${id}`, { method: "DELETE" });
     setDesigns((prev) => prev.filter((d) => d.id !== id));
+  }
+
+  async function renameDesign(id: string, newTitle: string) {
+    setDesigns((prev) => prev.map((d) => d.id === id ? { ...d, title: newTitle } : d));
+    await fetch(`/api/designs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newTitle }),
+    });
   }
 
   async function deleteBundle(id: string) {
@@ -448,11 +499,36 @@ export function DesignStudioLanding() {
         ) : null}
 
         {/* Single Designs grid */}
-        {!loading && bundles.length > 0 && designs.length > 0 && (
-          <div className="flex items-center gap-2 mb-4">
-            <Palette className="w-4 h-4 text-orange-500" />
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">Single Designs</h2>
-            <span className="text-xs text-gray-400 ml-1">{designs.length} design{designs.length !== 1 ? "s" : ""}</span>
+        {!loading && designs.length > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Palette className="w-4 h-4 text-orange-500" />
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Single Designs</h2>
+              <span className="text-xs text-gray-400 ml-1">{designs.length} design{designs.length !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {designs.length > 4 && (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={designSearch}
+                    onChange={e => setDesignSearch(e.target.value)}
+                    placeholder="Search designs…"
+                    className="h-8 pl-8 pr-3 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-500 w-40"
+                  />
+                </div>
+              )}
+              <select
+                value={designSort}
+                onChange={e => setDesignSort(e.target.value as typeof designSort)}
+                className="h-8 px-2 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="name">A–Z</option>
+              </select>
+            </div>
           </div>
         )}
 
@@ -479,15 +555,26 @@ export function DesignStudioLanding() {
               <Plus className="w-4 h-4" /> Start a New Design →
             </Button>
           </div>
-        ) : designs.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-            <AnimatePresence>
-              {designs.map((d) => (
-                <DesignCard key={d.id} design={d} isNew={recentlyDuplicated.has(d.id)} onDelete={deleteDesign} onDuplicate={duplicateDesign} />
-              ))}
-            </AnimatePresence>
-          </div>
-        ) : null}
+        ) : designs.length > 0 ? (() => {
+          const filtered = designs
+            .filter(d => !designSearch || d.title.toLowerCase().includes(designSearch.toLowerCase()))
+            .sort((a, b) => {
+              if (designSort === "name") return a.title.localeCompare(b.title);
+              if (designSort === "oldest") return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+              return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+            });
+          return filtered.length === 0 ? (
+            <p className="text-sm text-gray-400 py-8 text-center">No designs match "{designSearch}"</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              <AnimatePresence>
+                {filtered.map((d) => (
+                  <DesignCard key={d.id} design={d} isNew={recentlyDuplicated.has(d.id)} onDelete={deleteDesign} onDuplicate={duplicateDesign} onRename={renameDesign} />
+                ))}
+              </AnimatePresence>
+            </div>
+          );
+        })() : null}
       </div>
 
       {/* New Design Dialog */}

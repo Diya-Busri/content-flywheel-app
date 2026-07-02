@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   Plus, Check, GripVertical, X, ChevronDown, Bookmark, BookmarkCheck,
   Calendar, Tag, StickyNote, Target, ListTodo, ChevronLeft, ChevronRight,
-  Trash2, Pencil, CheckCircle2
+  Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,13 @@ const DEFAULT_GOALS: Goal[] = [
   { id: "creators", label: "Creators Onboarded", target: 10, current: 0, unit: "", color: "bg-purple-500", deadline: "" },
   { id: "products", label: "Products Listed", target: 25, current: 0, unit: "", color: "bg-blue-500", deadline: "" },
 ];
+const STARTER_TASKS: { text: string; priority: Priority; category: string }[] = [
+  { text: "Record and post one short-form video today", priority: "high", category: "content" },
+  { text: "Reply to comments on last 3 posts", priority: "medium", category: "growth" },
+  { text: "Set up your first digital product", priority: "high", category: "admin" },
+  { text: "Share your store link on social media", priority: "medium", category: "growth" },
+  { text: "Write your welcome email sequence", priority: "medium", category: "content" },
+];
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function isOverdue(d?: string) { return !!d && new Date(d) < new Date(new Date().toDateString()); }
@@ -64,6 +71,12 @@ function fmtDate(d?: string) {
   if (t === today) return "Today";
   if (t === today + 86400000) return "Tomorrow";
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+function daysUntil(d?: string): number | null {
+  if (!d) return null;
+  const today = new Date(new Date().toDateString()).getTime();
+  const t = new Date(d).getTime();
+  return Math.round((t - today) / 86400000);
 }
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -160,14 +173,20 @@ function TodoTab() {
     return true;
   });
   const activeCount = todos.filter(t => !t.completed).length;
+  const overdueCount = todos.filter(t => !t.completed && isOverdue(t.dueDate)).length;
   const completedCount = todos.filter(t => t.completed).length;
   const progress = todos.length > 0 ? Math.round((completedCount / todos.length) * 100) : 0;
   const getCat = (id?: string) => CATEGORIES.find(c => c.id === id);
 
   return (
     <div className="max-w-2xl">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-3 flex-wrap">
         <p className="text-sm text-muted-foreground">{activeCount} task{activeCount !== 1 ? "s" : ""} remaining</p>
+        {overdueCount > 0 && (
+          <span className="flex items-center gap-1 text-xs font-medium text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
+            <AlertCircle className="w-3 h-3" />{overdueCount} overdue
+          </span>
+        )}
       </div>
 
       {todos.length > 0 && (
@@ -176,7 +195,7 @@ function TodoTab() {
             <span>{completedCount} of {todos.length} done</span><span>{progress}%</span>
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+            <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
         </div>
       )}
@@ -184,7 +203,10 @@ function TodoTab() {
       {/* Input */}
       <div className="mb-5 space-y-2">
         <div className="flex gap-2">
-          <Input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addTodo()} placeholder="Add a task… press Enter to save" className="flex-1" />
+          <div className="relative flex-1">
+            <Input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addTodo()} placeholder="Add a task…" className="flex-1 pr-10" />
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/50 font-mono pointer-events-none">⏎</span>
+          </div>
           <Button onClick={() => addTodo()} size="icon"><Plus className="w-4 h-4" /></Button>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
@@ -285,9 +307,32 @@ function TodoTab() {
 
       {/* List */}
       <div className="space-y-2">
-        {filtered.length === 0 && (
+        {filtered.length === 0 && todos.length === 0 && (
+          <div className="py-8">
+            <div className="text-center mb-5">
+              <p className="text-sm font-medium text-foreground mb-1">Nothing here yet</p>
+              <p className="text-xs text-muted-foreground">Add a task above, or pick one to get started:</p>
+            </div>
+            <div className="space-y-2">
+              {STARTER_TASKS.map((t, i) => {
+                const cat = getCat(t.category);
+                return (
+                  <button key={i} onClick={() => { setTodos(prev => [{ id: uid(), text: t.text, completed: false, priority: t.priority, category: t.category, createdAt: Date.now() }, ...prev]); }}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-dashed border-border hover:border-orange-500/40 hover:bg-orange-500/5 transition-all text-left group">
+                    <Zap className="w-4 h-4 text-orange-500 shrink-0" />
+                    <span className="flex-1 text-sm text-foreground">{t.text}</span>
+                    {cat && <span className={cn("text-xs px-2 py-0.5 rounded-full shrink-0", cat.color)}>{cat.name}</span>}
+                    <span className={cn("text-xs shrink-0", PRIORITY[t.priority].color)}>{PRIORITY[t.priority].label}</span>
+                    <Plus className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {filtered.length === 0 && todos.length > 0 && (
           <div className="text-center py-12 text-muted-foreground text-sm">
-            {filter === "completed" ? "No completed tasks yet." : filter === "active" ? "All done! Nothing left." : "Add your first task above."}
+            {filter === "completed" ? "No completed tasks yet." : filter === "active" ? "All done! Nothing left." : "No tasks match this filter."}
           </div>
         )}
         {filtered.map(todo => {
@@ -343,6 +388,7 @@ function NotesTab() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => { try { const n = localStorage.getItem("cf_notes"); if (n) { const parsed = JSON.parse(n); setNotes(parsed); if (parsed.length > 0) setActiveId(parsed[0].id); } } catch {} }, []);
   useEffect(() => { try { localStorage.setItem("cf_notes", JSON.stringify(notes)); } catch {} }, [notes]);
@@ -362,20 +408,37 @@ function NotesTab() {
   };
 
   const active = notes.find(n => n.id === activeId);
+  const wordCount = active?.body.trim() ? active.body.trim().split(/\s+/).length : 0;
+  const charCount = active?.body.length ?? 0;
+
+  const filteredNotes = search.trim()
+    ? notes.filter(n => n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase()))
+    : notes;
 
   return (
     <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[400px]">
       {/* Sidebar */}
       <div className="w-56 shrink-0 flex flex-col gap-2">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes…" className="w-full h-8 pl-7 pr-3 text-xs rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
+        </div>
+        {/* New note */}
         <div className="flex gap-2">
-          <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === "Enter" && createNote()} placeholder="Note title…" className="flex-1 h-8 text-sm" />
+          <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === "Enter" && createNote()} placeholder="New note title…" className="flex-1 h-8 text-sm" />
           <Button size="icon" className="h-8 w-8 shrink-0" onClick={createNote}><Plus className="w-4 h-4" /></Button>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-          {notes.length === 0 && <p className="text-xs text-muted-foreground px-1 pt-2">No notes yet. Create one above.</p>}
-          {notes.map(note => (
+          {filteredNotes.length === 0 && (
+            <p className="text-xs text-muted-foreground px-1 pt-2">
+              {search ? "No notes match your search." : "No notes yet. Create one above."}
+            </p>
+          )}
+          {filteredNotes.map(note => (
             <button key={note.id} onClick={() => setActiveId(note.id)} className={cn("w-full text-left px-3 py-2 rounded-lg border transition-colors group relative", activeId === note.id ? "bg-primary/10 border-primary/40 text-primary" : "bg-card border-border hover:bg-accent text-foreground")}>
               <p className="text-sm font-medium truncate pr-5">{note.title || "Untitled"}</p>
+              {note.body && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{note.body.slice(0, 60)}</p>}
               <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(note.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
               <button onClick={e => { e.stopPropagation(); deleteNote(note.id); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity">
                 <Trash2 className="w-3.5 h-3.5" />
@@ -393,7 +456,10 @@ function NotesTab() {
           <>
             <div className="flex items-center gap-2">
               <input value={active.title} onChange={e => updateNote(active.id, { title: e.target.value })} className="flex-1 text-xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground" placeholder="Note title" />
-              <span className="text-xs text-muted-foreground shrink-0">Auto-saved</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground">{wordCount}w · {charCount}c</span>
+                <span className="text-xs text-muted-foreground">Auto-saved</span>
+              </div>
             </div>
             <textarea value={active.body} onChange={e => updateNote(active.id, { body: e.target.value })}
               className="flex-1 resize-none bg-card border border-border rounded-lg p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring leading-relaxed"
@@ -445,8 +511,20 @@ function CalendarTab() {
   };
   const removeEvent = (id: string) => setEvents(prev => prev.filter(e => e.id !== id));
   const typeColor = (t: string) => CAL_TYPES.find(c => c.id === t)?.color ?? "bg-gray-500";
+  const typeTextColor = (t: string) => {
+    const map: Record<string, string> = { post: "text-purple-400", launch: "text-orange-400", task: "text-blue-400", other: "text-gray-400" };
+    return map[t] ?? "text-gray-400";
+  };
 
   const selectedEvents = selectedDate ? events.filter(e => e.date === selectedDate) : [];
+
+  // Upcoming events (next 14 days from today, sorted by date)
+  const todayStr = fmt(today);
+  const in14 = new Date(today); in14.setDate(in14.getDate() + 14);
+  const upcomingEvents = events
+    .filter(e => e.date >= todayStr && e.date <= fmt(in14))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 6);
 
   return (
     <div className="flex gap-6 flex-wrap lg:flex-nowrap">
@@ -465,19 +543,21 @@ function CalendarTab() {
         {/* Cells */}
         <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border border-border">
           {days.map((d, i) => {
-            if (!d) return <div key={`pad-${i}`} className="bg-muted/30 h-16 p-1" />;
+            if (!d) return <div key={`pad-${i}`} className="bg-muted/30 h-20 p-1" />;
             const dayEvents = eventsOn(d);
             const dateStr = fmt(d);
             const isSelected = selectedDate === dateStr;
             return (
               <div key={dateStr} onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                className={cn("bg-card h-16 p-1 cursor-pointer hover:bg-accent transition-colors", isSelected && "bg-primary/10 ring-1 ring-inset ring-primary/40")}>
-                <p className={cn("text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full", isToday(d) ? "bg-primary text-primary-foreground" : "text-foreground")}>{d.getDate()}</p>
-                <div className="flex flex-wrap gap-0.5 mt-0.5">
-                  {dayEvents.slice(0, 3).map(ev => (
-                    <span key={ev.id} className={cn("w-1.5 h-1.5 rounded-full", typeColor(ev.type))} title={ev.title} />
+                className={cn("bg-card h-20 p-1 cursor-pointer hover:bg-accent transition-colors overflow-hidden", isSelected && "bg-primary/10 ring-1 ring-inset ring-primary/40")}>
+                <p className={cn("text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full shrink-0", isToday(d) ? "bg-primary text-primary-foreground" : "text-foreground")}>{d.getDate()}</p>
+                <div className="mt-0.5 space-y-0.5">
+                  {dayEvents.slice(0, 2).map(ev => (
+                    <p key={ev.id} className={cn("text-[9px] leading-tight truncate px-0.5 rounded font-medium", typeTextColor(ev.type))} title={ev.title}>
+                      {ev.title}
+                    </p>
                   ))}
-                  {dayEvents.length > 3 && <span className="text-[9px] text-muted-foreground">+{dayEvents.length - 3}</span>}
+                  {dayEvents.length > 2 && <p className="text-[9px] text-muted-foreground pl-0.5">+{dayEvents.length - 2}</p>}
                 </div>
               </div>
             );
@@ -537,9 +617,35 @@ function CalendarTab() {
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground text-sm">
-            <Calendar className="w-8 h-8 mb-2 opacity-30" />
-            Click a day to view or add entries
+          <div>
+            <h4 className="font-semibold text-sm mb-3 text-foreground">Coming up</h4>
+            {upcomingEvents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-28 text-center text-muted-foreground text-sm">
+                <Calendar className="w-7 h-7 mb-2 opacity-30" />
+                <p className="text-xs">Click a day to add entries</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {upcomingEvents.map(ev => {
+                  const d = new Date(ev.date + "T00:00:00");
+                  const isEv = ev.date === todayStr;
+                  const isTmrw = ev.date === new Date(Date.now()+86400000).toISOString().slice(0,10);
+                  const label = isEv ? "Today" : isTmrw ? "Tomorrow" : d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+                  return (
+                    <div key={ev.id} onClick={() => setSelectedDate(ev.date)} className="flex items-start gap-2 p-2 rounded-lg border border-border bg-card cursor-pointer hover:bg-accent transition-colors group">
+                      <span className={cn("w-2 h-2 rounded-full mt-1.5 shrink-0", typeColor(ev.type))} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{ev.title}</p>
+                        <p className="text-[10px] text-muted-foreground">{label}{ev.platform ? ` · ${ev.platform}` : ""}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {upcomingEvents.length > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-3">Next 14 days · Click to edit</p>
+            )}
           </div>
         )}
       </div>
@@ -558,6 +664,7 @@ function GoalsTab() {
   const [newLabel, setNewLabel] = useState("");
   const [newTarget, setNewTarget] = useState("");
   const [newUnit, setNewUnit] = useState("");
+  const [newDeadline, setNewDeadline] = useState("");
   const COLORS = ["bg-orange-500", "bg-purple-500", "bg-blue-500", "bg-green-500", "bg-red-500", "bg-pink-500"];
   const [newColor, setNewColor] = useState(COLORS[0]);
 
@@ -568,8 +675,8 @@ function GoalsTab() {
   const deleteGoal = (id: string) => setGoals(prev => prev.filter(g => g.id !== id));
   const addGoal = () => {
     if (!newLabel.trim() || !newTarget) return;
-    setGoals(prev => [...prev, { id: uid(), label: newLabel.trim(), target: Number(newTarget), current: 0, unit: newUnit.trim(), color: newColor, deadline: "" }]);
-    setNewLabel(""); setNewTarget(""); setNewUnit(""); setAdding(false);
+    setGoals(prev => [...prev, { id: uid(), label: newLabel.trim(), target: Number(newTarget), current: 0, unit: newUnit.trim(), color: newColor, deadline: newDeadline || "" }]);
+    setNewLabel(""); setNewTarget(""); setNewUnit(""); setNewDeadline(""); setAdding(false);
   };
 
   return (
@@ -577,18 +684,28 @@ function GoalsTab() {
       {goals.map(goal => {
         const pct = Math.min(100, goal.target > 0 ? Math.round((goal.current / goal.target) * 100) : 0);
         const isEditing = editId === goal.id;
+        const done = pct >= 100;
+        const daysLeft = daysUntil(goal.deadline);
+        const deadlineUrgent = daysLeft !== null && daysLeft <= 7 && !done;
+        const deadlineOverdue = daysLeft !== null && daysLeft < 0 && !done;
         return (
-          <div key={goal.id} className="p-4 rounded-xl border border-border bg-card">
+          <div key={goal.id} className={cn("p-4 rounded-xl border bg-card transition-all", done ? "border-green-500/40 bg-green-500/5" : "border-border")}>
             <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={cn("w-3 h-3 rounded-full shrink-0", goal.color)} />
                 {isEditing ? (
                   <input value={goal.label} onChange={e => updateGoal(goal.id, { label: e.target.value })} className="font-semibold text-sm bg-transparent border-b border-border outline-none" />
                 ) : (
                   <span className="font-semibold text-sm">{goal.label}</span>
                 )}
+                {done && <span className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">Done 🎉</span>}
+                {!done && daysLeft !== null && (
+                  <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", deadlineOverdue ? "bg-red-500/10 text-red-400" : deadlineUrgent ? "bg-yellow-500/10 text-yellow-500" : "bg-muted text-muted-foreground")}>
+                    {deadlineOverdue ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Due today" : `${daysLeft}d left`}
+                  </span>
+                )}
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-1 shrink-0">
                 <button onClick={() => setEditId(isEditing ? null : goal.id)} className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => deleteGoal(goal.id)} className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
@@ -598,15 +715,15 @@ function GoalsTab() {
             <div className="mb-2">
               <div className="flex justify-between text-xs text-muted-foreground mb-1">
                 <span>{goal.unit}{goal.current.toLocaleString()} of {goal.unit}{goal.target.toLocaleString()}</span>
-                <span className={pct >= 100 ? "text-green-500 font-bold" : ""}>{pct}%{pct >= 100 && " 🎉"}</span>
+                <span className={done ? "text-green-500 font-bold" : ""}>{pct}%</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-500", goal.color, pct >= 100 && "opacity-80")} style={{ width: `${pct}%` }} />
+                <div className={cn("h-full rounded-full transition-all duration-500", done ? "bg-green-500" : goal.color)} style={{ width: `${pct}%` }} />
               </div>
             </div>
 
             {/* Current value input */}
-            <div className="flex items-center gap-2 mt-3">
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
               <span className="text-xs text-muted-foreground shrink-0">Current:</span>
               <div className="flex items-center gap-1">
                 <button onClick={() => updateGoal(goal.id, { current: Math.max(0, goal.current - 1) })} className="w-6 h-6 rounded border border-border flex items-center justify-center text-sm hover:bg-accent transition-colors">−</button>
@@ -619,9 +736,11 @@ function GoalsTab() {
                   <input type="number" value={goal.target} onChange={e => updateGoal(goal.id, { target: Math.max(1, Number(e.target.value)) })} className="w-20 h-6 text-center text-sm border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
                   <span className="text-xs text-muted-foreground">Unit:</span>
                   <input value={goal.unit} onChange={e => updateGoal(goal.id, { unit: e.target.value })} className="w-12 h-6 px-1 text-sm border border-border rounded bg-background focus:outline-none" placeholder="£" />
+                  <span className="text-xs text-muted-foreground">Deadline:</span>
+                  <input type="date" value={goal.deadline ?? ""} onChange={e => updateGoal(goal.id, { deadline: e.target.value })} className="h-6 px-1 text-xs border border-border rounded bg-background focus:outline-none" />
                 </>
               )}
-              {pct >= 100 && <CheckCircle2 className="w-4 h-4 text-green-500 ml-auto" />}
+              {done && <CheckCircle2 className="w-4 h-4 text-green-500 ml-auto" />}
             </div>
 
             {isEditing && (
@@ -642,6 +761,10 @@ function GoalsTab() {
           <div className="flex gap-2">
             <Input type="number" value={newTarget} onChange={e => setNewTarget(e.target.value)} placeholder="Target (e.g. 1000)" className="h-8 text-sm flex-1" />
             <Input value={newUnit} onChange={e => setNewUnit(e.target.value)} placeholder="Unit (£, #)" className="h-8 text-sm w-20" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground shrink-0">Deadline:</span>
+            <input type="date" value={newDeadline} onChange={e => setNewDeadline(e.target.value)} className="h-8 px-2 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring flex-1" />
           </div>
           <div className="flex gap-1.5">
             {COLORS.map(c => (
