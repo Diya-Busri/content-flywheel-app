@@ -162,7 +162,7 @@ export default function AffiliatesClient({
           <div className="rounded-2xl border border-dashed border-border p-12 text-center">
             <Link2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground font-medium">No affiliate links yet</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">Click "Add affiliate" above to create your first referral link.</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Click &ldquo;Add affiliate&rdquo; above to create your first referral link.</p>
           </div>
         ) : (
           <div className="space-y-3">
