@@ -564,7 +564,7 @@ export function DesignStudioLanding() {
               return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
             });
           return filtered.length === 0 ? (
-            <p className="text-sm text-gray-400 py-8 text-center">No designs match "{designSearch}"</p>
+            <p className="text-sm text-gray-400 py-8 text-center">No designs match &ldquo;{designSearch}&rdquo;</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               <AnimatePresence>
