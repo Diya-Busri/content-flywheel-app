@@ -98,7 +98,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
         { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "💬", activeWhenStartsWith: true, featureKey: "caption_library" },
         { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
         { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
-        { href: "/dashboard/todo", icon: <ListTodo size={18} />, label: "To-Do List", emoji: "📋", activeWhenStartsWith: true },
+        { href: "/dashboard/workspace", icon: <ListTodo size={18} />, label: "Workspace", emoji: "🗂️", activeWhenStartsWith: true },
       ],
     },
     {
