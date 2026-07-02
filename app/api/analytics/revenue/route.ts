@@ -4,8 +4,9 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { productsTable } from "@/db/schema/products-schema";
+import { productViewsTable } from "@/db/schema/product-views-schema";
 import { emailContactsTable } from "@/db/schema/email-marketing-schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, gte, inArray } from "drizzle-orm";
 
 function daysAgo(n: number): Date {
   const d = new Date();
@@ -144,6 +145,51 @@ export async function GET(req: NextRequest) {
 
     const recentOrders = allOrdersMapped.slice(0, 20);
 
+    // Conversion funnel: published products with views and orders for the period
+    let conversionFunnel: Array<{ productId: string; title: string; views: number; orders: number; revenueCents: number }> = [];
+    try {
+      // All published products for this creator
+      const creatorProducts = await db
+        .select({ id: productsTable.id, title: productsTable.title })
+        .from(productsTable)
+        .where(and(eq(productsTable.userId, userId), eq(productsTable.status, "published")));
+
+      if (creatorProducts.length > 0) {
+        const creatorProductIds = creatorProducts.map((p) => p.id);
+
+        // View counts per product for the period
+        const viewQuery = periodStart
+          ? db.select({ productId: productViewsTable.productId, cnt: sql<number>`count(*)::int` })
+              .from(productViewsTable)
+              .where(and(inArray(productViewsTable.productId, creatorProductIds), gte(productViewsTable.viewedAt, periodStart)))
+              .groupBy(productViewsTable.productId)
+          : db.select({ productId: productViewsTable.productId, cnt: sql<number>`count(*)::int` })
+              .from(productViewsTable)
+              .where(inArray(productViewsTable.productId, creatorProductIds))
+              .groupBy(productViewsTable.productId);
+
+        const viewCounts = await viewQuery;
+        const viewMap = new Map(viewCounts.map((r) => [r.productId, Number(r.cnt)]));
+
+        conversionFunnel = creatorProducts
+          .map((p) => {
+            const orderData = productTotals.get(p.id) ?? { orders: 0, revenueCents: 0 };
+            return {
+              productId: p.id,
+              title: p.title,
+              views: viewMap.get(p.id) ?? 0,
+              orders: orderData.orders,
+              revenueCents: orderData.revenueCents,
+            };
+          })
+          .filter((p) => p.views > 0 || p.orders > 0)
+          .sort((a, b) => b.views - a.views)
+          .slice(0, 10);
+      }
+    } catch {
+      // Non-fatal — funnel is a nice-to-have
+    }
+
     // Subscriber count
     let subscriberCount = 0;
     try {
@@ -180,6 +226,7 @@ export async function GET(req: NextRequest) {
       recentOrders,
       allOrdersForExport: allOrdersMapped,
       subscriberCount,
+      conversionFunnel,
     });
   } catch (err) {
     console.error("[analytics/revenue] GET error:", err);

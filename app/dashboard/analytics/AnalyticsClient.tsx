@@ -11,6 +11,8 @@ interface DailyRevenue { date: string; cents: number; orders: number; }
 interface TopProduct   { productId: string; title: string; orders: number; revenueCents: number; }
 interface RecentOrder  { id: string; buyerEmail: string; buyerName: string | null; amountCents: number; currency: string; createdAt: string; productTitle: string; }
 
+interface FunnelProduct { productId: string; title: string; views: number; orders: number; revenueCents: number; }
+
 interface AnalyticsData {
   totalRevenueCents: number;
   totalOrders: number;
@@ -27,6 +29,7 @@ interface AnalyticsData {
   recentOrders: RecentOrder[];
   allOrdersForExport: RecentOrder[];
   subscriberCount: number;
+  conversionFunnel: FunnelProduct[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -271,6 +274,41 @@ export default function AnalyticsClient() {
             })}
           </div>
         </div>
+
+        {/* Conversion funnel */}
+        {data.conversionFunnel && data.conversionFunnel.length > 0 && (
+          <div className="bg-card border border-border rounded-xl p-6">
+            <div className="flex items-center justify-between mb-5 gap-2">
+              <h2 className="text-base font-semibold text-foreground">Conversion Funnel</h2>
+              <span className="text-xs text-muted-foreground">{periodLabel}</span>
+            </div>
+            {/* Column headers */}
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 gap-y-0 mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Product</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">Views</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">Orders</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">Conv.</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">Revenue</span>
+            </div>
+            <div className="space-y-1">
+              {data.conversionFunnel.map((p) => {
+                const rate = p.views > 0 ? ((p.orders / p.views) * 100) : 0;
+                const rateStr = rate >= 1 ? `${rate.toFixed(1)}%` : rate > 0 ? `${rate.toFixed(2)}%` : "—";
+                const rateColor = rate >= 3 ? "text-green-500" : rate >= 1 ? "text-orange-400" : "text-muted-foreground";
+                return (
+                  <div key={p.productId} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 items-center py-2.5 border-t border-border/50 first:border-0">
+                    <p className="text-sm text-foreground font-medium truncate pr-2">{p.title}</p>
+                    <span className="text-sm text-muted-foreground font-mono text-right tabular-nums">{p.views.toLocaleString()}</span>
+                    <span className="text-sm text-foreground font-mono text-right tabular-nums">{p.orders}</span>
+                    <span className={`text-sm font-bold text-right tabular-nums ${rateColor}`}>{rateStr}</span>
+                    <span className="text-sm font-bold text-orange-400 text-right tabular-nums">{gbp(p.revenueCents)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground/60 mt-4">Conv. = orders ÷ page views. Rates above 3% are strong.</p>
+          </div>
+        )}
 
         {/* Top products + Recent orders — side by side on wide screens */}
         <div className="grid lg:grid-cols-2 gap-6">
