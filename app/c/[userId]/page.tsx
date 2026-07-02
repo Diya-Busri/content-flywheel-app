@@ -539,6 +539,19 @@ export default async function CreatorProfilePage({
           </Link>
         </div>
 
+        {/* ── Browse marketplace ── */}
+        <div style={{ textAlign: "center", marginBottom: "32px" }}>
+          <a href="/marketplace" style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            fontSize: "13px", fontWeight: "600", color: t.subText,
+            textDecoration: "none", padding: "8px 18px", borderRadius: "100px",
+            border: `1px solid ${t.cardBorder}`,
+            transition: "opacity 0.15s",
+          }}>
+            🛍️ Browse more creators on Content Flywheel →
+          </a>
+        </div>
+
         {/* ── Footer ── */}
         <p style={{ textAlign: "center", fontSize: "12px", color: t.mutedText, letterSpacing: "0.01em" }}>
           Powered by <span style={{ color: accent, fontWeight: "700" }}>Content Flywheel</span>

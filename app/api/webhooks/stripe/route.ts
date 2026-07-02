@@ -242,6 +242,11 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
           <a href="${downloadUrl}" style="display:inline-block;padding:14px 32px;background:#f97316;color:#ffffff;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;">Download Now &rarr;</a>
           <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">This link expires in 7 days. If you need a new link, reply to this email.</p>
         </td></tr>
+        <tr><td style="padding:0 40px 32px;border-top:1px solid #f3f4f6;">
+          <p style="margin:24px 0 12px;font-size:13px;font-weight:700;color:#374151;">Discover more digital products</p>
+          <p style="margin:0 0 16px;font-size:13px;color:#6b7280;line-height:1.6;">Find templates, guides, courses and more from independent creators on the Content Flywheel marketplace.</p>
+          <a href="https://contentflywheel.co.uk/marketplace" style="display:inline-block;padding:10px 24px;background:#f9fafb;color:#374151;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;border:1px solid #e5e7eb;">Browse the Marketplace &rarr;</a>
+        </td></tr>
         <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
           <p style="margin:0;font-size:12px;color:#0B0B0F;">Powered by Content Flywheel</p>
         </td></tr>
