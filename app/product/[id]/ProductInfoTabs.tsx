@@ -5,6 +5,40 @@ import { useState } from "react";
 type Section = { id?: string; title: string; content?: string; order?: number };
 type DescBlock = { type: "p" | "ul" | "heading+ul"; text?: string; heading?: string; items?: string[] };
 
+function TextContentPreview({ descParagraphs, sections }: { descParagraphs: string[]; sections: Section[] }) {
+  const intro = descParagraphs[0]?.replace(/\*\*/g, "").trim() ?? "";
+  const preview = intro.length > 320 ? intro.slice(0, 320) + "…" : intro;
+  return (
+    <div style={{ padding: "24px", background: "linear-gradient(135deg, #fff7ed 0%, #fef3c7 50%, #fdf2f8 100%)", minHeight: "300px" }}>
+      {preview && (
+        <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#374151", lineHeight: 1.75, fontStyle: "italic" }}>
+          &ldquo;{preview}&rdquo;
+        </p>
+      )}
+      {sections.length > 0 && (
+        <>
+          <p style={{ margin: "0 0 10px", fontSize: "11px", fontWeight: 700, color: "#f97316", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            What&rsquo;s inside
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {sections.slice(0, 6).map((s, i) => (
+              <div key={s.id ?? i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#f97316", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "10px", fontWeight: 700, color: "#fff" }}>
+                  {i + 1}
+                </div>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{s.title}</span>
+              </div>
+            ))}
+            {sections.length > 6 && (
+              <p style={{ margin: "4px 0 0 30px", fontSize: "12px", color: "#9ca3af" }}>+ {sections.length - 6} more sections</p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function parseDescBlocks(paragraphs: string[]): DescBlock[] {
   const blocks: DescBlock[] = [];
   for (const para of paragraphs) {
@@ -46,12 +80,14 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export function ProductInfoTabs({ previewPageUrl, sections, descParagraphs, testimonials }: Props) {
-  // Pick first available tab
-  const defaultTab: TabId = previewPageUrl ? "preview" : sections.length > 0 ? "contents" : "about";
+  const hasTextPreview = descParagraphs.length > 0 || sections.length > 0;
+  const hasPreviewTab = !!previewPageUrl || hasTextPreview;
+  const defaultTab: TabId = hasPreviewTab ? "preview" : sections.length > 0 ? "contents" : "about";
   const [active, setActive] = useState<TabId>(defaultTab);
+  const [imageError, setImageError] = useState(false);
 
   const availableTabs = TABS.filter((t) => {
-    if (t.id === "preview") return !!previewPageUrl;
+    if (t.id === "preview") return hasPreviewTab;
     if (t.id === "contents") return sections.length > 0;
     if (t.id === "about") return descParagraphs.length > 0 || (testimonials && testimonials.length > 0);
     return false;
@@ -90,16 +126,21 @@ export function ProductInfoTabs({ previewPageUrl, sections, descParagraphs, test
       </div>
 
       {/* Panel: Preview */}
-      {active === "preview" && previewPageUrl && (
+      {active === "preview" && (
         <div style={{ position: "relative" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={previewPageUrl}
-            alt="Product content preview"
-            style={{ width: "100%", display: "block", maxHeight: "440px", objectFit: "cover", objectPosition: "top" }}
-          />
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "200px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.98))", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", bottom: "24px", left: 0, right: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+          {previewPageUrl && !imageError ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={previewPageUrl}
+              alt="Product content preview"
+              onError={() => setImageError(true)}
+              style={{ width: "100%", display: "block", maxHeight: "440px", objectFit: "cover", objectPosition: "top" }}
+            />
+          ) : (
+            <TextContentPreview descParagraphs={descParagraphs} sections={sections} />
+          )}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "160px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.98))", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: "20px", left: 0, right: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
             <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>You&apos;re seeing a preview — purchase to get full access</p>
             <a
               href="#buy"
