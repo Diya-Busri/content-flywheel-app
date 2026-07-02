@@ -1,161 +1,270 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { TrendingUp, TrendingDown, Download, RefreshCw } from "lucide-react";
 
-interface DailyRevenue {
-  date: string;
-  cents: number;
-  orders: number;
-}
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface TopProduct {
-  productId: string;
-  title: string;
-  orders: number;
-  revenueCents: number;
-}
+type Period = "7" | "30" | "90" | "all";
 
-interface RecentOrder {
-  id: string;
-  buyerEmail: string;
-  buyerName: string | null;
-  amountCents: number;
-  currency: string;
-  createdAt: string;
-  productTitle: string;
-}
+interface DailyRevenue { date: string; cents: number; orders: number; }
+interface TopProduct   { productId: string; title: string; orders: number; revenueCents: number; }
+interface RecentOrder  { id: string; buyerEmail: string; buyerName: string | null; amountCents: number; currency: string; createdAt: string; productTitle: string; }
 
 interface AnalyticsData {
   totalRevenueCents: number;
   totalOrders: number;
+  periodRevenueCents: number;
+  periodOrdersCount: number;
+  avgOrderCents: number;
+  revenueTrend: number;
+  prevPeriodRevenueCents: number;
+  // legacy
   last30DaysRevenueCents: number;
   last30DaysOrders: number;
   dailyRevenue: DailyRevenue[];
   topProducts: TopProduct[];
   recentOrders: RecentOrder[];
+  allOrdersForExport: RecentOrder[];
   subscriberCount: number;
 }
 
-function formatGBP(cents: number): string {
-  return `£${(cents / 100).toFixed(2)}`;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function gbp(cents: number) { return `£${(cents / 100).toFixed(2)}`; }
+function maskEmail(e: string) { return e.replace(/(.{3}).*@/, "$1***@"); }
+function fmtDate(iso: string) { return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
+
+function exportCSV(orders: RecentOrder[], period: Period) {
+  const header = ["Date", "Buyer Email", "Buyer Name", "Product", "Amount (£)"];
+  const rows = orders.map(o => [
+    fmtDate(o.createdAt),
+    o.buyerEmail,
+    o.buyerName ?? "",
+    o.productTitle,
+    (o.amountCents / 100).toFixed(2),
+  ]);
+  const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `revenue-${period === "all" ? "all-time" : `last-${period}d`}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-function maskEmail(email: string): string {
-  return email.replace(/(.{3}).*@/, "$1***@");
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function Skeleton({ className }: { className?: string }) {
+  return (
+    <div className={`rounded-lg bg-white/[0.06] animate-pulse ${className ?? ""}`} />
+  );
 }
 
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+function SkeletonDashboard() {
+  return (
+    <div className="min-h-screen bg-background p-6 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2"><Skeleton className="h-7 w-48" /><Skeleton className="h-4 w-64" /></div>
+          <Skeleton className="h-9 w-36 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <div key={i} className="bg-card border border-white/10 rounded-xl p-5 space-y-3"><Skeleton className="h-3 w-24" /><Skeleton className="h-8 w-32" /><Skeleton className="h-3 w-16" /></div>)}
+        </div>
+        <div className="bg-card border border-white/10 rounded-xl p-6">
+          <Skeleton className="h-5 w-40 mb-6" />
+          <div className="flex items-end gap-[3px] h-40">
+            {Array.from({ length: 30 }).map((_, i) => (
+              <div key={i} className="flex-1 rounded-t-sm bg-white/[0.06] animate-pulse" style={{ height: `${20 + Math.random() * 60}%` }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
+
+// ─── Trend badge ──────────────────────────────────────────────────────────────
+
+function TrendBadge({ pct, period }: { pct: number; period: Period }) {
+  if (period === "all") return null;
+  const up = pct > 0;
+  const flat = pct === 0;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+      flat ? "bg-white/10 text-gray-400" :
+      up    ? "bg-green-500/15 text-green-400" :
+              "bg-red-500/15 text-red-400"
+    }`}>
+      {!flat && (up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
+      {flat ? "Flat" : `${up ? "+" : ""}${pct}%`}
+      <span className="opacity-60">vs prev</span>
+    </span>
+  );
+}
+
+// ─── Stat card ────────────────────────────────────────────────────────────────
+
+function StatCard({ label, value, sub, accent, trend, period }: {
+  label: string; value: string; sub?: string;
+  accent?: boolean; trend?: number; period?: Period;
+}) {
+  return (
+    <div className="bg-card border border-white/10 rounded-xl p-5">
+      <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">{label}</p>
+      <p className={`text-2xl font-bold leading-none mb-1 ${accent ? "text-orange-400" : "text-white"}`}>{value}</p>
+      <div className="flex items-center gap-2 flex-wrap mt-1">
+        {sub && <p className="text-gray-500 text-xs">{sub}</p>}
+        {trend !== undefined && period !== undefined && <TrendBadge pct={trend} period={period} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+const PERIODS: { id: Period; label: string }[] = [
+  { id: "7",   label: "7 days" },
+  { id: "30",  label: "30 days" },
+  { id: "90",  label: "90 days" },
+  { id: "all", label: "All time" },
+];
 
 export default function AnalyticsClient() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>("30");
 
-  useEffect(() => {
-    fetch("/api/analytics/revenue")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) {
-          setError(d.error);
-        } else {
-          setData(d);
-        }
-      })
-      .catch(() => setError("Failed to load analytics"))
-      .finally(() => setLoading(false));
+  const load = useCallback(async (p: Period, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/analytics/revenue?period=${p}`);
+      const d = await r.json();
+      if (d.error) setError(d.error);
+      else setData(d);
+    } catch {
+      setError("Failed to load analytics");
+    } finally {
+      setLoading(false); setRefreshing(false);
+    }
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-gray-400 text-sm animate-pulse">Loading analytics...</div>
-      </div>
-    );
-  }
+  useEffect(() => { load(period); }, [period, load]);
+
+  if (loading) return <SkeletonDashboard />;
 
   if (error || !data) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-red-400 text-sm">{error ?? "No data available"}</div>
+        <p className="text-red-400 text-sm">{error ?? "No data available"}</p>
       </div>
     );
   }
 
-  const maxDailyCents = Math.max(...data.dailyRevenue.map((d) => d.cents), 1);
+  const maxDailyCents = Math.max(...data.dailyRevenue.map(d => d.cents), 1);
+  const maxProductRev = Math.max(...data.topProducts.map(p => p.revenueCents), 1);
+
+  const periodLabel = period === "all" ? "All time" : `Last ${period} days`;
+  const prevLabel   = period === "all" ? "" : `vs prev ${period}d`;
 
   return (
     <div className="min-h-screen bg-background p-6 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
+
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-white">Analytics & Revenue</h1>
-          <p className="text-gray-400 text-sm mt-1">Track your sales performance and revenue</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Analytics & Revenue</h1>
+            <p className="text-gray-400 text-sm mt-1">Track your sales performance and revenue</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Period selector */}
+            <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-0.5">
+              {PERIODS.map(p => (
+                <button key={p.id} onClick={() => setPeriod(p.id)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    period === p.id ? "bg-orange-500 text-white shadow" : "text-gray-400 hover:text-white"
+                  }`}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {/* Refresh */}
+            <button onClick={() => load(period, true)} disabled={refreshing}
+              className="flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-gray-400 hover:text-white border border-white/10 rounded-xl transition-colors">
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+            {/* CSV export */}
+            <button onClick={() => exportCSV(data.allOrdersForExport ?? data.recentOrders, period)}
+              className="flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-gray-400 hover:text-white border border-white/10 rounded-xl transition-colors">
+              <Download className="w-3.5 h-3.5" />Export CSV
+            </button>
+          </div>
         </div>
 
-        {/* Stats Row */}
+        {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
-            label="Total Revenue"
-            value={formatGBP(data.totalRevenueCents)}
+            label={`${periodLabel} Revenue`}
+            value={gbp(data.periodRevenueCents ?? data.last30DaysRevenueCents)}
+            sub={`${data.periodOrdersCount ?? data.last30DaysOrders} orders`}
             accent
+            trend={data.revenueTrend}
+            period={period}
           />
           <StatCard
-            label="Total Orders"
-            value={String(data.totalOrders)}
+            label="All-time Revenue"
+            value={gbp(data.totalRevenueCents)}
+            sub={`${data.totalOrders} orders total`}
           />
           <StatCard
-            label="Last 30 Days"
-            value={formatGBP(data.last30DaysRevenueCents)}
-            sub={`${data.last30DaysOrders} orders`}
+            label="Avg Order Value"
+            value={gbp(data.avgOrderCents ?? 0)}
+            sub={periodLabel}
+            trend={undefined}
           />
           <StatCard
             label="Subscribers"
             value={String(data.subscriberCount)}
+            sub="active list"
           />
         </div>
 
-        {/* Revenue Chart */}
+        {/* Revenue chart */}
         <div className="bg-card border border-white/10 rounded-xl p-6">
-          <h2 className="text-base font-semibold text-white mb-4">
-            Revenue — Last 30 Days
-          </h2>
-          <div className="flex items-end gap-[3px] h-40 w-full">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+            <h2 className="text-base font-semibold text-white">
+              Revenue — <span className="text-orange-400">{periodLabel}</span>
+            </h2>
+            {data.revenueTrend !== undefined && period !== "all" && (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                {prevLabel}:&nbsp;
+                <span className="text-gray-300 font-medium">{gbp(data.prevPeriodRevenueCents ?? 0)}</span>
+                <TrendBadge pct={data.revenueTrend} period={period} />
+              </div>
+            )}
+          </div>
+          <div className="flex items-end gap-[2px] h-36 w-full">
             {data.dailyRevenue.map((day, i) => {
-              const heightPct =
-                day.cents === 0
-                  ? 2
-                  : Math.max(4, Math.round((day.cents / maxDailyCents) * 100));
-              const showLabel = i % 5 === 0;
+              const h = day.cents === 0 ? 2 : Math.max(4, Math.round((day.cents / maxDailyCents) * 100));
+              const n = data.dailyRevenue.length;
+              const step = n <= 14 ? 2 : n <= 31 ? 5 : 10;
+              const showLabel = i % step === 0;
               return (
-                <div
-                  key={day.date}
-                  className="flex flex-col items-center flex-1 gap-1 group relative"
-                  title={`${day.date}: ${formatGBP(day.cents)} (${day.orders} orders)`}
-                >
-                  <div
-                    className="w-full rounded-t-sm transition-all"
-                    style={{
-                      height: `${heightPct}%`,
-                      backgroundColor:
-                        day.cents > 0
-                          ? "rgb(249,115,22)"
-                          : "rgba(255,255,255,0.08)",
-                    }}
-                  />
-                  {showLabel && (
-                    <span className="text-[9px] text-gray-500 rotate-0 whitespace-nowrap hidden md:block">
-                      {day.date.slice(5)}
-                    </span>
-                  )}
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-black border border-white/10 text-white text-[10px] px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                    {day.date}<br />{formatGBP(day.cents)}
+                <div key={day.date} className="flex flex-col items-center flex-1 gap-1 group relative" title={`${day.date}: ${gbp(day.cents)} (${day.orders} orders)`}>
+                  <div className="w-full rounded-t-sm transition-all duration-300" style={{
+                    height: `${h}%`,
+                    backgroundColor: day.cents > 0 ? "rgb(249,115,22)" : "rgba(255,255,255,0.06)",
+                  }} />
+                  {showLabel && <span className="text-[9px] text-gray-600 whitespace-nowrap hidden md:block">{day.date.slice(5)}</span>}
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 border border-white/10 text-white text-[10px] px-2 py-1.5 rounded-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-xl">
+                    <p className="font-semibold">{gbp(day.cents)}</p>
+                    <p className="text-gray-400">{day.date} · {day.orders} {day.orders === 1 ? "order" : "orders"}</p>
                   </div>
                 </div>
               );
@@ -163,98 +272,69 @@ export default function AnalyticsClient() {
           </div>
         </div>
 
-        {/* Top Products */}
-        <div className="bg-card border border-white/10 rounded-xl p-6">
-          <h2 className="text-base font-semibold text-white mb-4">Top Products</h2>
-          {data.topProducts.length === 0 ? (
-            <p className="text-gray-500 text-sm">No sales yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-gray-500 text-xs uppercase tracking-wide border-b border-white/10">
-                    <th className="text-left pb-3 font-medium">Product</th>
-                    <th className="text-right pb-3 font-medium">Orders</th>
-                    <th className="text-right pb-3 font-medium">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {data.topProducts.map((p) => (
-                    <tr key={p.productId} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3 text-white font-medium truncate max-w-[220px]">
-                        {p.title}
-                      </td>
-                      <td className="py-3 text-right text-gray-300">{p.orders}</td>
-                      <td className="py-3 text-right text-orange-400 font-medium">
-                        {formatGBP(p.revenueCents)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        {/* Top products + Recent orders — side by side on wide screens */}
+        <div className="grid lg:grid-cols-2 gap-6">
+
+          {/* Top products */}
+          <div className="bg-card border border-white/10 rounded-xl p-6">
+            <h2 className="text-base font-semibold text-white mb-5">Top Products</h2>
+            {data.topProducts.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-gray-500 text-sm">No sales yet in this period.</p>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {data.topProducts.slice(0, 8).map((p, i) => {
+                  const barW = Math.max(3, Math.round((p.revenueCents / maxProductRev) * 100));
+                  return (
+                    <div key={p.productId} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] font-bold text-gray-600 w-4 text-right shrink-0">{i + 1}</span>
+                          <p className="text-sm text-white font-medium truncate">{p.title}</p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs text-gray-500">{p.orders} sales</span>
+                          <span className="text-sm font-bold text-orange-400">{gbp(p.revenueCents)}</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden ml-6">
+                        <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-500" style={{ width: `${barW}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Recent orders */}
+          <div className="bg-card border border-white/10 rounded-xl p-6">
+            <h2 className="text-base font-semibold text-white mb-5">Recent Orders</h2>
+            {data.recentOrders.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-gray-500 text-sm">No orders yet in this period.</p>
+              </div>
+            ) : (
+              <div className="space-y-0 divide-y divide-white/5">
+                {data.recentOrders.slice(0, 10).map(o => (
+                  <div key={o.id} className="flex items-center gap-3 py-2.5 hover:bg-white/[0.02] transition-colors -mx-1 px-1 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-200 font-medium truncate">{maskEmail(o.buyerEmail)}</p>
+                      <p className="text-xs text-gray-500 truncate">{o.productTitle}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-orange-400">{gbp(o.amountCents)}</p>
+                      <p className="text-[10px] text-gray-600">{fmtDate(o.createdAt)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Recent Orders */}
-        <div className="bg-card border border-white/10 rounded-xl p-6">
-          <h2 className="text-base font-semibold text-white mb-4">Recent Orders</h2>
-          {data.recentOrders.length === 0 ? (
-            <p className="text-gray-500 text-sm">No orders yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-gray-500 text-xs uppercase tracking-wide border-b border-white/10">
-                    <th className="text-left pb-3 font-medium">Buyer</th>
-                    <th className="text-left pb-3 font-medium hidden md:table-cell">Product</th>
-                    <th className="text-right pb-3 font-medium">Amount</th>
-                    <th className="text-right pb-3 font-medium hidden sm:table-cell">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {data.recentOrders.map((o) => (
-                    <tr key={o.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3 text-gray-300">{maskEmail(o.buyerEmail)}</td>
-                      <td className="py-3 text-gray-400 hidden md:table-cell truncate max-w-[180px]">
-                        {o.productTitle}
-                      </td>
-                      <td className="py-3 text-right text-orange-400 font-medium">
-                        {formatGBP(o.amountCents)}
-                      </td>
-                      <td className="py-3 text-right text-gray-500 hidden sm:table-cell text-xs">
-                        {formatDate(o.createdAt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="bg-card border border-white/10 rounded-xl p-5">
-      <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">{label}</p>
-      <p className={`text-2xl font-bold ${accent ? "text-orange-400" : "text-white"}`}>
-        {value}
-      </p>
-      {sub && <p className="text-gray-500 text-xs mt-1">{sub}</p>}
     </div>
   );
 }
