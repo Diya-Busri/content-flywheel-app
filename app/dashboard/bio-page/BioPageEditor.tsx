@@ -16,6 +16,8 @@ import {
   Mail,
   Eye,
   EyeOff,
+  Download,
+  Image,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +42,28 @@ type WaitlistEntry = { id: string; email: string; name?: string; createdAt: stri
 
 const BASE_URL = typeof window !== "undefined" ? window.location.origin : "https://contentflywheel.com";
 
+const SOCIAL_PLATFORMS = [
+  { id: "tiktok",    label: "TikTok",    icon: "𝕋", prefix: "https://tiktok.com/@",     placeholder: "username" },
+  { id: "instagram", label: "Instagram", icon: "📸", prefix: "https://instagram.com/",   placeholder: "username" },
+  { id: "youtube",   label: "YouTube",   icon: "▶", prefix: "https://youtube.com/@",    placeholder: "handle" },
+  { id: "twitter",   label: "X / Twitter", icon: "𝕏", prefix: "https://x.com/",        placeholder: "username" },
+  { id: "linktree",  label: "Linktree",  icon: "🌿", prefix: "https://linktr.ee/",      placeholder: "username" },
+  { id: "store",     label: "My Store",  icon: "🛍", prefix: "/store/",                 placeholder: "slug" },
+];
+
+const COLOR_PRESETS = [
+  "#f97316","#ef4444","#a855f7","#3b82f6","#10b981","#ec4899","#eab308","#ffffff","#000000",
+];
+
+function exportWaitlistCSV(entries: WaitlistEntry[]) {
+  const rows = [["Email","Name","Date"], ...entries.map(e => [e.email, e.name ?? "", new Date(e.createdAt).toLocaleDateString("en-GB")])];
+  const csv = rows.map(r => r.map(c => `"${c.replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "bio-waitlist.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+
 function BioPreview({ page }: { page: BioPage }) {
   const initials = page.title ? page.title.slice(0, 2).toUpperCase() : "??";
   return (
@@ -52,12 +76,16 @@ function BioPreview({ page }: { page: BioPage }) {
 
       <div className="flex-1 p-8 flex flex-col items-center">
         {/* Avatar */}
-        <div
-          className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-4 mt-4"
-          style={{ backgroundColor: page.primaryColor }}
-        >
-          {initials}
-        </div>
+        {page.avatarUrl ? (
+          <img src={page.avatarUrl} alt={page.title} className="w-20 h-20 rounded-full object-cover mb-4 mt-4 ring-2 ring-white/10" />
+        ) : (
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-4 mt-4"
+            style={{ backgroundColor: page.primaryColor }}
+          >
+            {initials}
+          </div>
+        )}
 
         {/* Title */}
         <h1 className="text-xl font-bold text-white mb-1 text-center">
@@ -346,28 +374,44 @@ export default function BioPageEditor() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-gray-500">Tagline</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-gray-500">Tagline</Label>
+                    <span className="text-[10px] text-gray-400">{page.bio.length}/120</span>
+                  </div>
                   <Input
                     placeholder="Building quietly. Dropping soon."
                     value={page.bio}
+                    maxLength={120}
                     onChange={(e) => setPage((p) => ({ ...p, bio: e.target.value }))}
                     className="bg-gray-50 dark:bg-[#111] border-gray-200 dark:border-[#2A2A2A]"
                   />
                 </div>
                 <div className="space-y-1.5">
+                  <Label className="text-xs text-gray-500 flex items-center gap-1.5"><Image className="w-3 h-3" />Avatar image URL</Label>
+                  <Input
+                    placeholder="https://i.imgur.com/your-photo.jpg"
+                    value={page.avatarUrl ?? ""}
+                    onChange={(e) => setPage((p) => ({ ...p, avatarUrl: e.target.value }))}
+                    className="bg-gray-50 dark:bg-[#111] border-gray-200 dark:border-[#2A2A2A] font-mono text-xs"
+                  />
+                  <p className="text-[10px] text-gray-400">Paste a direct image URL (Imgur, Cloudinary, etc.)</p>
+                </div>
+                <div className="space-y-2">
                   <Label className="text-xs text-gray-500">Accent colour</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={page.primaryColor}
-                      onChange={(e) => setPage((p) => ({ ...p, primaryColor: e.target.value }))}
-                      className="w-10 h-10 rounded-lg cursor-pointer border-0 p-0.5 bg-transparent"
-                    />
-                    <Input
-                      value={page.primaryColor}
-                      onChange={(e) => setPage((p) => ({ ...p, primaryColor: e.target.value }))}
-                      className="bg-gray-50 dark:bg-[#111] border-gray-200 dark:border-[#2A2A2A] font-mono w-32"
-                    />
+                  <div className="flex gap-1.5 flex-wrap">
+                    {COLOR_PRESETS.map(c => (
+                      <button key={c} type="button" onClick={() => setPage(p => ({ ...p, primaryColor: c }))}
+                        className={`w-7 h-7 rounded-full transition-all ${page.primaryColor === c ? "ring-2 ring-offset-2 ring-gray-400 scale-110" : "hover:scale-105"}`}
+                        style={{ backgroundColor: c, border: c === "#ffffff" ? "1px solid #ddd" : "none" }} />
+                    ))}
+                    <div className="flex items-center gap-1.5 ml-1">
+                      <input type="color" value={page.primaryColor}
+                        onChange={(e) => setPage((p) => ({ ...p, primaryColor: e.target.value }))}
+                        className="w-7 h-7 rounded-lg cursor-pointer border-0 p-0.5 bg-transparent" />
+                      <Input value={page.primaryColor}
+                        onChange={(e) => setPage((p) => ({ ...p, primaryColor: e.target.value }))}
+                        className="bg-gray-50 dark:bg-[#111] border-gray-200 dark:border-[#2A2A2A] font-mono w-28 h-7 text-xs" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -380,16 +424,43 @@ export default function BioPageEditor() {
                     variant="outline"
                     size="sm"
                     onClick={addLink}
-                    disabled={page.links.length >= 6}
+                    disabled={page.links.length >= 8}
                     className="gap-1 text-xs h-7"
                   >
                     <Plus className="w-3 h-3" />
                     Add link
                   </Button>
                 </div>
+
+                {/* Social platform quick-add */}
+                <div>
+                  <p className="text-[11px] text-gray-400 mb-2 uppercase tracking-wide font-semibold">Quick add a platform</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {SOCIAL_PLATFORMS.map(pl => {
+                      const alreadyAdded = page.links.some(l => l.url.startsWith(pl.prefix));
+                      return (
+                        <button key={pl.id} type="button" disabled={page.links.length >= 8 || alreadyAdded}
+                          onClick={() => {
+                            const handle = window.prompt(`Enter your ${pl.label} ${pl.placeholder}:`);
+                            if (!handle) return;
+                            const url = pl.prefix.startsWith("http") ? `${pl.prefix}${handle}` : `${pl.prefix}${handle}`;
+                            setPage(p => ({ ...p, links: [...p.links, { label: pl.label, url }] }));
+                          }}
+                          className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+                            alreadyAdded ? "opacity-40 cursor-default border-gray-200 dark:border-[#2A2A2A] text-gray-400" :
+                            "border-gray-200 dark:border-[#2A2A2A] text-gray-600 dark:text-gray-300 hover:border-orange-300 hover:text-orange-500 dark:hover:border-orange-700"
+                          }`}>
+                          <span>{pl.icon}</span>{pl.label}
+                          {alreadyAdded && <Check className="w-3 h-3 text-green-500" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {page.links.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-4">
-                    No links yet. Add a link to get started.
+                    No links yet — use quick-add above or add manually.
                   </p>
                 ) : (
                   <div className="space-y-3">
@@ -481,10 +552,17 @@ export default function BioPageEditor() {
                   {waitlistEntries.length} {waitlistEntries.length === 1 ? "subscriber" : "subscribers"}
                 </h2>
               </div>
-              <Button variant="outline" size="sm" onClick={loadWaitlist} disabled={waitlistLoading} className="gap-1.5 text-xs">
-                <Loader2 className={`w-3.5 h-3.5 ${waitlistLoading ? "animate-spin" : "hidden"}`} />
-                Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                {waitlistEntries.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => exportWaitlistCSV(waitlistEntries)} className="gap-1.5 text-xs">
+                    <Download className="w-3.5 h-3.5" />Export CSV
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={loadWaitlist} disabled={waitlistLoading} className="gap-1.5 text-xs">
+                  <Loader2 className={`w-3.5 h-3.5 ${waitlistLoading ? "animate-spin" : "hidden"}`} />
+                  Refresh
+                </Button>
+              </div>
             </div>
 
             {waitlistLoading ? (
