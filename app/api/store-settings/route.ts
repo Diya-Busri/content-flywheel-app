@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 
 function getDefaults(userId: string) {
   return {
@@ -98,6 +98,28 @@ export async function PATCH(req: NextRequest) {
     for (const key of allowed) {
       if (key in body) {
         updates[key] = body[key];
+      }
+    }
+
+    // If a customDomain is being set, ensure no other user has already claimed it
+    if (updates.customDomain && typeof updates.customDomain === "string") {
+      const normalised = updates.customDomain.trim().toLowerCase();
+      updates.customDomain = normalised;
+      const [existing] = await db
+        .select({ userId: storeSettingsTable.userId })
+        .from(storeSettingsTable)
+        .where(
+          and(
+            eq(storeSettingsTable.customDomain, normalised),
+            ne(storeSettingsTable.userId, userId)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        return NextResponse.json(
+          { error: "This domain is already connected to another store." },
+          { status: 409 }
+        );
       }
     }
 

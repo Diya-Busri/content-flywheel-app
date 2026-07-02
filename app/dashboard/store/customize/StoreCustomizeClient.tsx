@@ -444,6 +444,27 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     }
   };
 
+  // ── Domain availability state ──
+  const [domainStatus, setDomainStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const domainCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkDomain = useCallback((value: string) => {
+    if (domainCheckTimer.current) clearTimeout(domainCheckTimer.current);
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) { setDomainStatus("idle"); return; }
+    setDomainStatus("checking");
+    domainCheckTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/store-settings/check-domain?domain=${encodeURIComponent(trimmed)}`);
+        const data = await res.json() as { available: boolean; reason?: string };
+        if (data.reason === "Invalid domain format") setDomainStatus("invalid");
+        else setDomainStatus(data.available ? "available" : "taken");
+      } catch {
+        setDomainStatus("idle");
+      }
+    }, 600);
+  }, []);
+
   // ── AI Design state ──
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -969,15 +990,48 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">Your domain</label>
-                    <Input
-                      value={settings.customDomain ?? ""}
-                      onChange={(e) => set("customDomain", e.target.value.trim().toLowerCase() || null)}
-                      placeholder="store.yourdomain.com"
-                      className="h-9 text-sm border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:border-orange-500"
-                    />
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      After saving, visits to this domain will show your store automatically.
-                    </p>
+                    <div className="relative">
+                      <Input
+                        value={settings.customDomain ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value.trim().toLowerCase() || null;
+                          set("customDomain", v);
+                          checkDomain(e.target.value);
+                        }}
+                        placeholder="store.yourdomain.com"
+                        className={`h-9 text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:border-orange-500 pr-24 ${
+                          domainStatus === "taken" || domainStatus === "invalid"
+                            ? "border-red-400"
+                            : domainStatus === "available"
+                            ? "border-green-400"
+                            : "border-gray-200"
+                        }`}
+                      />
+                      {domainStatus !== "idle" && (
+                        <span className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          domainStatus === "checking" ? "text-gray-400 bg-gray-100" :
+                          domainStatus === "available" ? "text-green-700 bg-green-50" :
+                          domainStatus === "taken" ? "text-red-700 bg-red-50" :
+                          "text-red-700 bg-red-50"
+                        }`}>
+                          {domainStatus === "checking" && "Checking…"}
+                          {domainStatus === "available" && "✓ Available"}
+                          {domainStatus === "taken" && "✗ Taken"}
+                          {domainStatus === "invalid" && "✗ Invalid"}
+                        </span>
+                      )}
+                    </div>
+                    {domainStatus === "taken" && (
+                      <p className="text-[11px] text-red-500 mt-1">This domain is already connected to another store.</p>
+                    )}
+                    {domainStatus === "invalid" && (
+                      <p className="text-[11px] text-red-500 mt-1">Enter a valid domain (e.g. store.yourbrand.com).</p>
+                    )}
+                    {(domainStatus !== "taken" && domainStatus !== "invalid") && (
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        After saving, visits to this domain will show your store automatically.
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -1001,7 +1055,11 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
 
             {/* Save */}
             <div className="pb-4 pt-2">
-              <Button onClick={handleSave} disabled={saving} className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2 h-10">
+              <Button
+                onClick={handleSave}
+                disabled={saving || domainStatus === "taken" || domainStatus === "invalid"}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2 h-10 disabled:opacity-50"
+              >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saving ? "Saving…" : "Save Changes"}
               </Button>
