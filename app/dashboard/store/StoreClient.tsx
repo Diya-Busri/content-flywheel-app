@@ -412,7 +412,11 @@ function EmptyState({ icon: Icon, title, subtitle, action }: {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function StoreClient({ userId }: StoreClientProps) {
-  const storeUrl = `${STORE_BASE}/${userId}`;
+  const fallbackStoreUrl = `${STORE_BASE}/${userId}`;
+  const [customDomain, setCustomDomain] = useState<string | null>(null);
+  const [customDomainLoaded, setCustomDomainLoaded] = useState(false);
+  // Use subdomain URL if set (e.g. digitaldrift.contentflywheel.co.uk), else /c/userId
+  const storeUrl = customDomain ? `https://${customDomain}` : fallbackStoreUrl;
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("products");
   const [copied, setCopied] = useState(false);
@@ -504,6 +508,14 @@ export function StoreClient({ userId }: StoreClientProps) {
 
   useEffect(() => {
     fetchPromoCodes(); fetchBundles(); fetchAffiliates(); fetchLibrary(); fetchAnalytics();
+    // Fetch store settings to resolve custom subdomain URL
+    fetch("/api/store-settings")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.customDomain) setCustomDomain(data.customDomain as string);
+      })
+      .catch(() => {})
+      .finally(() => setCustomDomainLoaded(true));
   }, [fetchPromoCodes, fetchBundles, fetchAffiliates, fetchLibrary, fetchAnalytics]);
 
   const handleCopy = async () => {
@@ -569,7 +581,12 @@ export function StoreClient({ userId }: StoreClientProps) {
         {/* ── Store URL Card ── */}
         <div className="relative rounded-2xl overflow-hidden border border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-950/20 p-4 mb-6">
           <div className="relative flex items-center gap-3 flex-wrap">
-            <p className="text-xs font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400 shrink-0">Your Store</p>
+            <div className="shrink-0">
+              <p className="text-xs font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400">Your Store</p>
+              {customDomain && (
+                <p className="text-[10px] text-orange-400 dark:text-orange-500 mt-0.5">Custom URL active</p>
+              )}
+            </div>
             <div className="flex-1 min-w-0 bg-gray-100 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] rounded-xl px-4 py-2.5">
               <p className="text-sm text-gray-900 dark:text-white font-mono truncate">{storeUrl}</p>
             </div>
