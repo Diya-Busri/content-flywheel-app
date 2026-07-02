@@ -36,10 +36,10 @@ export async function POST() {
           quantity: 1,
           price_data: {
             currency: "gbp",
-            unit_amount: 999, // £9.99
+            unit_amount: 1999, // £19.99
             product_data: {
               name: "Custom Domain — Content Flywheel",
-              description: "Connect your own domain to your Content Flywheel store. One-time activation.",
+              description: "Connect your own .com domain to your Content Flywheel store. One-time unlock.",
             },
           },
         },

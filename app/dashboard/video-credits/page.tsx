@@ -348,7 +348,7 @@ function VideoCreditsContent() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
-              <p className="text-sm font-bold text-gray-900 dark:text-white">Custom Domain</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Custom .com Domain</p>
               {domainActive
                 ? <span className="text-[11px] font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-1.5 py-0.5 rounded">Active</span>
                 : <span className="text-[11px] font-semibold text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded flex items-center gap-1"><Lock className="w-2.5 h-2.5" /> Locked</span>
@@ -356,8 +356,8 @@ function VideoCreditsContent() {
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {domainActive
-                ? "Your custom domain is active. Configure it in Store Settings."
-                : "Connect your own domain to your store. e.g. store.yourbrand.com — one-time activation."}
+                ? "Your custom domain is unlocked. Custom .com mapping coming soon."
+                : "Connect your own .com domain to your store (e.g. yourbrand.com) — one-time unlock."}
             </p>
           </div>
           <div className="shrink-0">
@@ -367,9 +367,9 @@ function VideoCreditsContent() {
               </Button>
             ) : (
               <div className="text-right">
-                <p className="text-xl font-bold text-gray-900 dark:text-white mb-1.5">£9.99</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white mb-1.5">£19.99</p>
                 <Button size="sm" onClick={() => void handleBuyDomain()} disabled={loadingDomain} className="bg-orange-500 hover:bg-orange-600 text-white">
-                  {loadingDomain ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Activate"}
+                  {loadingDomain ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Unlock"}
                 </Button>
               </div>
             )}
