@@ -113,9 +113,13 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // If a customDomain is being set, ensure no other user has already claimed it
+    // If a customDomain is being set, normalise to full subdomain and ensure uniqueness
     if (updates.customDomain && typeof updates.customDomain === "string") {
-      const normalised = updates.customDomain.trim().toLowerCase();
+      const SUFFIX = ".contentflywheel.co.uk";
+      const raw = updates.customDomain.trim().toLowerCase();
+      // Accept bare handle ("digitaldrift") or full subdomain ("digitaldrift.contentflywheel.co.uk")
+      const handle = raw.endsWith(SUFFIX) ? raw.slice(0, -SUFFIX.length) : raw;
+      const normalised = `${handle}${SUFFIX}`;
       updates.customDomain = normalised;
       const [existing] = await db
         .select({ userId: storeSettingsTable.userId })

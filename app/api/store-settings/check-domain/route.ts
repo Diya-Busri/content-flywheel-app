@@ -5,9 +5,11 @@ import { db } from "@/db/db";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { and, eq, ne } from "drizzle-orm";
 
+const SUFFIX = ".contentflywheel.co.uk";
+
 /**
- * GET /api/store-settings/check-domain?domain=store.example.com
- * Returns { available: true } if no other user has this domain, { available: false } if taken.
+ * GET /api/store-settings/check-domain?domain=digitaldrift
+ * Accepts a bare handle or full subdomain. Returns { available: true/false }.
  */
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
@@ -16,14 +18,17 @@ export async function GET(req: NextRequest) {
   }
 
   const raw = req.nextUrl.searchParams.get("domain") ?? "";
-  const domain = raw.trim().toLowerCase();
+  const trimmed = raw.trim().toLowerCase();
+  // Accept "digitaldrift" or "digitaldrift.contentflywheel.co.uk"
+  const handle = trimmed.endsWith(SUFFIX) ? trimmed.slice(0, -SUFFIX.length) : trimmed;
+  const domain = handle ? `${handle}${SUFFIX}` : "";
 
   if (!domain) {
     return NextResponse.json({ available: true });
   }
 
-  // Basic format check
-  const valid = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain);
+  // Handle: 2-63 chars, letters/numbers/hyphens, no leading/trailing hyphen
+  const valid = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(handle);
   if (!valid) {
     return NextResponse.json({ available: false, reason: "Invalid domain format" });
   }

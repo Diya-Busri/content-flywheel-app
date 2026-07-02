@@ -14,8 +14,13 @@ async function handleCustomDomain(req: NextRequest): Promise<NextResponse | null
   const host = req.headers.get("host") ?? "";
   const hostname = host.split(":")[0].toLowerCase();
 
-  // Skip if this is the main platform domain or a subdomain of it
-  if (hostname === PLATFORM_HOSTNAME || hostname.endsWith(`.${PLATFORM_HOSTNAME}`) || hostname === "localhost") {
+  // Skip only the bare platform domain, www, and localhost.
+  // *.contentflywheel.co.uk subdomains are creator store URLs — pass them through to lookup.
+  if (
+    hostname === PLATFORM_HOSTNAME ||
+    hostname === `www.${PLATFORM_HOSTNAME}` ||
+    hostname === "localhost"
+  ) {
     return null;
   }
 

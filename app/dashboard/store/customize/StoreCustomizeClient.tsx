@@ -975,83 +975,81 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
               </div>
             </div>
 
-            {/* Custom Domain */}
-            <div className="space-y-3 border-t border-gray-200 pt-4">
-              <SectionHeader icon={<Globe size={14} />} label="Custom Domain" />
-              {settings.customDomainActive ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-gray-500">
-                    Point your own domain to your Content Flywheel store. Add a <strong>CNAME</strong> record in your DNS settings:
-                  </p>
-                  <div className="rounded-lg bg-gray-900 text-green-400 text-xs font-mono px-3 py-2 space-y-0.5 select-all">
-                    <div><span className="text-gray-500">Type:</span> CNAME</div>
-                    <div><span className="text-gray-500">Name:</span> store (or @)</div>
-                    <div><span className="text-gray-500">Value:</span> cname.contentflywheel.co.uk</div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Your domain</label>
-                    <div className="relative">
-                      <Input
-                        value={settings.customDomain ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value.trim().toLowerCase() || null;
-                          set("customDomain", v);
-                          checkDomain(e.target.value);
-                        }}
-                        placeholder="store.yourdomain.com"
-                        className={`h-9 text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:border-orange-500 pr-24 ${
-                          domainStatus === "taken" || domainStatus === "invalid"
-                            ? "border-red-400"
-                            : domainStatus === "available"
-                            ? "border-green-400"
-                            : "border-gray-200"
-                        }`}
-                      />
+            {/* Store URL / Subdomain */}
+            {(() => {
+              const SUFFIX = ".contentflywheel.co.uk";
+              const storedDomain = settings.customDomain ?? "";
+              const currentHandle = storedDomain.endsWith(SUFFIX)
+                ? storedDomain.slice(0, -SUFFIX.length)
+                : storedDomain.includes(".") ? "" : storedDomain;
+              return (
+                <div className="space-y-3 border-t border-gray-200 pt-4">
+                  <SectionHeader icon={<Globe size={14} />} label="Your Store URL" />
+                  {settings.customDomainActive ? (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-gray-500">Choose your store address</label>
+                      <div className="flex items-center gap-0">
+                        <div className="relative flex-1">
+                          <Input
+                            value={currentHandle}
+                            onChange={(e) => {
+                              const handle = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                              const full = handle ? `${handle}${SUFFIX}` : null;
+                              set("customDomain", full);
+                              checkDomain(handle);
+                            }}
+                            placeholder="yourbrand"
+                            maxLength={40}
+                            className={`h-9 text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:border-orange-500 rounded-r-none ${
+                              domainStatus === "taken" || domainStatus === "invalid"
+                                ? "border-red-400"
+                                : domainStatus === "available"
+                                ? "border-green-400"
+                                : "border-gray-200"
+                            }`}
+                          />
+                        </div>
+                        <div className="h-9 px-2.5 flex items-center bg-gray-100 border border-l-0 border-gray-200 rounded-r-md text-xs text-gray-500 font-mono whitespace-nowrap">
+                          .contentflywheel.co.uk
+                        </div>
+                      </div>
                       {domainStatus !== "idle" && (
-                        <span className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                          domainStatus === "checking" ? "text-gray-400 bg-gray-100" :
-                          domainStatus === "available" ? "text-green-700 bg-green-50" :
-                          domainStatus === "taken" ? "text-red-700 bg-red-50" :
-                          "text-red-700 bg-red-50"
+                        <p className={`text-[11px] font-medium ${
+                          domainStatus === "checking" ? "text-gray-400" :
+                          domainStatus === "available" ? "text-green-600" : "text-red-500"
                         }`}>
                           {domainStatus === "checking" && "Checking…"}
-                          {domainStatus === "available" && "✓ Available"}
-                          {domainStatus === "taken" && "✗ Taken"}
-                          {domainStatus === "invalid" && "✗ Invalid"}
-                        </span>
+                          {domainStatus === "available" && `✓ Available — your store will be at ${currentHandle}${SUFFIX}`}
+                          {domainStatus === "taken" && "✗ This name is already taken by another store."}
+                          {domainStatus === "invalid" && "✗ Only letters, numbers and hyphens allowed (min 2 characters)."}
+                        </p>
+                      )}
+                      {domainStatus === "idle" && currentHandle && (
+                        <p className="text-[11px] text-gray-400">
+                          Your store: <span className="font-mono text-gray-600">{currentHandle}{SUFFIX}</span>
+                        </p>
                       )}
                     </div>
-                    {domainStatus === "taken" && (
-                      <p className="text-[11px] text-red-500 mt-1">This domain is already connected to another store.</p>
-                    )}
-                    {domainStatus === "invalid" && (
-                      <p className="text-[11px] text-red-500 mt-1">Enter a valid domain (e.g. store.yourbrand.com).</p>
-                    )}
-                    {(domainStatus !== "taken" && domainStatus !== "invalid") && (
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        After saving, visits to this domain will show your store automatically.
-                      </p>
-                    )}
-                  </div>
+                  ) : (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-gray-200 flex items-center justify-center shrink-0">
+                        <Lock size={14} className="text-gray-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-700 mb-0.5">Store URL not activated</p>
+                        <p className="text-[11px] text-gray-400">Get your own <span className="font-mono">yourbrand.contentflywheel.co.uk</span> for a one-time fee.</p>
+                      </div>
+                      <a
+                        href="/dashboard/video-credits"
+                        className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors whitespace-nowrap"
+                      >
+                        Activate — £9.99
+                      </a>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-gray-200 flex items-center justify-center shrink-0">
-                    <Lock size={14} className="text-gray-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-gray-700 mb-0.5">Custom domain not activated</p>
-                    <p className="text-[11px] text-gray-400">Connect your own domain (e.g. store.yourbrand.com) for a one-time fee.</p>
-                  </div>
-                  <a
-                    href="/dashboard/video-credits"
-                    className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors whitespace-nowrap"
-                  >
-                    Activate — £9.99
-                  </a>
-                </div>
-              )}
-            </div>
+              );
+            })()}
 
             {/* Save */}
             <div className="pb-4 pt-2">
