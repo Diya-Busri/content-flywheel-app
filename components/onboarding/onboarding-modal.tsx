@@ -193,13 +193,6 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => { onComplete(); }}
-              className="w-full mt-4 text-white/30 hover:text-white/50 text-xs transition-colors"
-            >
-              Skip setup — explore everything
-            </button>
           </div>
         )}
 
@@ -214,7 +207,7 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
                 Quick — tell us about your brand
               </h2>
               <p className="text-white/40 text-sm">
-                Makes every AI output sound like you. Skip if you want.
+                Makes every AI output sound like you. All fields optional.
               </p>
             </div>
 
@@ -267,24 +260,17 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6">
               <Button
                 onClick={handleSaveBrand}
                 disabled={saving}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
               >
                 {saving ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
                 ) : (
                   <>Save & continue <ArrowRight className="ml-2 h-4 w-4" /></>
                 )}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => { setStep(3); onStepComplete?.(2); }}
-                className="text-white/30 hover:text-white/50"
-              >
-                Skip
               </Button>
             </div>
           </div>
@@ -360,19 +346,12 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
               </div>
             )}
 
-            <Button
-              onClick={handleLaunch}
-              variant="outline"
-              className="w-full border-white/10 text-white/60 hover:text-white hover:bg-white/5 text-sm"
-            >
-              {goal && goal.id !== "digital_products" ? `Go to ${goal.title}` : "Explore the dashboard"}
-            </Button>
             <button
               type="button"
-              onClick={onComplete}
-              className="mt-3 w-full text-white/20 hover:text-white/40 text-xs transition-colors"
+              onClick={handleLaunch}
+              className="w-full bg-white/10 hover:bg-white/15 text-white/70 hover:text-white border border-white/10 rounded-lg py-2.5 px-4 text-sm font-medium transition-all"
             >
-              Skip — go to dashboard
+              {goal && goal.id !== "digital_products" ? `Go to ${goal.title}` : "Explore the dashboard"} <ArrowRight className="inline ml-1.5 h-3.5 w-3.5" />
             </button>
           </div>
         )}
