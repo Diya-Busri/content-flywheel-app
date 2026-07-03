@@ -504,7 +504,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
         setCustomDomainError(data.error ?? "Failed to connect domain.");
       } else {
         setDomainDns(data.dns ?? { type: "CNAME", name: "@", value: "cname.vercel-dns.com" });
-        toast({ title: "Domain connected!", description: `Add the DNS record below at your registrar to go live.` });
+        toast({ title: "Domain connected!", description: "We've emailed you step-by-step setup instructions." });
       }
     } catch {
       setCustomDomainError("Network error. Please try again.");
@@ -1159,6 +1159,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                             )}
 
                             <p className="text-[10px] text-gray-400">Changes can take up to 24 hours. Your store goes live automatically once DNS propagates.</p>
+                            <p className="text-[10px] text-green-600 font-medium">📧 We&apos;ve emailed you these instructions so you can do this at your own pace.</p>
                           </div>
                         </div>
                       ) : domainStep === 1 ? (
