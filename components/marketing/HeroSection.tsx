@@ -1,11 +1,12 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Package, Video, Calendar, ArrowRight } from "lucide-react"
+import { Package, Video, Calendar, ArrowRight, ShoppingBag } from "lucide-react"
 import Link from "next/link"
 
 const JOURNEY_STEPS = [
   { label: "Create Product", icon: Package },
+  { label: "Sell It", icon: ShoppingBag },
   { label: "Create Video", icon: Video },
   { label: "Plan Content", icon: Calendar },
 ]
@@ -40,7 +41,7 @@ export default function HeroSection() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-balance text-4xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-7xl"
           >
-            Create &amp; Market{" "}
+            Create, Sell &amp; Market{" "}
             <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
               Digital Products
             </span>{" "}
@@ -54,7 +55,7 @@ export default function HeroSection() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mt-6 text-lg leading-8 text-white/50 sm:text-xl max-w-2xl mx-auto"
           >
-            Generate your product, create promotional videos, and plan your content strategy — all from one platform.
+            Generate your product, sell it from your own store, create promo videos, and plan your content strategy — all from one platform.
           </motion.p>
 
           {/* CTAs */}
@@ -87,7 +88,7 @@ export default function HeroSection() {
         {/* Journey steps */}
         <div className="mt-20">
           <p className="mb-8 text-center text-xs font-semibold uppercase tracking-widest text-white/25">
-            The beginner journey — Idea → Product → Content
+            The beginner journey — Idea → Product → Sell → Content
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             {JOURNEY_STEPS.map((step, i) => {
@@ -126,8 +127,8 @@ export default function HeroSection() {
 
           <div className="mx-auto mt-12 max-w-3xl rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 text-center text-white/50">
             <p className="text-sm sm:text-base">
-              ChatGPT writes it. Canva designs it. Later you figure out where to post it.{" "}
-              <span className="font-semibold text-orange-400">Content Flywheel handles the create & market part — all in one place.</span>
+              ChatGPT writes it. Canva designs it. Later you figure out where to sell it.{" "}
+              <span className="font-semibold text-orange-400">Content Flywheel handles the create, sell &amp; market part — all in one place.</span>
             </p>
           </div>
         </div>

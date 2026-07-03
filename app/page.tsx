@@ -9,9 +9,9 @@ import HeroSection from "@/components/marketing/HeroSection";
 import { LandingAICoach } from "@/components/marketing/LandingAICoach";
 
 export const metadata: Metadata = {
-  title: "Content Flywheel — Create & Market Digital Products with AI",
+  title: "Content Flywheel — Create, Sell & Market Digital Products with AI",
   description:
-    "Build ebooks, planners and templates with AI. Create promotional videos and plan your content strategy — all from one platform.",
+    "Build digital products with AI, sell from your own store, and grow your audience — all from one platform. No third-party platforms needed.",
 };
 
 async function getPublicReviews(): Promise<{ text: string; name: string; rating?: number }[]> {
