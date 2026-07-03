@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, and, ne } from "drizzle-orm";
@@ -26,15 +26,25 @@ export async function POST(req: NextRequest) {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Verify custom domain is unlocked for this user
-    const [settings] = await db
-      .select({ customDomainActive: storeSettingsTable.customDomainActive })
-      .from(storeSettingsTable)
-      .where(eq(storeSettingsTable.userId, userId))
-      .limit(1);
+    // Verify custom domain is unlocked for this user (admin always gets access)
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+    let isAdmin = false;
+    if (adminEmail) {
+      const user = await currentUser();
+      const email = user?.emailAddresses?.[0]?.emailAddress?.trim().toLowerCase() ?? "";
+      isAdmin = email === adminEmail;
+    }
 
-    if (!settings?.customDomainActive) {
-      return NextResponse.json({ error: "Custom domain not unlocked" }, { status: 403 });
+    if (!isAdmin) {
+      const [settings] = await db
+        .select({ customDomainActive: storeSettingsTable.customDomainActive })
+        .from(storeSettingsTable)
+        .where(eq(storeSettingsTable.userId, userId))
+        .limit(1);
+
+      if (!settings?.customDomainActive) {
+        return NextResponse.json({ error: "Custom domain not unlocked" }, { status: 403 });
+      }
     }
 
     const body = await req.json() as { domain?: string };
