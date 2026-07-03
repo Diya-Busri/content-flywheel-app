@@ -7,8 +7,8 @@ import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import type { OnboardingSteps } from "@/app/api/onboarding/route";
 
-type OnboardingContextValue = { modalActive: boolean };
-const OnboardingContext = createContext<OnboardingContextValue>({ modalActive: false });
+type OnboardingContextValue = { modalActive: boolean; refetch: () => Promise<void> };
+const OnboardingContext = createContext<OnboardingContextValue>({ modalActive: false, refetch: async () => {} });
 export function useOnboarding() { return useContext(OnboardingContext); }
 
 const BRAND_ORANGE = "#F59E0B";
@@ -170,7 +170,7 @@ export function OnboardingProvider({
   }, [steps]);
 
   return (
-    <OnboardingContext.Provider value={{ modalActive: showModal }}>
+    <OnboardingContext.Provider value={{ modalActive: showModal, refetch: fetchOnboarding }}>
       {/* Overlay for new users: hides the dashboard until we know whether to show the modal */}
       {showLoadingOverlay && (
         <div className="fixed inset-0 z-[9999] bg-[#0a0a0a] flex items-center justify-center">
