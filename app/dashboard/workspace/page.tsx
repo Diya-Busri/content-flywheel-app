@@ -26,7 +26,8 @@ interface Todo {
   category?: string; dueDate?: string; createdAt: number;
 }
 interface SavedTask { id: string; text: string; priority: Priority; category?: string; }
-interface Note { id: string; title: string; body: string; updatedAt: number; }
+type NoteTag = "script" | "idea" | "research" | "strategy" | "personal";
+interface Note { id: string; title: string; body: string; updatedAt: number; tag?: NoteTag; pinned?: boolean; }
 interface CalEvent { id: string; title: string; date: string; type: "post" | "launch" | "task" | "other"; platform?: string; }
 interface Goal { id: string; label: string; target: number; current: number; unit: string; deadline?: string; color: string; }
 
@@ -55,6 +56,35 @@ const DEFAULT_GOALS: Goal[] = [
   { id: "products", label: "Products Listed",     target: 25,   current: 0, unit: "",  color: "#3b82f6", deadline: "" },
 ];
 const GOAL_COLORS = ["#f97316","#a855f7","#3b82f6","#10b981","#ef4444","#ec4899"];
+
+const NOTE_TAGS: Record<NoteTag, { label: string; pill: string; dot: string }> = {
+  script:   { label: "Script",   pill: "bg-purple-500/15 text-purple-500 dark:text-purple-400 border-purple-500/20",  dot: "bg-purple-500" },
+  idea:     { label: "Idea",     pill: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",      dot: "bg-amber-500" },
+  research: { label: "Research", pill: "bg-blue-500/15 text-blue-500 dark:text-blue-400 border-blue-500/20",          dot: "bg-blue-500" },
+  strategy: { label: "Strategy", pill: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",      dot: "bg-green-500" },
+  personal: { label: "Personal", pill: "bg-pink-500/15 text-pink-500 dark:text-pink-400 border-pink-500/20",          dot: "bg-pink-500" },
+};
+
+const NOTE_TEMPLATES: Record<string, { label: string; emoji: string; title: string; body: string; tag: NoteTag }> = {
+  blank: {
+    label: "Blank", emoji: "📄", title: "", body: "", tag: "idea",
+  },
+  "hook-script": {
+    label: "Hook Script", emoji: "🎬", tag: "script",
+    title: "Hook Script",
+    body: "## Hook\n\n\n## Problem\n\n\n## Solution / Transition\n\n\n## CTA\n\n",
+  },
+  "content-idea": {
+    label: "Content Idea", emoji: "💡", tag: "idea",
+    title: "Content Idea",
+    body: "## Angle\n\n\n## Hook options\n- \n- \n- \n\n## Key points\n- \n- \n\n## CTA\n\n",
+  },
+  "strategy-brief": {
+    label: "Strategy Brief", emoji: "📊", tag: "strategy",
+    title: "Strategy Brief",
+    body: "## Goal\n\n\n## Target audience\n\n\n## Key message\n\n\n## Channels\n\n\n## Success metrics\n\n",
+  },
+};
 const STARTER_TASKS: { text: string; priority: Priority; category: string }[] = [
   { text: "Record and post one short-form video today",  priority: "high",   category: "content" },
   { text: "Reply to comments on your last 3 posts",       priority: "medium", category: "growth" },
@@ -413,11 +443,18 @@ function TodoTab() {
 // NOTES TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
+type FontSize = "sm" | "base" | "lg";
+type FontFamily = "sans" | "mono";
+
 function NotesTab() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState("");
   const [search, setSearch] = useState("");
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [tagFilter, setTagFilter] = useState<NoteTag | "">("");
+  const [fontSize, setFontSize] = useState<FontSize>("base");
+  const [fontFamily, setFontFamily] = useState<FontFamily>("sans");
+  const [copied, setCopied] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -428,130 +465,329 @@ function NotesTab() {
   }, []);
   useEffect(() => { try { localStorage.setItem("cf_notes", JSON.stringify(notes)); } catch {} }, [notes]);
 
-  const createNote = () => {
-    const title = newTitle.trim() || "Untitled note";
-    const note: Note = { id: uid(), title, body: "", updatedAt: Date.now() };
+  const createNote = (templateKey = "blank") => {
+    const tpl = NOTE_TEMPLATES[templateKey] ?? NOTE_TEMPLATES.blank;
+    const note: Note = { id: uid(), title: tpl.title || "Untitled note", body: tpl.body, updatedAt: Date.now(), tag: tpl.tag };
     setNotes(prev => [note, ...prev]);
     setActiveId(note.id);
-    setNewTitle("");
+    setShowTemplates(false);
     setTimeout(() => editorRef.current?.focus(), 50);
   };
-  const updateNote = (id: string, patch: Partial<Note>) => {
+
+  const updateNote = (id: string, patch: Partial<Note>) =>
     setNotes(prev => prev.map(n => n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n));
-  };
-  const deleteNote = (id: string) => {
+
+  const deleteNote = (id: string) =>
     setNotes(prev => { const next = prev.filter(n => n.id !== id); setActiveId(next[0]?.id ?? null); return next; });
+
+  const duplicateNote = (note: Note) => {
+    const copy: Note = { ...note, id: uid(), title: `${note.title} (copy)`, updatedAt: Date.now() };
+    setNotes(prev => [copy, ...prev]);
+    setActiveId(copy.id);
   };
 
-  // Format shortcuts
-  const insertFormat = (prefix: string, suffix = "") => {
+  const togglePin = (id: string) =>
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, pinned: !n.pinned, updatedAt: n.updatedAt } : n));
+
+  const copyToClipboard = async () => {
+    if (!active) return;
+    const text = `# ${active.title}\n\n${active.body}`;
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+  };
+
+  // Format insertion
+  const insertFormat = (prefix: string, suffix = "", linePrefix = false) => {
     const el = editorRef.current;
     if (!el || !activeId) return;
     const start = el.selectionStart;
     const end = el.selectionEnd;
     const body = active?.body ?? "";
     const selected = body.slice(start, end);
-    const before = start === 0 || body[start - 1] === "\n" ? "" : "\n";
-    const after = end === body.length || body[end] === "\n" ? "" : "\n";
-    const insertion = suffix
-      ? `${prefix}${selected || "text"}${suffix}`
-      : `${before}${prefix}${selected || "text"}${after}`;
+    let insertion: string;
+    if (suffix) {
+      insertion = `${prefix}${selected || "text"}${suffix}`;
+    } else if (linePrefix) {
+      const before = start === 0 || body[start - 1] === "\n" ? "" : "\n";
+      const after = end === body.length || body[end] === "\n" ? "" : "\n";
+      insertion = `${before}${prefix}${selected || "text"}${after}`;
+    } else {
+      insertion = `${prefix}${selected || "text"}`;
+    }
     const newBody = body.slice(0, start) + insertion + body.slice(end);
     updateNote(activeId, { body: newBody });
-    setTimeout(() => {
-      el.focus();
-      const pos = start + insertion.length;
-      el.setSelectionRange(pos, pos);
-    }, 10);
+    setTimeout(() => { el.focus(); const pos = start + insertion.length; el.setSelectionRange(pos, pos); }, 10);
+  };
+
+  // Keyboard shortcuts inside editor
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key === "b") { e.preventDefault(); insertFormat("**", "**"); return; }
+    if (mod && e.key === "i") { e.preventDefault(); insertFormat("_", "_"); return; }
+    if (mod && e.key === "h") { e.preventDefault(); insertFormat("## ", "", true); return; }
+    if (mod && e.key === "k") { e.preventDefault(); insertFormat("`", "`"); return; }
+    if (mod && e.shiftKey && e.key === "l") { e.preventDefault(); insertFormat("- ", "", true); return; }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const start = el.selectionStart;
+      const body = active?.body ?? "";
+      const newBody = body.slice(0, start) + "  " + body.slice(start);
+      updateNote(activeId!, { body: newBody });
+      setTimeout(() => { el.focus(); el.setSelectionRange(start + 2, start + 2); }, 10);
+    }
   };
 
   const active = notes.find(n => n.id === activeId);
-  const wordCount = active?.body.trim() ? active.body.trim().split(/\s+/).length : 0;
+  const words = active?.body.trim() ? active.body.trim().split(/\s+/).length : 0;
+  const readTime = Math.max(1, Math.ceil(words / 200));
 
-  const filteredNotes = search.trim()
-    ? notes.filter(n => n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase()))
-    : notes;
+  // Sort: pinned first, then by updatedAt
+  const sorted = [...notes].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.updatedAt - a.updatedAt;
+  });
+  const filteredNotes = sorted.filter(n => {
+    const q = search.toLowerCase();
+    if (q && !n.title.toLowerCase().includes(q) && !n.body.toLowerCase().includes(q)) return false;
+    if (tagFilter && n.tag !== tagFilter) return false;
+    return true;
+  });
+
+  const FONT_SIZES: Record<FontSize, string> = { sm: "text-sm", base: "text-base", lg: "text-lg" };
+  const FONT_FAMILIES: Record<FontFamily, string> = { sans: "font-sans", mono: "font-mono" };
 
   return (
-    <div className="flex gap-0 h-[calc(100vh-220px)] min-h-[460px] rounded-xl border border-border overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-64 shrink-0 flex flex-col bg-muted/30 border-r border-border">
-        {/* Header */}
+    <div className="flex gap-0 h-[calc(100vh-220px)] min-h-[500px] rounded-xl border border-border overflow-hidden">
+
+      {/* ── Sidebar ── */}
+      <div className="w-72 shrink-0 flex flex-col bg-muted/30 border-r border-border">
+
+        {/* Search */}
         <div className="p-3 border-b border-border space-y-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes…"
+              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
           </div>
-          <div className="flex gap-1.5">
-            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === "Enter" && createNote()} placeholder="New note…" className="flex-1 h-8 text-xs" />
-            <Button size="icon" className="h-8 w-8 shrink-0 bg-orange-500 hover:bg-orange-600 text-white" onClick={createNote}><Plus className="w-3.5 h-3.5" /></Button>
+
+          {/* New note button */}
+          <div className="relative">
+            <button onClick={() => setShowTemplates(v => !v)}
+              className="w-full h-9 flex items-center justify-center gap-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors">
+              <Plus className="w-4 h-4" />New note
+              <ChevronDown className={cn("w-3.5 h-3.5 ml-auto opacity-70 transition-transform", showTemplates && "rotate-180")} />
+            </button>
+            {showTemplates && (
+              <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden">
+                {Object.entries(NOTE_TEMPLATES).map(([key, tpl]) => (
+                  <button key={key} onClick={() => createNote(key)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-accent transition-colors">
+                    <span className="text-lg leading-none">{tpl.emoji}</span>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">{tpl.label}</p>
+                      {key !== "blank" && <p className="text-[10px] text-muted-foreground capitalize">{tpl.tag}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Tag filter pills */}
+          <div className="flex gap-1 flex-wrap">
+            <button onClick={() => setTagFilter("")}
+              className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all",
+                tagFilter === "" ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:border-foreground")}>
+              All
+            </button>
+            {(Object.keys(NOTE_TAGS) as NoteTag[]).map(tag => (
+              <button key={tag} onClick={() => setTagFilter(t => t === tag ? "" : tag)}
+                className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all",
+                  tagFilter === tag ? NOTE_TAGS[tag].pill : "border-border text-muted-foreground hover:border-foreground")}>
+                {NOTE_TAGS[tag].label}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Note list */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {filteredNotes.length === 0 && (
-            <div className="py-8 text-center">
+          {filteredNotes.length === 0 ? (
+            <div className="py-10 text-center">
               <StickyNote className="w-6 h-6 mx-auto mb-2 text-muted-foreground/30" />
-              <p className="text-xs text-muted-foreground">{search ? "No matches" : "No notes yet"}</p>
+              <p className="text-xs text-muted-foreground">{search || tagFilter ? "No matches" : "No notes yet"}</p>
             </div>
-          )}
-          {filteredNotes.map(note => (
-            <button key={note.id} onClick={() => setActiveId(note.id)} className={cn("w-full text-left px-3 py-2.5 rounded-lg border transition-all group relative", activeId === note.id ? "bg-white dark:bg-[#1A1A1A] border-orange-500/30 shadow-sm" : "bg-transparent border-transparent hover:bg-white/60 dark:hover:bg-white/5 hover:border-border")}>
+          ) : filteredNotes.map(note => (
+            <button key={note.id} onClick={() => setActiveId(note.id)}
+              className={cn("w-full text-left px-3 py-2.5 rounded-lg border transition-all group relative",
+                activeId === note.id
+                  ? "bg-white dark:bg-[#1A1A1A] border-orange-500/30 shadow-sm"
+                  : "bg-transparent border-transparent hover:bg-white/60 dark:hover:bg-white/5 hover:border-border")}>
               <div className="flex items-start gap-2">
-                <div className={cn("w-1 h-full min-h-[32px] rounded-full shrink-0 mt-0.5", activeId === note.id ? "bg-orange-500" : "bg-transparent group-hover:bg-border")} />
-                <div className="flex-1 min-w-0 pr-5">
-                  <p className="text-xs font-semibold truncate text-foreground">{note.title || "Untitled"}</p>
-                  {note.body && <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{note.body.slice(0, 55)}</p>}
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">{new Date(note.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+                {/* Accent bar */}
+                <div className={cn("w-1 min-h-[32px] rounded-full shrink-0 mt-0.5 transition-colors",
+                  activeId === note.id
+                    ? note.tag ? NOTE_TAGS[note.tag].dot : "bg-orange-500"
+                    : "bg-transparent group-hover:bg-border")} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    {note.pinned && <span className="text-orange-500 text-[10px]">📌</span>}
+                    <p className="text-xs font-semibold truncate text-foreground">{note.title || "Untitled"}</p>
+                  </div>
+                  {note.tag && (
+                    <span className={cn("inline-block px-1.5 py-px rounded-full text-[9px] font-bold border mb-0.5", NOTE_TAGS[note.tag].pill)}>
+                      {NOTE_TAGS[note.tag].label}
+                    </span>
+                  )}
+                  {note.body && (
+                    <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
+                      {note.body.replace(/#+\s/g, "").replace(/\*\*/g, "").replace(/_/g, "").slice(0, 80)}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                    {new Date(note.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  </p>
                 </div>
               </div>
-              <button onClick={e => { e.stopPropagation(); deleteNote(note.id); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all p-0.5 rounded">
-                <Trash2 className="w-3 h-3" />
-              </button>
+
+              {/* Hover actions */}
+              <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={e => { e.stopPropagation(); togglePin(note.id); }}
+                  title={note.pinned ? "Unpin" : "Pin"}
+                  className={cn("p-0.5 rounded text-muted-foreground hover:text-orange-500 transition-colors text-[10px]", note.pinned && "text-orange-500")}>
+                  📌
+                </button>
+                <button onClick={e => { e.stopPropagation(); deleteNote(note.id); }}
+                  className="p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             </button>
           ))}
         </div>
+
+        {/* Footer count */}
+        <div className="px-3 py-2 border-t border-border">
+          <p className="text-[10px] text-muted-foreground/60">{notes.length} note{notes.length !== 1 ? "s" : ""}</p>
+        </div>
       </div>
 
-      {/* Editor */}
+      {/* ── Editor ── */}
       <div className="flex-1 flex flex-col min-w-0 bg-card">
         {!active ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 p-8">
-            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <StickyNote className="w-5 h-5 text-muted-foreground/40" />
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 p-8">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+              <StickyNote className="w-6 h-6 text-muted-foreground/40" />
             </div>
-            <p className="text-sm text-muted-foreground">Select a note or create one to get started</p>
+            <div>
+              <p className="text-sm font-semibold text-foreground mb-1">No note selected</p>
+              <p className="text-xs text-muted-foreground">Pick a note from the list or create a new one</p>
+            </div>
+            <button onClick={() => setShowTemplates(true)}
+              className="mt-1 flex items-center gap-1.5 text-xs text-orange-500 hover:underline">
+              <Plus className="w-3.5 h-3.5" />Create your first note
+            </button>
           </div>
         ) : (
           <>
             {/* Note header */}
-            <div className="px-5 pt-4 pb-3 border-b border-border flex items-center gap-3">
-              <input value={active.title} onChange={e => updateNote(active.id, { title: e.target.value })}
-                className="flex-1 text-lg font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground" placeholder="Note title" />
-              <span className="text-xs text-muted-foreground/60 shrink-0">{wordCount}w · auto-saved</span>
+            <div className="px-5 pt-4 pb-3 border-b border-border flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <input
+                  value={active.title}
+                  onChange={e => updateNote(active.id, { title: e.target.value })}
+                  className="w-full text-xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground leading-tight"
+                  placeholder="Note title"
+                />
+                {/* Tag selector */}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  {(Object.keys(NOTE_TAGS) as NoteTag[]).map(tag => (
+                    <button key={tag} onClick={() => updateNote(active.id, { tag: active.tag === tag ? undefined : tag })}
+                      className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all",
+                        active.tag === tag ? NOTE_TAGS[tag].pill : "border-border text-muted-foreground/60 hover:border-foreground/40")}>
+                      {NOTE_TAGS[tag].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Header actions */}
+              <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                <button onClick={copyToClipboard} title="Copy as markdown"
+                  className={cn("flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-all",
+                    copied ? "bg-green-500/10 text-green-600 border-green-500/30" : "border-border text-muted-foreground hover:text-foreground hover:bg-accent")}>
+                  {copied ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+                <button onClick={() => duplicateNote(active)} title="Duplicate note"
+                  className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                  <Zap className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => deleteNote(active.id)} title="Delete note"
+                  className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5 transition-all">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Format toolbar */}
-            <div className="px-4 py-1.5 border-b border-border/50 flex items-center gap-0.5">
+            <div className="px-4 py-1.5 border-b border-border/50 flex items-center gap-0.5 flex-wrap">
               {[
-                { icon: <Heading2 className="w-3.5 h-3.5" />, title: "Heading", action: () => insertFormat("## ") },
-                { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold", action: () => insertFormat("**", "**") },
-                { icon: <List className="w-3.5 h-3.5" />, title: "List", action: () => insertFormat("- ") },
-                { icon: <Quote className="w-3.5 h-3.5" />, title: "Quote", action: () => insertFormat("> ") },
+                { icon: <Heading2 className="w-3.5 h-3.5" />, title: "Heading (⌘H)", action: () => insertFormat("## ", "", true) },
+                { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold (⌘B)", action: () => insertFormat("**", "**") },
+                { icon: <span className="text-xs font-italic leading-none italic">I</span>, title: "Italic (⌘I)", action: () => insertFormat("_", "_") },
+                { icon: <List className="w-3.5 h-3.5" />, title: "List (⌘⇧L)", action: () => insertFormat("- ", "", true) },
+                { icon: <Quote className="w-3.5 h-3.5" />, title: "Quote", action: () => insertFormat("> ", "", true) },
+                { icon: <span className="text-xs font-mono leading-none">`</span>, title: "Code (⌘K)", action: () => insertFormat("`", "`") },
               ].map((btn, i) => (
                 <button key={i} onClick={btn.action} title={btn.title}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
                   {btn.icon}
                 </button>
               ))}
-              <div className="ml-auto text-[10px] text-muted-foreground/40 font-mono">markdown supported</div>
+
+              {/* Divider */}
+              <div className="w-px h-4 bg-border mx-1" />
+
+              {/* Font size */}
+              <div className="flex items-center gap-0.5">
+                {(["sm", "base", "lg"] as FontSize[]).map(s => (
+                  <button key={s} onClick={() => setFontSize(s)}
+                    className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors",
+                      fontSize === s ? "bg-orange-500/15 text-orange-500" : "text-muted-foreground hover:text-foreground")}>
+                    {s === "sm" ? "A" : s === "base" ? "A" : "A"}
+                    <span className="sr-only">{s}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Font family toggle */}
+              <button onClick={() => setFontFamily(f => f === "sans" ? "mono" : "sans")}
+                title="Toggle font (sans / mono)"
+                className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors",
+                  fontFamily === "mono" ? "bg-orange-500/15 text-orange-500" : "text-muted-foreground hover:text-foreground")}>
+                {fontFamily === "mono" ? "Mono" : "Sans"}
+              </button>
+
+              <div className="ml-auto text-[10px] text-muted-foreground/40">
+                {words > 0 && `${words}w · ${readTime} min`}
+              </div>
             </div>
 
-            {/* Textarea */}
-            <textarea ref={editorRef} value={active.body} onChange={e => updateNote(active.id, { body: e.target.value })}
-              className="flex-1 resize-none bg-transparent p-5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none leading-relaxed"
-              placeholder="Start writing… Use ## for headings, **bold**, - for lists" />
+            {/* Editor textarea */}
+            <textarea
+              ref={editorRef}
+              value={active.body}
+              onChange={e => updateNote(active.id, { body: e.target.value })}
+              onKeyDown={handleEditorKeyDown}
+              className={cn(
+                "flex-1 resize-none bg-transparent p-6 text-foreground placeholder:text-muted-foreground/40 focus:outline-none leading-relaxed",
+                FONT_SIZES[fontSize],
+                FONT_FAMILIES[fontFamily],
+              )}
+              placeholder={`Start writing…\n\n## Use ## for headings\n**bold** and _italic_ for emphasis\n- Lists with a dash\n> Quotes with >\n\`code\` with backticks\n\nKeyboard: ⌘B bold · ⌘H heading · ⌘I italic · Tab to indent`}
+            />
           </>
         )}
       </div>
