@@ -14,11 +14,14 @@ async function handleCustomDomain(req: NextRequest): Promise<NextResponse | null
   const host = req.headers.get("host") ?? "";
   const hostname = host.split(":")[0].toLowerCase();
 
-  // Skip only the bare platform domain, www, and localhost.
-  // *.contentflywheel.co.uk subdomains are creator store URLs — pass them through to lookup.
+  // Skip the bare platform domain, www, known platform subdomains, and localhost.
+  // clerk.* must be excluded — the wildcard CNAME routes clerk.contentflywheel.co.uk to our app,
+  // so without this exclusion Clerk's JS/API calls hit our custom-domain lookup and return CORS errors.
   if (
     hostname === PLATFORM_HOSTNAME ||
     hostname === `www.${PLATFORM_HOSTNAME}` ||
+    hostname === `clerk.${PLATFORM_HOSTNAME}` ||
+    hostname.endsWith(`.clerk.${PLATFORM_HOSTNAME}`) ||
     hostname === "localhost"
   ) {
     return null;
@@ -94,4 +97,3 @@ export default clerkMiddleware(async (auth, req) => {
 export const config = {
   matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
 };
-// deploy: 1783046851
