@@ -286,7 +286,7 @@ function ProductStrip({
         </div>
         <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
           {items.map((item) => (
-            <div key={item.id} style={{ flexShrink: 0, width: "180px" }}>
+            <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
               <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={onWishlist} onQuickView={onQuickView} onNicheClick={onNicheClick} />
             </div>
           ))}
@@ -528,7 +528,7 @@ export default function MarketplaceClient() {
             </div>
             <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
               {recommended.map((item) => (
-                <div key={item.id} style={{ flexShrink: 0, width: "180px" }}>
+                <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
                   <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); }} />
                 </div>
               ))}
