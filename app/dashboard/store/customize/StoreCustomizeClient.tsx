@@ -465,6 +465,61 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     }, 600);
   }, []);
 
+  // ── Custom .com domain state ──
+  const [customDomainInput, setCustomDomainInput] = useState<string>(
+    // Pre-fill if they already have a non-platform domain saved
+    (() => {
+      const d = settings.customDomain ?? "";
+      return d && !d.endsWith(".contentflywheel.co.uk") ? d : "";
+    })()
+  );
+  const [connectingDomain, setConnectingDomain] = useState(false);
+  const [domainDns, setDomainDns] = useState<{ type: string; name: string; value: string } | null>(
+    // If there's already a non-platform custom domain saved, show DNS instructions immediately
+    (() => {
+      const d = settings.customDomain ?? "";
+      return d && !d.endsWith(".contentflywheel.co.uk")
+        ? { type: "CNAME", name: "@", value: "cname.vercel-dns.com" }
+        : null;
+    })()
+  );
+  const [customDomainError, setCustomDomainError] = useState<string | null>(null);
+
+  const handleConnectCustomDomain = async () => {
+    const domain = customDomainInput.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    if (!domain) return;
+    setConnectingDomain(true);
+    setCustomDomainError(null);
+    try {
+      const res = await fetch("/api/custom-domain/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await res.json() as { domain?: string; dns?: { type: string; name: string; value: string }; error?: string };
+      if (!res.ok) {
+        setCustomDomainError(data.error ?? "Failed to connect domain.");
+      } else {
+        setDomainDns(data.dns ?? { type: "CNAME", name: "@", value: "cname.vercel-dns.com" });
+        toast({ title: "Domain connected!", description: `Add the DNS record below at your registrar to go live.` });
+      }
+    } catch {
+      setCustomDomainError("Network error. Please try again.");
+    } finally {
+      setConnectingDomain(false);
+    }
+  };
+
+  const handleRemoveCustomDomain = async () => {
+    try {
+      await fetch("/api/custom-domain/connect", { method: "DELETE" });
+      setCustomDomainInput("");
+      setDomainDns(null);
+      setCustomDomainError(null);
+      toast({ title: "Custom domain removed." });
+    } catch { /* silent */ }
+  };
+
   // ── AI Design state ──
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1030,17 +1085,81 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                     )}
                   </div>
 
-                  {/* Custom .com domain upsell */}
+                  {/* Custom .com domain — input when unlocked */}
                   {settings.customDomainActive ? (
-                    <div className="rounded-xl border border-green-200 bg-green-50 p-3 flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
-                        <Globe size={13} className="text-green-600" />
+                    <div className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                          <Globe size={13} className="text-green-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-green-800">Custom Domain</p>
+                          <p className="text-[11px] text-green-600">Connect your own .com domain to your store</p>
+                        </div>
+                        <span className="text-[10px] font-bold text-green-600 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full shrink-0">Unlocked</span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-green-800">Custom Domain Unlocked</p>
-                        <p className="text-[11px] text-green-600">Connect your own .com domain — coming soon.</p>
-                      </div>
-                      <span className="text-[10px] font-bold text-green-600 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full">Active</span>
+
+                      {domainDns ? (
+                        /* Domain connected — show DNS instructions */
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-semibold text-green-800">Connected:</span>
+                            <span className="text-[11px] font-mono text-green-700">{customDomainInput}</span>
+                            <button
+                              type="button"
+                              onClick={handleRemoveCustomDomain}
+                              className="ml-auto text-[10px] text-red-400 hover:text-red-600 underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div className="rounded-lg bg-white border border-green-200 p-2.5 space-y-1.5">
+                            <p className="text-[11px] font-semibold text-gray-700">Add this DNS record at your registrar:</p>
+                            <div className="grid grid-cols-3 gap-1 text-[10px]">
+                              <div className="bg-gray-50 rounded p-1.5">
+                                <p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Type</p>
+                                <p className="font-mono font-bold text-gray-800">{domainDns.type}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded p-1.5">
+                                <p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Name</p>
+                                <p className="font-mono font-bold text-gray-800">{domainDns.name}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded p-1.5 col-span-1">
+                                <p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Value</p>
+                                <p className="font-mono font-bold text-gray-800 break-all">{domainDns.value}</p>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-gray-400">DNS changes take up to 24 hours to propagate. Your store will go live automatically.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Domain not yet connected — show input */
+                        <div className="space-y-1.5">
+                          <div className="flex gap-1.5">
+                            <Input
+                              value={customDomainInput}
+                              onChange={(e) => {
+                                setCustomDomainInput(e.target.value);
+                                setCustomDomainError(null);
+                              }}
+                              placeholder="yourbrand.com"
+                              className="h-8 text-xs bg-white text-gray-900 placeholder:text-gray-400 focus:border-green-500 flex-1"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleConnectCustomDomain}
+                              disabled={connectingDomain || !customDomainInput.trim()}
+                              className="shrink-0 h-8 px-3 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                            >
+                              {connectingDomain ? <Loader2 size={11} className="animate-spin" /> : null}
+                              {connectingDomain ? "Connecting…" : "Connect"}
+                            </button>
+                          </div>
+                          {customDomainError && (
+                            <p className="text-[11px] text-red-500">{customDomainError}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-3 flex items-center gap-2.5">
