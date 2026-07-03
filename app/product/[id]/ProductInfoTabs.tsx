@@ -84,7 +84,6 @@ export function ProductInfoTabs({ previewPageUrl, sections, descParagraphs, test
   const hasPreviewTab = !!previewPageUrl || hasTextPreview;
   const defaultTab: TabId = hasPreviewTab ? "preview" : sections.length > 0 ? "contents" : "about";
   const [active, setActive] = useState<TabId>(defaultTab);
-  const [imageError, setImageError] = useState(false);
 
   const availableTabs = TABS.filter((t) => {
     if (t.id === "preview") return hasPreviewTab;
@@ -128,17 +127,8 @@ export function ProductInfoTabs({ previewPageUrl, sections, descParagraphs, test
       {/* Panel: Preview */}
       {active === "preview" && (
         <div style={{ position: "relative" }}>
-          {previewPageUrl && !imageError ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={previewPageUrl}
-              alt="Product content preview"
-              onError={() => setImageError(true)}
-              style={{ width: "100%", display: "block", maxHeight: "440px", objectFit: "cover", objectPosition: "top" }}
-            />
-          ) : (
-            <TextContentPreview descParagraphs={descParagraphs} sections={sections} />
-          )}
+          {/* Always show text preview as base — reliable regardless of capture status */}
+          <TextContentPreview descParagraphs={descParagraphs} sections={sections} />
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "160px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.98))", pointerEvents: "none" }} />
           <div style={{ position: "absolute", bottom: "20px", left: 0, right: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
             <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>You&apos;re seeing a preview — purchase to get full access</p>
