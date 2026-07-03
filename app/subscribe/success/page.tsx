@@ -11,8 +11,10 @@ export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import Stripe from "stripe";
-import { updateProfile } from "@/db/queries/profiles-queries";
-import { getProfileByUserId } from "@/db/queries/profiles-queries";
+import { updateProfile, getProfileByUserId } from "@/db/queries/profiles-queries";
+import { db } from "@/db/db";
+import { promoCodesTable } from "@/db/schema/promo-codes-schema";
+import { eq, sql } from "drizzle-orm";
 
 export default async function SubscribeSuccessPage({
   searchParams,
@@ -60,6 +62,16 @@ export default async function SubscribeSuccessPage({
           ...(stripeCustomerId ? { stripeCustomerId } : {}),
           ...(stripeSubscriptionId ? { stripeSubscriptionId } : {}),
         });
+      }
+
+      // Increment promo code usedCount (webhook may not have fired yet)
+      const promoCode = session.metadata?.promoCode;
+      if (promoCode && !alreadyActive) {
+        await db
+          .update(promoCodesTable)
+          .set({ usedCount: sql`${promoCodesTable.usedCount} + 1` })
+          .where(eq(promoCodesTable.code, promoCode))
+          .catch(() => {});
       }
     }
   } catch (err) {
