@@ -5,36 +5,23 @@ import { useState } from "react";
 type Section = { id?: string; title: string; content?: string; order?: number };
 type DescBlock = { type: "p" | "ul" | "heading+ul"; text?: string; heading?: string; items?: string[] };
 
-function TextContentPreview({ descParagraphs, sections }: { descParagraphs: string[]; sections: Section[] }) {
-  const intro = descParagraphs[0]?.replace(/\*\*/g, "").trim() ?? "";
-  const preview = intro.length > 320 ? intro.slice(0, 320) + "…" : intro;
+function TextContentPreview({ descParagraphs }: { descParagraphs: string[] }) {
+  // Show up to 3 paragraphs of the description as a content teaser
+  const paras = descParagraphs
+    .map((p) => p.replace(/\*\*/g, "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
   return (
-    <div style={{ padding: "24px", background: "linear-gradient(135deg, #fff7ed 0%, #fef3c7 50%, #fdf2f8 100%)", minHeight: "300px" }}>
-      {preview && (
-        <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#374151", lineHeight: 1.75, fontStyle: "italic" }}>
-          &ldquo;{preview}&rdquo;
+    <div style={{ padding: "28px 24px", background: "linear-gradient(135deg, #fff7ed 0%, #fef3c7 50%, #fdf2f8 100%)", minHeight: "260px" }}>
+      <p style={{ margin: "0 0 16px", fontSize: "11px", fontWeight: 700, color: "#f97316", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+        Inside this product
+      </p>
+      {paras.map((para, i) => (
+        <p key={i} style={{ margin: "0 0 14px", fontSize: "14px", color: "#374151", lineHeight: 1.75, fontStyle: i === 0 ? "italic" : "normal" }}>
+          {i === 0 ? <>&ldquo;{para}&rdquo;</> : para}
         </p>
-      )}
-      {sections.length > 0 && (
-        <>
-          <p style={{ margin: "0 0 10px", fontSize: "11px", fontWeight: 700, color: "#f97316", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            What&rsquo;s inside
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {sections.slice(0, 6).map((s, i) => (
-              <div key={s.id ?? i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#f97316", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: "10px", fontWeight: 700, color: "#fff" }}>
-                  {i + 1}
-                </div>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{s.title}</span>
-              </div>
-            ))}
-            {sections.length > 6 && (
-              <p style={{ margin: "4px 0 0 30px", fontSize: "12px", color: "#9ca3af" }}>+ {sections.length - 6} more sections</p>
-            )}
-          </div>
-        </>
-      )}
+      ))}
     </div>
   );
 }
@@ -128,7 +115,7 @@ export function ProductInfoTabs({ previewPageUrl, sections, descParagraphs, test
       {active === "preview" && (
         <div style={{ position: "relative" }}>
           {/* Always show text preview as base — reliable regardless of capture status */}
-          <TextContentPreview descParagraphs={descParagraphs} sections={sections} />
+          <TextContentPreview descParagraphs={descParagraphs} />
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "160px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.98))", pointerEvents: "none" }} />
           <div style={{ position: "absolute", bottom: "20px", left: 0, right: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
             <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>You&apos;re seeing a preview — purchase to get full access</p>
