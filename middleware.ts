@@ -24,9 +24,13 @@ async function handleCustomDomain(req: NextRequest): Promise<NextResponse | null
     return null;
   }
 
-  // Look up the custom domain in DB via a lightweight API call
+  // Look up the custom domain in DB via a lightweight API call.
+  // IMPORTANT: use the platform's own base URL, NOT req.url — if req.url is on a wildcard
+  // subdomain (e.g. digitaldrift.contentflywheel.co.uk), the fetch would recurse through
+  // middleware infinitely and time out, causing this function to return null.
   try {
-    const lookupUrl = new URL(`/api/custom-domain/lookup?host=${encodeURIComponent(hostname)}`, req.url);
+    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `https://${PLATFORM_HOSTNAME}`;
+    const lookupUrl = new URL(`/api/custom-domain/lookup?host=${encodeURIComponent(hostname)}`, appBaseUrl);
     const res = await fetch(lookupUrl.toString(), { next: { revalidate: 60 } }); // cache 60s
     if (!res.ok) return null;
     const data = await res.json() as { userId?: string };
