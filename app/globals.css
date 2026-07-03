@@ -80,6 +80,8 @@
     /* position:relative is required for overflow-x:hidden to clip fixed/absolute children on iOS */
     position: relative;
     overflow-x: hidden;
+    /* Prevent white flash between page navigations — matches app dark background */
+    background-color: #0a0a0a;
   }
   html,
   body {
@@ -91,6 +93,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-color: #0a0a0a;
   }
   /*
    * iOS Safari auto-zoom prevention: Safari zooms the viewport when an <input> has
