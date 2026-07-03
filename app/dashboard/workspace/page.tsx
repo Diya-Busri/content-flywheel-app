@@ -1,19 +1,23 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Check, GripVertical, X, ChevronDown, Bookmark, BookmarkCheck,
   Calendar, Tag, StickyNote, Target, ListTodo, ChevronLeft, ChevronRight,
   Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap, Bold, List,
-  Heading2, Quote
+  Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
+  FileText, Lightbulb, ChevronUp, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useWorkspaceAdmin } from "@/components/workspace-admin-context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WorkspaceTab = "todos" | "notes" | "calendar" | "goals";
+type WorkspaceTab = "todos" | "notes" | "calendar" | "goals"
+  | "research" | "marketing-psychology" | "copywriting" | "content-ideas"
+  | "analytics" | "distribution" | "experiments";
 type Priority = "high" | "medium" | "low";
 type TodoFilter = "all" | "active" | "completed";
 
@@ -99,6 +103,16 @@ const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
   { id: "notes",    label: "Notes",            icon: <StickyNote className="w-4 h-4" /> },
   { id: "calendar", label: "Content Calendar", icon: <Calendar className="w-4 h-4" /> },
   { id: "goals",    label: "Goals",            icon: <Target className="w-4 h-4" /> },
+];
+
+const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
+  { id: "research",              label: "Research",             icon: <BookOpen className="w-4 h-4" /> },
+  { id: "marketing-psychology",  label: "Mktg Psychology",      icon: <Brain className="w-4 h-4" /> },
+  { id: "copywriting",           label: "Copywriting",          icon: <FileText className="w-4 h-4" /> },
+  { id: "content-ideas",         label: "Content Ideas",        icon: <Lightbulb className="w-4 h-4" /> },
+  { id: "analytics",             label: "Analytics",            icon: <BarChart2 className="w-4 h-4" /> },
+  { id: "distribution",          label: "Distribution",         icon: <Megaphone className="w-4 h-4" /> },
+  { id: "experiments",           label: "Experiments",          icon: <FlaskConical className="w-4 h-4" /> },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -908,42 +922,652 @@ function GoalsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FOUNDER OS — SHARED TYPES & REUSABLE COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface FounderEntry {
+  id: string;
+  category: string;
+  type: string;
+  title: string;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TypeOption { value: string; label: string }
+
+interface EntryFormProps {
+  types: TypeOption[];
+  onSave: (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => void;
+  onCancel: () => void;
+  initial?: Partial<FounderEntry>;
+  titlePlaceholder?: string;
+  contentPlaceholder?: string;
+  extraFields?: (
+    type: string,
+    metadata: Record<string, unknown>,
+    setMeta: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
+  ) => React.ReactNode;
+}
+
+function FounderWorkspaceEntryForm({
+  types, onSave, onCancel, initial, titlePlaceholder, contentPlaceholder, extraFields,
+}: EntryFormProps) {
+  const [type, setType] = useState(initial?.type ?? types[0]?.value ?? "");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [content, setContent] = useState(initial?.content ?? "");
+  const [meta, setMeta] = useState<Record<string, unknown>>((initial?.metadata ?? {}) as Record<string, unknown>);
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    onSave({ type, title: title.trim(), content: content.trim(), metadata: meta });
+  };
+
+  return (
+    <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 space-y-3">
+      {/* Type selector */}
+      {types.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {types.map(t => (
+            <button key={t.value} onClick={() => setType(t.value)}
+              className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+                type === t.value
+                  ? "bg-orange-500 text-white border-orange-500"
+                  : "border-border text-muted-foreground hover:text-foreground hover:border-orange-400")}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <Input
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        placeholder={titlePlaceholder ?? "Title…"}
+        className="h-9"
+        autoFocus
+        onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSave()}
+      />
+      <textarea
+        value={content}
+        onChange={e => setContent(e.target.value)}
+        placeholder={contentPlaceholder ?? "Notes, details, or context…"}
+        rows={3}
+        className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      {extraFields?.(type, meta, setMeta)}
+      <div className="flex gap-2">
+        <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white font-semibold flex-1" onClick={handleSave}>
+          {initial?.id ? "Save changes" : "Add entry"}
+        </Button>
+        <Button size="sm" variant="outline" className="h-8" onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
+interface EntryCardProps {
+  entry: FounderEntry;
+  onDelete: (id: string) => void;
+  onEdit: (entry: FounderEntry) => void;
+  typeLabel?: string;
+  renderMeta?: (meta: Record<string, unknown> | null) => React.ReactNode;
+}
+
+function FounderWorkspaceEntryCard({ entry, onDelete, onEdit, typeLabel, renderMeta }: EntryCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-2 hover:border-orange-500/30 transition-colors">
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {typeLabel && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-wide">
+                {typeLabel}
+              </span>
+            )}
+            <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+          </div>
+          {entry.content && (
+            <p className={cn("text-sm text-muted-foreground mt-1 whitespace-pre-wrap", !expanded && "line-clamp-2")}>
+              {entry.content}
+            </p>
+          )}
+          {entry.content && entry.content.length > 100 && (
+            <button onClick={() => setExpanded(v => !v)} className="mt-0.5 text-[11px] text-orange-500 hover:underline flex items-center gap-0.5">
+              {expanded ? <><ChevronUp className="w-3 h-3" />Less</> : <><ChevronDown className="w-3 h-3" />More</>}
+            </button>
+          )}
+          {renderMeta?.(entry.metadata)}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => onEdit(entry)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => onDelete(entry.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SectionProps {
+  category: string;
+  types: TypeOption[];
+  heading: string;
+  description: string;
+  titlePlaceholder?: string;
+  contentPlaceholder?: string;
+  extraFields?: EntryFormProps["extraFields"];
+  renderMeta?: EntryCardProps["renderMeta"];
+}
+
+function FounderWorkspaceSection({
+  category, types, heading, description, titlePlaceholder, contentPlaceholder, extraFields, renderMeta,
+}: SectionProps) {
+  const [entries, setEntries] = useState<FounderEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<FounderEntry | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchEntries = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/founder-workspace?category=${encodeURIComponent(category)}`);
+      if (!res.ok) throw new Error("Failed to load");
+      const data = await res.json() as FounderEntry[];
+      setEntries(data);
+    } catch {
+      setError("Could not load entries");
+    } finally {
+      setLoading(false);
+    }
+  }, [category]);
+
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
+
+  const handleSave = async (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => {
+    try {
+      if (editingEntry) {
+        const res = await fetch("/api/founder-workspace", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingEntry.id, ...data }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+        const updated = await res.json() as FounderEntry;
+        setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+        setEditingEntry(null);
+      } else {
+        const res = await fetch("/api/founder-workspace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category, ...data }),
+        });
+        if (!res.ok) throw new Error("Failed to create");
+        const created = await res.json() as FounderEntry;
+        setEntries(prev => [...prev, created]);
+        setShowForm(false);
+      }
+    } catch {
+      setError("Failed to save entry");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this entry?")) return;
+    try {
+      await fetch(`/api/founder-workspace?id=${id}`, { method: "DELETE" });
+      setEntries(prev => prev.filter(e => e.id !== id));
+    } catch {
+      setError("Failed to delete");
+    }
+  };
+
+  const handleEdit = (entry: FounderEntry) => {
+    setEditingEntry(entry);
+    setShowForm(false);
+  };
+
+  const typeLabel = (type: string) => types.find(t => t.value === type)?.label;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-bold text-foreground">{heading}</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        </div>
+        {!showForm && !editingEntry && (
+          <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white shrink-0" onClick={() => setShowForm(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1" />Add
+          </Button>
+        )}
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 flex items-center gap-2">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />{error}
+          <button className="ml-auto underline" onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+
+      {showForm && !editingEntry && (
+        <FounderWorkspaceEntryForm
+          types={types}
+          onSave={handleSave}
+          onCancel={() => setShowForm(false)}
+          titlePlaceholder={titlePlaceholder}
+          contentPlaceholder={contentPlaceholder}
+          extraFields={extraFields}
+        />
+      )}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="w-4 h-4 animate-spin" />Loading…
+        </div>
+      ) : entries.length === 0 && !showForm ? (
+        <button onClick={() => setShowForm(true)}
+          className="w-full py-8 rounded-2xl border border-dashed border-border text-sm text-muted-foreground hover:text-orange-500 hover:border-orange-500/40 hover:bg-orange-500/5 transition-all flex flex-col items-center gap-2">
+          <Plus className="w-5 h-5" />
+          <span>Add your first entry</span>
+        </button>
+      ) : (
+        <div className="space-y-2">
+          {entries.map(entry => (
+            editingEntry?.id === entry.id ? (
+              <FounderWorkspaceEntryForm
+                key={entry.id}
+                types={types}
+                onSave={handleSave}
+                onCancel={() => setEditingEntry(null)}
+                initial={entry}
+                titlePlaceholder={titlePlaceholder}
+                contentPlaceholder={contentPlaceholder}
+                extraFields={extraFields}
+              />
+            ) : (
+              <FounderWorkspaceEntryCard
+                key={entry.id}
+                entry={entry}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+                typeLabel={typeLabel(entry.type)}
+                renderMeta={renderMeta}
+              />
+            )
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FOUNDER OS — 7 ADMIN TAB COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function ResearchTab() {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <FounderWorkspaceSection
+        category="research"
+        types={[
+          { value: "insight", label: "Market Insight" },
+          { value: "competitor", label: "Competitor" },
+          { value: "icp", label: "ICP Note" },
+          { value: "trend", label: "Trend" },
+        ]}
+        heading="Market Research"
+        description="Insights, competitor notes, ICP observations, and trends you want to remember."
+        titlePlaceholder="e.g. TikTok nurse niche — high demand, low supply of PDF planners"
+        contentPlaceholder="Detailed notes, source, context…"
+        extraFields={(type, meta, setMeta) => (
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Source / URL (optional)</label>
+            <Input
+              value={typeof meta.source === "string" ? meta.source : ""}
+              onChange={e => setMeta({ ...meta, source: e.target.value })}
+              placeholder="https://…"
+              className="h-8 text-xs"
+            />
+          </div>
+        )}
+        renderMeta={meta => meta?.source ? (
+          <a href={String(meta.source)} target="_blank" rel="noopener noreferrer"
+            className="mt-1 inline-flex items-center gap-1 text-[11px] text-orange-500 hover:underline truncate max-w-full">
+            {String(meta.source)}
+          </a>
+        ) : null}
+      />
+    </div>
+  );
+}
+
+function MarketingPsychologyTab() {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <FounderWorkspaceSection
+        category="marketing-psychology"
+        types={[
+          { value: "trigger", label: "Trigger" },
+          { value: "principle", label: "Principle" },
+          { value: "behavior", label: "Buyer Behavior" },
+          { value: "framework", label: "Framework" },
+        ]}
+        heading="Marketing Psychology"
+        description="Psychological triggers, buyer behaviors, and conversion principles that inform your strategy."
+        titlePlaceholder="e.g. Loss aversion — fear of losing beats desire to gain"
+        contentPlaceholder="How this applies to your product or audience…"
+        extraFields={(_type, meta, setMeta) => (
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Real-world example (optional)</label>
+            <Input
+              value={typeof meta.example === "string" ? meta.example : ""}
+              onChange={e => setMeta({ ...meta, example: e.target.value })}
+              placeholder="e.g. 'Only 3 left' on the product page increased conversions"
+              className="h-8 text-xs"
+            />
+          </div>
+        )}
+        renderMeta={meta => meta?.example ? (
+          <p className="mt-1 text-[11px] text-muted-foreground italic">Example: {String(meta.example)}</p>
+        ) : null}
+      />
+    </div>
+  );
+}
+
+function CopywritingTab() {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <FounderWorkspaceSection
+        category="copywriting"
+        types={[
+          { value: "headline", label: "Headline" },
+          { value: "formula", label: "Formula" },
+          { value: "power-word", label: "Power Words" },
+          { value: "template", label: "Template" },
+          { value: "framework", label: "Framework" },
+        ]}
+        heading="Copywriting Bank"
+        description="Headline formulas, frameworks, power words, and reusable copy templates."
+        titlePlaceholder="e.g. PAS — Problem / Agitate / Solve"
+        contentPlaceholder="The formula, template, or word list with notes on when to use it…"
+      />
+    </div>
+  );
+}
+
+function ContentIdeasTab() {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <FounderWorkspaceSection
+        category="content-ideas"
+        types={[
+          { value: "hook", label: "Hook" },
+          { value: "angle", label: "Angle" },
+          { value: "script", label: "Script" },
+          { value: "viral-format", label: "Viral Format" },
+          { value: "series", label: "Series Idea" },
+        ]}
+        heading="Content Ideas"
+        description="Hooks, angles, scripts, viral formats, and series concepts to batch-create."
+        titlePlaceholder="e.g. 'The reason your meal prep fails has nothing to do with motivation'"
+        contentPlaceholder="Full idea, script outline, or angle description…"
+        extraFields={(_type, meta, setMeta) => (
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Platform (optional)</label>
+            <Input
+              value={typeof meta.platform === "string" ? meta.platform : ""}
+              onChange={e => setMeta({ ...meta, platform: e.target.value })}
+              placeholder="e.g. TikTok, Instagram, Pinterest"
+              className="h-8 text-xs"
+            />
+          </div>
+        )}
+        renderMeta={meta => meta?.platform ? (
+          <span className="mt-1 inline-block px-2 py-0.5 rounded-full bg-muted text-[10px] text-muted-foreground font-medium">
+            {String(meta.platform)}
+          </span>
+        ) : null}
+      />
+    </div>
+  );
+}
+
+function AnalyticsTab() {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <FounderWorkspaceSection
+        category="analytics"
+        types={[
+          { value: "win", label: "Win" },
+          { value: "miss", label: "Miss" },
+          { value: "insight", label: "Insight" },
+          { value: "ab-result", label: "A/B Result" },
+        ]}
+        heading="Analytics & Learnings"
+        description="What's working, what's not, key metrics, and A/B test results."
+        titlePlaceholder="e.g. TikTok hook style A doubled watch time vs. style B"
+        contentPlaceholder="What happened, what you measured, what you'll do differently…"
+        extraFields={(_type, meta, setMeta) => (
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-muted-foreground mb-1 block">Metric (optional)</label>
+              <Input
+                value={typeof meta.metric === "string" ? meta.metric : ""}
+                onChange={e => setMeta({ ...meta, metric: e.target.value })}
+                placeholder="e.g. CTR, Revenue, Views"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-muted-foreground mb-1 block">Value (optional)</label>
+              <Input
+                value={typeof meta.value === "string" ? meta.value : ""}
+                onChange={e => setMeta({ ...meta, value: e.target.value })}
+                placeholder="e.g. 4.2%, £340, 18k"
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+        )}
+        renderMeta={meta => (meta?.metric || meta?.value) ? (
+          <div className="mt-1 flex gap-2 flex-wrap">
+            {meta.metric && <span className="text-[11px] text-muted-foreground">{String(meta.metric)}</span>}
+            {meta.value && <span className="text-[11px] font-semibold text-foreground">{String(meta.value)}</span>}
+          </div>
+        ) : null}
+      />
+    </div>
+  );
+}
+
+const DISTRIBUTION_STATUS_COLORS: Record<string, string> = {
+  active: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+  testing: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+  paused: "bg-gray-500/10 text-muted-foreground border-border",
+};
+
+function DistributionTab() {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <FounderWorkspaceSection
+        category="distribution"
+        types={[
+          { value: "channel", label: "Channel" },
+          { value: "partnership", label: "Partnership" },
+          { value: "traffic-source", label: "Traffic Source" },
+          { value: "strategy", label: "Strategy" },
+        ]}
+        heading="Distribution"
+        description="Channels, partnerships, traffic sources, and distribution strategies."
+        titlePlaceholder="e.g. TikTok → link in bio → Gumroad funnel"
+        contentPlaceholder="How this distribution channel works, what content drives it, results so far…"
+        extraFields={(_type, meta, setMeta) => (
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+            <div className="flex gap-1.5">
+              {(["active", "testing", "paused"] as const).map(s => (
+                <button key={s} onClick={() => setMeta({ ...meta, status: s })}
+                  className={cn("px-2.5 py-1 rounded-full text-xs font-medium border capitalize transition-all",
+                    meta.status === s ? DISTRIBUTION_STATUS_COLORS[s] : "border-border text-muted-foreground hover:border-orange-400")}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        renderMeta={meta => meta?.status ? (
+          <span className={cn("mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize",
+            DISTRIBUTION_STATUS_COLORS[String(meta.status)] ?? "bg-muted text-muted-foreground border-border")}>
+            {String(meta.status)}
+          </span>
+        ) : null}
+      />
+    </div>
+  );
+}
+
+const EXPERIMENT_STATUS_COLORS: Record<string, string> = {
+  running: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  complete: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+  failed: "bg-red-500/10 text-red-500 border-red-500/20",
+};
+
+function ExperimentsTab() {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <FounderWorkspaceSection
+        category="experiments"
+        types={[{ value: "experiment", label: "Experiment" }]}
+        heading="Experiments"
+        description="Hypotheses, tests, and results. Treat the business like a lab."
+        titlePlaceholder="Hypothesis: e.g. Adding a freebie to the bio link will lift product page visits"
+        contentPlaceholder="What you're testing, how you're measuring it, what you learned…"
+        extraFields={(_type, meta, setMeta) => (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+              <div className="flex gap-1.5">
+                {(["running", "complete", "failed"] as const).map(s => (
+                  <button key={s} onClick={() => setMeta({ ...meta, status: s })}
+                    className={cn("px-2.5 py-1 rounded-full text-xs font-medium border capitalize transition-all",
+                      meta.status === s ? EXPERIMENT_STATUS_COLORS[s] : "border-border text-muted-foreground hover:border-orange-400")}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Result (fill in when complete)</label>
+              <Input
+                value={typeof meta.result === "string" ? meta.result : ""}
+                onChange={e => setMeta({ ...meta, result: e.target.value })}
+                placeholder="e.g. CTR went from 1.2% to 3.8% — confirmed, rolling out"
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+        )}
+        renderMeta={meta => (
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            {meta?.status && (
+              <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize",
+                EXPERIMENT_STATUS_COLORS[String(meta.status)] ?? "bg-muted text-muted-foreground border-border")}>
+                {String(meta.status)}
+              </span>
+            )}
+            {meta?.result && (
+              <span className="text-[11px] text-muted-foreground italic">{String(meta.result)}</span>
+            )}
+          </div>
+        )}
+      />
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function WorkspacePage() {
+  const isAdmin = useWorkspaceAdmin();
   const [tab, setTab] = useState<WorkspaceTab>("todos");
 
   const tabDesc: Record<WorkspaceTab, string> = {
-    todos:    "Stay on top of your daily content tasks",
-    notes:    "Capture ideas, scripts, and notes",
-    calendar: "Plan and schedule your content drops",
-    goals:    "Track revenue, growth, and product targets",
+    todos:                "Stay on top of your daily content tasks",
+    notes:                "Capture ideas, scripts, and notes",
+    calendar:             "Plan and schedule your content drops",
+    goals:                "Track revenue, growth, and product targets",
+    "research":           "Market insights, competitor notes, and ICP observations",
+    "marketing-psychology": "Psychological triggers and buyer behavior principles",
+    "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
+    "content-ideas":      "Hooks, angles, scripts, and viral content formats",
+    "analytics":          "What's working, what's not, and key metric learnings",
+    "distribution":       "Channels, partnerships, and traffic source strategies",
+    "experiments":        "Hypotheses, active tests, and documented results",
   };
 
   return (
     <div className="p-6 max-w-none">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Workspace</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {isAdmin ? "Founder OS" : "Workspace"}
+        </h1>
         <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[tab]}</p>
       </div>
 
       {/* Tab nav */}
-      <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px",
-              tab === t.id ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")}>
-            {t.icon}{t.label}
-          </button>
-        ))}
+      <div className="border-b border-border mb-6 overflow-x-auto">
+        <div className="flex gap-1">
+          {/* Standard tabs */}
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px",
+                tab === t.id ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+
+          {/* Admin-only divider + tabs */}
+          {isAdmin && (
+            <>
+              <div className="w-px bg-border mx-2 self-stretch my-1.5" />
+              {ADMIN_TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px",
+                    tab === t.id ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")}>
+                  {t.icon}{t.label}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
       </div>
 
+      {/* Standard tab content */}
       {tab === "todos"    && <TodoTab />}
       {tab === "notes"    && <NotesTab />}
       {tab === "calendar" && <CalendarTab />}
       {tab === "goals"    && <GoalsTab />}
+
+      {/* Admin-only tab content */}
+      {isAdmin && tab === "research"              && <ResearchTab />}
+      {isAdmin && tab === "marketing-psychology"  && <MarketingPsychologyTab />}
+      {isAdmin && tab === "copywriting"           && <CopywritingTab />}
+      {isAdmin && tab === "content-ideas"         && <ContentIdeasTab />}
+      {isAdmin && tab === "analytics"             && <AnalyticsTab />}
+      {isAdmin && tab === "distribution"          && <DistributionTab />}
+      {isAdmin && tab === "experiments"           && <ExperimentsTab />}
     </div>
   );
 }

@@ -58,3 +58,4 @@ export * from "./designs-schema";
 export * from "./bundles-schema";
 export * from "./page-sessions-schema";
 export * from "./featured-products-schema";
+export * from "./founder-workspace-schema";
