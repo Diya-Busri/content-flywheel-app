@@ -6,10 +6,10 @@
  * No multi-step funnel required.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Video, CheckCircle2, Package, ChevronDown } from "lucide-react";
+import { ArrowLeft, Loader2, Video, CheckCircle2, Package, ChevronDown, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,6 +84,41 @@ export default function NewVideoGuidePage() {
   const [error, setError] = useState<string | null>(null);
   const [formStep, setFormStep] = useState<1 | 2>(1);
   const [selectedAngle, setSelectedAngle] = useState<string>("problem-solution");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      let text = "";
+      if (file.name.endsWith(".txt")) {
+        text = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve((ev.target?.result as string) ?? "");
+          reader.readAsText(file);
+        });
+      } else {
+        // PDF — send to extraction endpoint
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/extract-pdf-text", { method: "POST", body: fd });
+        if (res.ok) {
+          const data = (await res.json()) as { text?: string };
+          text = data.text ?? "";
+        }
+      }
+      if (text.trim()) {
+        const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+        // First non-empty line → product name (truncated), rest → description
+        if (lines.length > 0) setProductName(lines[0].slice(0, 120));
+        if (lines.length > 1) setDescription(lines.slice(1, 8).join(" ").slice(0, 600));
+      }
+    } catch { /* non-blocking */ }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const currentStepIdx = STEPS.findIndex((s) => s.key === step);
 
@@ -203,19 +238,32 @@ export default function NewVideoGuidePage() {
             {/* ── Form step 1: Product details ── */}
             {formStep === 1 && (
               <div className="space-y-5">
-                {products.length > 0 && (
-                  <div className="space-y-1.5">
-                    <Label>Select a product (optional)</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="outline" className="w-full h-11 justify-between font-normal">
-                          <span className="flex items-center gap-2 min-w-0">
-                            <Package className="h-4 w-4 shrink-0 text-orange-500" />
-                            <span className="truncate">{selectedProduct ? selectedProduct.title : "Choose from your Digital Products…"}</span>
+
+                {/* Option 1: Select from library */}
+                <div className="space-y-1.5">
+                  <Label>Select from your Digital Products</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-11 justify-between font-normal"
+                        disabled={products.length === 0}
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Package className="h-4 w-4 shrink-0 text-orange-500" />
+                          <span className="truncate text-left">
+                            {products.length === 0
+                              ? "No products yet — create one in Digital Products"
+                              : selectedProduct
+                              ? selectedProduct.title
+                              : "Choose from your Digital Products…"}
                           </span>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                        </span>
+                        {products.length > 0 && <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    {products.length > 0 && (
                       <DropdownMenuContent className="w-full min-w-[320px]">
                         {products.map((p) => (
                           <DropdownMenuItem key={p.id} onClick={() => selectProduct(p)} className="flex flex-col items-start gap-0.5 py-2">
@@ -224,15 +272,53 @@ export default function NewVideoGuidePage() {
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
-                    </DropdownMenu>
-                    {selectedProduct && <p className="text-xs text-muted-foreground">Fields pre-filled — edit below if needed.</p>}
-                    <div className="relative flex items-center gap-2 my-1">
-                      <div className="flex-1 h-px bg-border" />
-                      <span className="text-xs text-muted-foreground">or fill in manually</span>
-                      <div className="flex-1 h-px bg-border" />
-                    </div>
-                  </div>
-                )}
+                    )}
+                  </DropdownMenu>
+                  {selectedProduct && <p className="text-xs text-green-600 dark:text-green-400">✓ Fields pre-filled — edit below if needed.</p>}
+                </div>
+
+                {/* Divider */}
+                <div className="relative flex items-center gap-2">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or upload a file</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Option 2: Upload PDF or text file */}
+                <div className="space-y-1.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.txt"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-11 border-dashed gap-2"
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploading ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Extracting text…</>
+                    ) : (
+                      <><Upload className="h-4 w-4 text-orange-500" /> Upload PDF or .txt file</>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    We&apos;ll extract the key info and fill in the fields below.
+                  </p>
+                </div>
+
+                {/* Divider */}
+                <div className="relative flex items-center gap-2">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or fill in manually</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Option 3: Manual fields */}
                 <div className="space-y-1.5">
                   <Label htmlFor="productName">Product or offer name</Label>
                   <Input id="productName" placeholder="e.g. 30-Day Social Media Planner" value={productName} onChange={(e) => setProductName(e.target.value)} required autoFocus className="h-11" />
@@ -241,6 +327,7 @@ export default function NewVideoGuidePage() {
                   <Label htmlFor="description">What does it do / who is it for?</Label>
                   <Textarea id="description" placeholder="e.g. A planner for content creators who want to post consistently without burnout" value={description} onChange={(e) => setDescription(e.target.value)} required rows={3} className="resize-none" />
                 </div>
+
                 <Button type="submit" className="w-full h-11 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm" disabled={!productName.trim() || !description.trim()}>
                   Next: Pick your angle →
                 </Button>
