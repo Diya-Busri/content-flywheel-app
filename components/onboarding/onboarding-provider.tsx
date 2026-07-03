@@ -178,10 +178,7 @@ export function OnboardingProvider({
         </div>
       )}
       <OnboardingModal show={showModal} onComplete={handleModalComplete} onStepComplete={handleStepComplete} />
-      {/* Keep children mounted (good for hydration) but visually hidden during overlay */}
-      <div className={showLoadingOverlay ? "invisible" : undefined}>
-        {children}
-      </div>
+      {children}
       {!loading && !onboardingCompleted && !showModal && (
         <div className="fixed bottom-6 right-6 z-40 w-80 max-w-[calc(100vw-3rem)]">
           <OnboardingChecklist steps={steps} enabledFeatures={enabledFeatures} onStepsChange={fetchOnboarding} />
