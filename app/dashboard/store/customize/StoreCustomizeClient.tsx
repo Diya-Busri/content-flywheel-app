@@ -486,6 +486,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
   const [customDomainError, setCustomDomainError] = useState<string | null>(null);
   const [domainStep, setDomainStep] = useState<1 | 2>(1); // 1 = find, 2 = connect
   const [brandSearch, setBrandSearch] = useState("");
+  const [showDnsGuide, setShowDnsGuide] = useState(false);
 
   const handleConnectCustomDomain = async () => {
     const domain = customDomainInput.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
@@ -1110,7 +1111,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                             <span className="text-[11px] font-mono text-green-700">{customDomainInput}</span>
                             <button type="button" onClick={handleRemoveCustomDomain} className="ml-auto text-[10px] text-red-400 hover:text-red-600 underline">Remove</button>
                           </div>
-                          <div className="rounded-lg bg-white border border-green-200 p-2.5 space-y-1.5">
+                          <div className="rounded-lg bg-white border border-green-200 p-2.5 space-y-2">
                             <p className="text-[11px] font-semibold text-gray-700">Add this DNS record at your registrar:</p>
                             <div className="grid grid-cols-3 gap-1 text-[10px]">
                               <div className="bg-gray-50 rounded p-1.5">
@@ -1126,7 +1127,38 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                                 <p className="font-mono font-bold text-gray-800 break-all">{domainDns.value}</p>
                               </div>
                             </div>
-                            <p className="text-[10px] text-gray-400">DNS changes can take up to 24 hours. Your store goes live automatically once they propagate.</p>
+
+                            {/* Collapsible step-by-step guide */}
+                            <button
+                              type="button"
+                              onClick={() => setShowDnsGuide((v) => !v)}
+                              className="flex items-center gap-1 text-[11px] text-green-700 font-semibold hover:text-green-900"
+                            >
+                              <span>{showDnsGuide ? "▾" : "▸"}</span>
+                              Not sure how to add this? See step-by-step
+                            </button>
+                            {showDnsGuide && (
+                              <div className="bg-green-50 border border-green-100 rounded-lg p-2.5 space-y-2 text-[11px] text-gray-700">
+                                <p className="font-semibold text-green-800">If you bought your domain on Namecheap:</p>
+                                <div className="space-y-1.5">
+                                  <div className="flex gap-2">
+                                    <span className="font-bold text-green-600 shrink-0">1.</span>
+                                    <span>Go to <a href="https://ap.www.namecheap.com/domains/list/" target="_blank" rel="noopener noreferrer" className="underline font-semibold text-green-700">Namecheap → Domain List</a> and click <strong>Manage</strong> next to your domain.</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <span className="font-bold text-green-600 shrink-0">2.</span>
+                                    <span>Click the <strong>Advanced DNS</strong> tab. Under &ldquo;Host Records&rdquo; click <strong>Add New Record</strong>.</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <span className="font-bold text-green-600 shrink-0">3.</span>
+                                    <span>Set Type to <code className="bg-white border border-green-200 px-1 rounded font-mono">CNAME Record</code>, Host to <code className="bg-white border border-green-200 px-1 rounded font-mono">@</code>, Value to <code className="bg-white border border-green-200 px-1 rounded font-mono">cname.vercel-dns.com</code>. Save.</span>
+                                  </div>
+                                </div>
+                                <p className="text-[10px] text-gray-500">Used GoDaddy, Squarespace, or another registrar? The steps are similar — look for &ldquo;DNS Management&rdquo; in your domain settings.</p>
+                              </div>
+                            )}
+
+                            <p className="text-[10px] text-gray-400">Changes can take up to 24 hours. Your store goes live automatically once DNS propagates.</p>
                           </div>
                         </div>
                       ) : domainStep === 1 ? (
