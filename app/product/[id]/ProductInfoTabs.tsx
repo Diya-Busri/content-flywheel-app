@@ -119,12 +119,13 @@ export function ProductInfoTabs({ previewPageUrl, sections, descParagraphs, test
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "160px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.98))", pointerEvents: "none" }} />
           <div style={{ position: "absolute", bottom: "20px", left: 0, right: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
             <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>You&apos;re seeing a preview — purchase to get full access</p>
-            <a
-              href="#buy"
-              style={{ display: "inline-block", padding: "10px 24px", borderRadius: "10px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontSize: "14px", fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 16px rgba(249,115,22,0.35)" }}
+            <button
+              type="button"
+              onClick={() => document.getElementById("buy")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              style={{ display: "inline-block", padding: "10px 24px", borderRadius: "10px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontSize: "14px", fontWeight: 700, textDecoration: "none", border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(249,115,22,0.35)" }}
             >
               Get instant access →
-            </a>
+            </button>
           </div>
         </div>
       )}
