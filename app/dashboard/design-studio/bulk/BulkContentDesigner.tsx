@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Sparkles, ChevronLeft, Loader2, Trash2, Edit3, Download,
   Check, RefreshCw, ChevronRight, Zap, BookOpen, Lightbulb,
-  X, Package, Link, CheckCircle2, AlertCircle,
+  X, Package, Link, CheckCircle2, AlertCircle, Megaphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
@@ -23,7 +23,11 @@ export type ContentRow = {
   cta: string;
   bgTheme: string;
   productTitle?: string;
+  isCta?: boolean;
 };
+
+type Platform = "instagram" | "tiktok-link" | "tiktok-nolink";
+type CtaType = "automatic" | "link-in-bio" | "comment-keyword" | "visit-store" | "follow-for-more" | "custom";
 
 type TemplateStyle = EngineTemplateStyle;
 type Mode = "topic" | "products" | "url";
@@ -119,9 +123,14 @@ function PostPreview({ post, design, index, onDelete, onEdit, onQuickEdit, isDar
         </div>
       </div>
       <div className={`px-2.5 py-2 border-t ${isDark ? "border-white/10" : "border-gray-100"}`}>
-        <p className={`text-[10px] font-semibold truncate ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-          {post.productTitle ? `${post.productTitle}` : `Post ${index + 1}`}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className={`text-[10px] font-semibold truncate flex-1 ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+            {post.productTitle ? `${post.productTitle}` : `Post ${index + 1}`}
+          </p>
+          {post.isCta && (
+            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-orange-500/20 text-orange-400">CTA</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -287,6 +296,12 @@ export function BulkContentDesigner() {
   const [urlScraping, setUrlScraping] = useState(false);
   const [urlScrapeError, setUrlScrapeError] = useState<string | null>(null);
 
+  // CTA settings
+  const [platform, setPlatform] = useState<Platform>("instagram");
+  const [ctaType, setCtaType] = useState<CtaType>("automatic");
+  const [ctaKeyword, setCtaKeyword] = useState("");
+  const [ctaCustom, setCtaCustom] = useState("");
+
   const containerCls = isDark ? "bg-[#0F0F0F] text-white" : "bg-[#F9FAFB] text-gray-900";
   const cardCls = isDark ? "bg-[#1A1A1A] border-white/10" : "bg-white border-gray-200";
 
@@ -344,7 +359,7 @@ export function BulkContentDesigner() {
     setGenerating(true);
     setGenError(null);
     try {
-      const body: Record<string, unknown> = { style, count, tone, niche };
+      const body: Record<string, unknown> = { style, count, tone, niche, platform, ctaType, ctaKeyword, ctaCustom };
       if (mode === "products") {
         const selected = products.filter((p) => selectedProductIds.has(p.id));
         body.products = selected.map((p) => ({
@@ -705,6 +720,96 @@ export function BulkContentDesigner() {
                 </div>
               </div>
 
+              {/* CTA Settings */}
+              <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                    <Megaphone className="w-4 h-4 text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">CTA Settings</p>
+                    <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>A platform-optimised CTA slide is auto-appended to every carousel</p>
+                  </div>
+                </div>
+
+                {/* Platform */}
+                <div>
+                  <label className="block text-xs font-semibold mb-2">Publishing platform</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { value: "instagram", label: "Instagram", sub: "Link in Bio" },
+                      { value: "tiktok-link", label: "TikTok", sub: "Has link" },
+                      { value: "tiktok-nolink", label: "TikTok", sub: "No link" },
+                    ] as { value: Platform; label: string; sub: string }[]).map((p) => (
+                      <button
+                        key={p.value}
+                        onClick={() => {
+                          setPlatform(p.value);
+                          if (p.value === "tiktok-nolink" && ctaType === "link-in-bio") setCtaType("comment-keyword");
+                          if (p.value === "tiktok-nolink" && ctaType === "visit-store") setCtaType("comment-keyword");
+                        }}
+                        className={`flex flex-col items-center py-2.5 px-2 rounded-xl border-2 text-xs font-semibold transition-colors ${
+                          platform === p.value ? "border-orange-500 bg-orange-500/10 text-orange-500" : isDark ? "border-white/10 text-gray-400 hover:border-white/30" : "border-gray-200 text-gray-600 hover:border-gray-300"
+                        }`}
+                      >
+                        <span>{p.label}</span>
+                        <span className={`text-[9px] font-normal mt-0.5 ${platform === p.value ? "text-orange-400" : isDark ? "text-gray-600" : "text-gray-400"}`}>{p.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* CTA Type */}
+                <div>
+                  <label className="block text-xs font-semibold mb-2">CTA type</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { value: "automatic", label: "Automatic" },
+                      ...(platform !== "tiktok-nolink" ? [{ value: "link-in-bio", label: "Link in Bio" }] : []),
+                      { value: "comment-keyword", label: "Comment Keyword" },
+                      ...(platform !== "tiktok-nolink" ? [{ value: "visit-store", label: "Visit Store" }] : []),
+                      { value: "follow-for-more", label: "Follow for More" },
+                      { value: "custom", label: "Custom" },
+                    ] as { value: CtaType; label: string }[]).map((t) => (
+                      <button
+                        key={t.value}
+                        onClick={() => setCtaType(t.value)}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${ctaType === t.value ? "border-orange-500 bg-orange-500/10 text-orange-500" : isDark ? "border-white/10 text-gray-400 hover:border-white/30" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Keyword field (comment-keyword) */}
+                {ctaType === "comment-keyword" && (
+                  <div>
+                    <label className="block text-xs font-semibold mb-1.5">Comment keyword</label>
+                    <input
+                      value={ctaKeyword}
+                      onChange={(e) => setCtaKeyword(e.target.value)}
+                      placeholder="e.g. GUIDE, LINK, FREE"
+                      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
+                    />
+                    <p className={`text-xs mt-1 ${isDark ? "text-gray-600" : "text-gray-400"}`}>e.g. "Comment 'GUIDE' and I'll DM you the link"</p>
+                  </div>
+                )}
+
+                {/* Custom CTA text */}
+                {ctaType === "custom" && (
+                  <div>
+                    <label className="block text-xs font-semibold mb-1.5">Custom CTA text</label>
+                    <input
+                      value={ctaCustom}
+                      onChange={(e) => setCtaCustom(e.target.value)}
+                      placeholder="e.g. DM me 'START' to join the waitlist"
+                      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
+                    />
+                  </div>
+                )}
+              </div>
+
               {genError && <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{genError}</p>}
 
               <Button disabled={!canGenerate || generating} onClick={generate} className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-semibold gap-2 text-base rounded-xl">
@@ -771,7 +876,7 @@ export function BulkContentDesigner() {
                 </p>
               </div>
               <div className="flex gap-3 justify-center flex-wrap">
-                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setPostDesigns([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); setUrlInput(""); setUrlScraped(null); setUrlScrapeError(null); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
+                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setPostDesigns([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); setUrlInput(""); setUrlScraped(null); setUrlScrapeError(null); setPlatform("instagram"); setCtaType("automatic"); setCtaKeyword(""); setCtaCustom(""); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
                   <RefreshCw className="w-4 h-4 mr-2" /> New Batch
                 </Button>
                 {bundleId ? (
