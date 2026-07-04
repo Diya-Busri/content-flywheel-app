@@ -3436,7 +3436,7 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
                   Voice Settings
                 </CardTitle>
                 <CardDescription className="text-gray-600 dark:text-muted-foreground">
-                  Choose the voice, style, and speed for your video. These settings are used for all voiceovers — including "Build My Video".
+                  Choose the voice, style, and speed for your video. These settings are used for all voiceovers — including &ldquo;Build My Video&rdquo;.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-8">
