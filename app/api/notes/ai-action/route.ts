@@ -24,6 +24,22 @@ Create a tight, well-structured summary of the note below.
 Capture ALL key points and main ideas in a scannable format.
 Use a brief intro sentence, then bullet points for the key insights.
 Return only the summary — no commentary, no preamble.`,
+
+  "shorten": `You are an expert editor. Make the text below significantly shorter — cut it to about half the length.
+Remove filler, redundancy, and weaker points. Keep only the most important ideas, expressed concisely.
+Preserve the core meaning and voice. Do not add any new content.
+Return only the shortened text — no commentary, no preamble.`,
+
+  "rewrite": `You are an expert ghostwriter for creators and founders.
+Completely rewrite the text below from scratch while preserving the same core ideas.
+Use fresh wording, a different structure, and more engaging framing.
+Keep the same voice and intended audience. Aim for roughly the same length.
+Return only the rewritten text — no commentary, no preamble.`,
+
+  "change-tone": `You are an expert copywriter. Rewrite the text below in a warmer, more conversational tone.
+Make it feel like the author is speaking directly to a friend — approachable, confident, and human.
+Remove jargon and overly formal language. Keep all the key ideas intact.
+Return only the rewritten text — no commentary, no preamble.`,
 };
 
 export async function POST(req: NextRequest) {
