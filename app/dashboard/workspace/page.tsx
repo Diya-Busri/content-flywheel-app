@@ -6,8 +6,10 @@ import {
   Calendar, Tag, StickyNote, Target, ListTodo, ChevronLeft, ChevronRight,
   Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap, Bold, List,
   Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
-  FileText, Lightbulb, ChevronUp, Loader2
+  FileText, Lightbulb, ChevronUp, Loader2,
+  Sparkles, Wand2, Video, Package, Pin, AlignLeft, Mic, Layers, Minus, Italic
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -446,7 +448,45 @@ function TodoTab() {
 type FontSize = "sm" | "base" | "lg";
 type FontFamily = "sans" | "mono";
 
+function formatRelativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function cleanPreview(body: string): string {
+  return body
+    .replace(/^#+\s/gm, "")
+    .replace(/\*\*/g, "")
+    .replace(/_/g, "")
+    .replace(/^>\s/gm, "")
+    .replace(/^-\s/gm, "")
+    .replace(/`/g, "")
+    .replace(/\n+/g, " ")
+    .trim();
+}
+
+const AI_WRITING_ACTIONS = new Set(["improve-writing", "expand-idea", "summarise"]);
+
+const AI_ACTIONS: { id: string; label: string; icon: JSX.Element; nav?: boolean }[] = [
+  { id: "improve-writing",    label: "Improve Writing",          icon: <Wand2 className="w-3 h-3" /> },
+  { id: "expand-idea",        label: "Expand Idea",              icon: <Sparkles className="w-3 h-3" /> },
+  { id: "summarise",          label: "Summarise",                icon: <AlignLeft className="w-3 h-3" /> },
+  { id: "turn-into-script",   label: "Turn into Script",         icon: <Mic className="w-3 h-3" />, nav: true },
+  { id: "turn-into-carousel", label: "Turn into Carousel",       icon: <Layers className="w-3 h-3" />, nav: true },
+  { id: "turn-into-video",    label: "Turn into Video Guide",    icon: <Video className="w-3 h-3" />, nav: true },
+  { id: "turn-into-product",  label: "Turn into Digital Product",icon: <Package className="w-3 h-3" />, nav: true },
+];
+
 function NotesTab() {
+  const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -455,15 +495,30 @@ function NotesTab() {
   const [fontSize, setFontSize] = useState<FontSize>("base");
   const [fontFamily, setFontFamily] = useState<FontFamily>("sans");
   const [copied, setCopied] = useState(false);
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [autoSaved, setAutoSaved] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
     try {
       const n = localStorage.getItem("cf_notes");
-      if (n) { const parsed = JSON.parse(n); setNotes(parsed); if (parsed.length > 0) setActiveId(parsed[0].id); }
+      if (n) {
+        const parsed = JSON.parse(n) as Note[];
+        setNotes(parsed);
+        if (parsed.length > 0) setActiveId(parsed[0].id);
+      }
     } catch {}
   }, []);
-  useEffect(() => { try { localStorage.setItem("cf_notes", JSON.stringify(notes)); } catch {} }, [notes]);
+
+  useEffect(() => {
+    if (isFirstLoad.current) { isFirstLoad.current = false; return; }
+    try { localStorage.setItem("cf_notes", JSON.stringify(notes)); } catch {}
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    setAutoSaved(true);
+    autoSaveTimer.current = setTimeout(() => setAutoSaved(false), 2000);
+  }, [notes]);
 
   const createNote = (templateKey = "blank") => {
     const tpl = NOTE_TEMPLATES[templateKey] ?? NOTE_TEMPLATES.blank;
@@ -495,7 +550,34 @@ function NotesTab() {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
   };
 
-  // Format insertion
+  const handleAiAction = async (actionId: string) => {
+    if (!active) return;
+    if (AI_WRITING_ACTIONS.has(actionId)) {
+      setAiLoading(actionId);
+      try {
+        const res = await fetch("/api/notes/ai-action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: actionId, title: active.title, body: active.body }),
+        });
+        const json = await res.json() as { result?: string; error?: string };
+        if (json.result) updateNote(active.id, { body: json.result });
+      } catch {}
+      finally { setAiLoading(null); }
+      return;
+    }
+    // Navigation actions — prefill via sessionStorage
+    const prefill = JSON.stringify({ title: active.title, body: active.body });
+    try { sessionStorage.setItem("note_prefill", prefill); } catch {}
+    if (actionId === "turn-into-script" || actionId === "turn-into-video") {
+      router.push("/dashboard/video-guide/new");
+    } else if (actionId === "turn-into-carousel") {
+      router.push("/dashboard/design-studio");
+    } else if (actionId === "turn-into-product") {
+      router.push("/dashboard/library");
+    }
+  };
+
   const insertFormat = (prefix: string, suffix = "", linePrefix = false) => {
     const el = editorRef.current;
     if (!el || !activeId) return;
@@ -518,7 +600,6 @@ function NotesTab() {
     setTimeout(() => { el.focus(); const pos = start + insertion.length; el.setSelectionRange(pos, pos); }, 10);
   };
 
-  // Keyboard shortcuts inside editor
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key === "b") { e.preventDefault(); insertFormat("**", "**"); return; }
@@ -541,7 +622,6 @@ function NotesTab() {
   const words = active?.body.trim() ? active.body.trim().split(/\s+/).length : 0;
   const readTime = Math.max(1, Math.ceil(words / 200));
 
-  // Sort: pinned first, then by updatedAt
   const sorted = [...notes].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
@@ -558,53 +638,66 @@ function NotesTab() {
   const FONT_FAMILIES: Record<FontFamily, string> = { sans: "font-sans", mono: "font-mono" };
 
   return (
-    <div className="flex gap-0 h-[calc(100vh-220px)] min-h-[500px] rounded-xl border border-border overflow-hidden">
+    <div className="flex h-[calc(100vh-220px)] min-h-[500px] rounded-2xl border border-border overflow-hidden shadow-sm">
 
-      {/* ── Sidebar ── */}
-      <div className="w-72 shrink-0 flex flex-col bg-muted/30 border-r border-border">
+      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
+      <div className="w-[272px] shrink-0 flex flex-col bg-muted/20 dark:bg-[#0A0A0A] border-r border-border">
 
-        {/* Search */}
-        <div className="p-3 border-b border-border space-y-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes…"
-              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
+        {/* Sidebar header */}
+        <div className="px-4 pt-4 pb-3 border-b border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-foreground">Notes</p>
+              <p className="text-[10px] text-muted-foreground mt-px">{notes.length} saved</p>
+            </div>
+            <div className="relative">
+              <button
+                onClick={() => setShowTemplates(v => !v)}
+                className="flex items-center gap-1.5 h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />New
+                <ChevronDown className={cn("w-3 h-3 opacity-70 transition-transform duration-150", showTemplates && "rotate-180")} />
+              </button>
+              {showTemplates && (
+                <div className="absolute top-full mt-1.5 right-0 z-30 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[188px] overflow-hidden">
+                  {Object.entries(NOTE_TEMPLATES).map(([key, tpl]) => (
+                    <button key={key} onClick={() => createNote(key)}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-accent transition-colors">
+                      <span className="text-base leading-none">{tpl.emoji}</span>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{tpl.label}</p>
+                        {key !== "blank" && <p className="text-[10px] text-muted-foreground capitalize">{tpl.tag}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* New note button */}
+          {/* Search */}
           <div className="relative">
-            <button onClick={() => setShowTemplates(v => !v)}
-              className="w-full h-9 flex items-center justify-center gap-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors">
-              <Plus className="w-4 h-4" />New note
-              <ChevronDown className={cn("w-3.5 h-3.5 ml-auto opacity-70 transition-transform", showTemplates && "rotate-180")} />
-            </button>
-            {showTemplates && (
-              <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-popover border border-border rounded-xl shadow-lg py-1 overflow-hidden">
-                {Object.entries(NOTE_TEMPLATES).map(([key, tpl]) => (
-                  <button key={key} onClick={() => createNote(key)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-accent transition-colors">
-                    <span className="text-lg leading-none">{tpl.emoji}</span>
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">{tpl.label}</p>
-                      {key !== "blank" && <p className="text-[10px] text-muted-foreground capitalize">{tpl.tag}</p>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search notes…"
+              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-border bg-background/60 focus:outline-none focus:ring-1 focus:ring-orange-400/50 placeholder:text-muted-foreground/50 transition-shadow"
+            />
           </div>
 
-          {/* Tag filter pills */}
+          {/* Tag filter */}
           <div className="flex gap-1 flex-wrap">
-            <button onClick={() => setTagFilter("")}
+            <button
+              onClick={() => setTagFilter("")}
               className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all",
-                tagFilter === "" ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:border-foreground")}>
+                tagFilter === "" ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:border-foreground/50")}>
               All
             </button>
             {(Object.keys(NOTE_TAGS) as NoteTag[]).map(tag => (
               <button key={tag} onClick={() => setTagFilter(t => t === tag ? "" : tag)}
                 className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all",
-                  tagFilter === tag ? NOTE_TAGS[tag].pill : "border-border text-muted-foreground hover:border-foreground")}>
+                  tagFilter === tag ? NOTE_TAGS[tag].pill : "border-border text-muted-foreground hover:border-foreground/50")}>
                 {NOTE_TAGS[tag].label}
               </button>
             ))}
@@ -612,181 +705,317 @@ function NotesTab() {
         </div>
 
         {/* Note list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto py-2 px-2 space-y-px">
           {filteredNotes.length === 0 ? (
-            <div className="py-10 text-center">
-              <StickyNote className="w-6 h-6 mx-auto mb-2 text-muted-foreground/30" />
-              <p className="text-xs text-muted-foreground">{search || tagFilter ? "No matches" : "No notes yet"}</p>
+            <div className="py-12 text-center px-4">
+              <div className="w-10 h-10 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-3">
+                <StickyNote className="w-5 h-5 text-muted-foreground/30" />
+              </div>
+              <p className="text-xs font-medium text-muted-foreground">
+                {search || tagFilter ? "No matches found" : "No notes yet"}
+              </p>
+              {!search && !tagFilter && (
+                <button onClick={() => createNote()}
+                  className="mt-2 text-[11px] text-orange-500 hover:underline font-medium">
+                  Create your first note
+                </button>
+              )}
             </div>
-          ) : filteredNotes.map(note => (
-            <button key={note.id} onClick={() => setActiveId(note.id)}
-              className={cn("w-full text-left px-3 py-2.5 rounded-lg border transition-all group relative",
-                activeId === note.id
-                  ? "bg-white dark:bg-[#1A1A1A] border-orange-500/30 shadow-sm"
-                  : "bg-transparent border-transparent hover:bg-white/60 dark:hover:bg-white/5 hover:border-border")}>
-              <div className="flex items-start gap-2">
-                {/* Accent bar */}
-                <div className={cn("w-1 min-h-[32px] rounded-full shrink-0 mt-0.5 transition-colors",
-                  activeId === note.id
+          ) : filteredNotes.map(note => {
+            const isActive = activeId === note.id;
+            const preview = cleanPreview(note.body).slice(0, 100);
+            return (
+              <button key={note.id} onClick={() => setActiveId(note.id)}
+                className={cn(
+                  "w-full text-left px-3 py-3 rounded-xl border transition-all duration-150 group relative",
+                  isActive
+                    ? "bg-white dark:bg-[#1C1C1C] border-orange-400/40 shadow-sm shadow-orange-500/5"
+                    : "bg-transparent border-transparent hover:bg-white/70 dark:hover:bg-white/5 hover:border-border/60 hover:shadow-sm"
+                )}>
+                {/* Left accent bar */}
+                <div className={cn(
+                  "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full transition-all duration-150",
+                  isActive
                     ? note.tag ? NOTE_TAGS[note.tag].dot : "bg-orange-500"
-                    : "bg-transparent group-hover:bg-border")} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    {note.pinned && <span className="text-orange-500 text-[10px]">📌</span>}
-                    <p className="text-xs font-semibold truncate text-foreground">{note.title || "Untitled"}</p>
+                    : "bg-transparent group-hover:bg-border/60"
+                )} />
+
+                <div className="pl-1.5">
+                  {/* Title */}
+                  <div className="flex items-start gap-1.5 mb-1">
+                    {note.pinned && <Pin className="w-3 h-3 text-orange-400 shrink-0 mt-0.5" />}
+                    <p className={cn(
+                      "text-[13px] font-semibold leading-snug truncate transition-colors pr-8",
+                      isActive ? "text-foreground" : "text-foreground/80 group-hover:text-foreground"
+                    )}>
+                      {note.title || "Untitled"}
+                    </p>
                   </div>
-                  {note.tag && (
-                    <span className={cn("inline-block px-1.5 py-px rounded-full text-[9px] font-bold border mb-0.5", NOTE_TAGS[note.tag].pill)}>
-                      {NOTE_TAGS[note.tag].label}
-                    </span>
-                  )}
-                  {note.body && (
-                    <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
-                      {note.body.replace(/#+\s/g, "").replace(/\*\*/g, "").replace(/_/g, "").slice(0, 80)}
+
+                  {/* Preview */}
+                  {preview && (
+                    <p className="text-[11px] text-muted-foreground/60 line-clamp-2 leading-relaxed mb-1.5">
+                      {preview}
                     </p>
                   )}
-                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-                    {new Date(note.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                  </p>
-                </div>
-              </div>
 
-              {/* Hover actions */}
-              <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
-                <button onClick={e => { e.stopPropagation(); togglePin(note.id); }}
-                  title={note.pinned ? "Unpin" : "Pin"}
-                  className={cn("p-0.5 rounded text-muted-foreground hover:text-orange-500 transition-colors text-[10px]", note.pinned && "text-orange-500")}>
-                  📌
-                </button>
-                <button onClick={e => { e.stopPropagation(); deleteNote(note.id); }}
-                  className="p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors">
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-            </button>
-          ))}
+                  {/* Footer: tag + date */}
+                  <div className="flex items-center justify-between gap-1">
+                    <div>
+                      {note.tag ? (
+                        <span className={cn("inline-block px-1.5 py-px rounded-full text-[9px] font-bold border", NOTE_TAGS[note.tag].pill)}>
+                          {NOTE_TAGS[note.tag].label}
+                        </span>
+                      ) : <span />}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/40 shrink-0">
+                      {formatRelativeTime(note.updatedAt)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Hover actions */}
+                <div className="absolute top-2.5 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  <button onClick={e => { e.stopPropagation(); togglePin(note.id); }}
+                    title={note.pinned ? "Unpin" : "Pin"}
+                    className={cn(
+                      "w-6 h-6 rounded-md flex items-center justify-center transition-colors",
+                      note.pinned ? "text-orange-500 bg-orange-500/10" : "text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10"
+                    )}>
+                    <Pin className="w-3 h-3" />
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); deleteNote(note.id); }}
+                    className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Footer count */}
-        <div className="px-3 py-2 border-t border-border">
-          <p className="text-[10px] text-muted-foreground/60">{notes.length} note{notes.length !== 1 ? "s" : ""}</p>
+        {/* Footer */}
+        <div className="px-4 py-2.5 border-t border-border flex items-center justify-between">
+          <p className="text-[10px] text-muted-foreground/50">{notes.length} note{notes.length !== 1 ? "s" : ""}</p>
+          {notes.length > 0 && (
+            <p className="text-[10px] text-muted-foreground/40">
+              {notes.reduce((acc, n) => acc + (n.body ? n.body.trim().split(/\s+/).length : 0), 0).toLocaleString()} words
+            </p>
+          )}
         </div>
       </div>
 
-      {/* ── Editor ── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-card">
+      {/* ── Editor ─────────────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 bg-card dark:bg-[#0F0F0F]">
         {!active ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 p-8">
-            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
-              <StickyNote className="w-6 h-6 text-muted-foreground/40" />
+          /* Empty state */
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-5 p-10">
+            <div className="w-16 h-16 rounded-2xl bg-muted/60 flex items-center justify-center">
+              <StickyNote className="w-7 h-7 text-muted-foreground/30" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground mb-1">No note selected</p>
-              <p className="text-xs text-muted-foreground">Pick a note from the list or create a new one</p>
+              <p className="text-base font-bold text-foreground mb-1.5">Your workspace awaits</p>
+              <p className="text-sm text-muted-foreground max-w-xs">Pick a note from the list or start fresh with a template</p>
             </div>
-            <button onClick={() => setShowTemplates(true)}
-              className="mt-1 flex items-center gap-1.5 text-xs text-orange-500 hover:underline">
-              <Plus className="w-3.5 h-3.5" />Create your first note
-            </button>
+            <div className="flex flex-col gap-2 items-stretch w-64 mt-1">
+              {Object.entries(NOTE_TEMPLATES).slice(0, 3).map(([key, tpl]) => (
+                <button key={key} onClick={() => createNote(key)}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border hover:border-orange-400/50 hover:bg-orange-500/5 transition-all text-sm font-medium text-muted-foreground hover:text-foreground group">
+                  <span className="text-base">{tpl.emoji}</span>
+                  <span>{tpl.label}</span>
+                  <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>
-            {/* Note header */}
-            <div className="px-5 pt-4 pb-3 border-b border-border flex items-start gap-3">
-              <div className="flex-1 min-w-0">
-                <input
-                  value={active.title}
-                  onChange={e => updateNote(active.id, { title: e.target.value })}
-                  className="w-full text-xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground leading-tight"
-                  placeholder="Note title"
-                />
-                {/* Tag selector */}
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            {/* ── AI Action Bar ─────────────────────────────────────────────── */}
+            <div className="px-6 py-2.5 border-b border-border/50 bg-gradient-to-r from-orange-500/[0.03] to-amber-500/[0.03] dark:from-orange-500/[0.06] dark:to-amber-500/[0.06]">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-px">
+                <div className="flex items-center gap-1.5 shrink-0 mr-0.5">
+                  <Sparkles className="w-3 h-3 text-orange-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-orange-500/80">AI</span>
+                  <div className="w-px h-3.5 bg-orange-500/20 ml-0.5" />
+                </div>
+                {AI_ACTIONS.map(action => (
+                  <button
+                    key={action.id}
+                    onClick={() => handleAiAction(action.id)}
+                    disabled={!!aiLoading}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap border transition-all duration-150 shrink-0",
+                      aiLoading === action.id
+                        ? "bg-orange-500/10 border-orange-500/30 text-orange-500"
+                        : "border-border/70 text-muted-foreground hover:text-foreground hover:border-orange-400/50 hover:bg-orange-500/5 disabled:opacity-40 disabled:cursor-not-allowed"
+                    )}>
+                    {aiLoading === action.id
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : action.icon
+                    }
+                    {action.label}
+                    {action.nav && aiLoading !== action.id && (
+                      <ChevronRight className="w-2.5 h-2.5 opacity-40 ml-0.5" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Note header ───────────────────────────────────────────────── */}
+            <div className="px-8 pt-6 pb-4 border-b border-border/40">
+              {/* Title */}
+              <input
+                value={active.title}
+                onChange={e => updateNote(active.id, { title: e.target.value })}
+                className="w-full text-2xl font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/30 leading-tight mb-3"
+                placeholder="Untitled note"
+              />
+
+              {/* Metadata row */}
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <span className="text-[11px] text-muted-foreground/60">
+                  Last edited {formatRelativeTime(active.updatedAt)}
+                </span>
+                {autoSaved && (
+                  <span className="flex items-center gap-1 text-[11px] text-emerald-500 font-medium">
+                    <Check className="w-3 h-3" /> Auto saved
+                  </span>
+                )}
+                {words > 0 && (
+                  <span className="text-[11px] text-muted-foreground/40">
+                    {words} words · {readTime} min read
+                  </span>
+                )}
+              </div>
+
+              {/* Tags + actions */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 flex-wrap">
                   {(Object.keys(NOTE_TAGS) as NoteTag[]).map(tag => (
                     <button key={tag} onClick={() => updateNote(active.id, { tag: active.tag === tag ? undefined : tag })}
                       className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all",
-                        active.tag === tag ? NOTE_TAGS[tag].pill : "border-border text-muted-foreground/60 hover:border-foreground/40")}>
+                        active.tag === tag ? NOTE_TAGS[tag].pill : "border-border text-muted-foreground/50 hover:border-foreground/30")}>
                       {NOTE_TAGS[tag].label}
                     </button>
                   ))}
                 </div>
-              </div>
 
-              {/* Header actions */}
-              <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                <button onClick={copyToClipboard} title="Copy as markdown"
-                  className={cn("flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-all",
-                    copied ? "bg-green-500/10 text-green-600 border-green-500/30" : "border-border text-muted-foreground hover:text-foreground hover:bg-accent")}>
-                  {copied ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
-                  {copied ? "Copied!" : "Copy"}
-                </button>
-                <button onClick={() => duplicateNote(active)} title="Duplicate note"
-                  className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
-                  <Zap className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => deleteNote(active.id)} title="Delete note"
-                  className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5 transition-all">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={copyToClipboard} title="Copy as markdown"
+                    className={cn("flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all",
+                      copied ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30" : "border-border text-muted-foreground hover:text-foreground hover:bg-accent")}>
+                    {copied ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                  <button onClick={() => duplicateNote(active)} title="Duplicate"
+                    className="w-8 h-8 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all flex items-center justify-center">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => deleteNote(active.id)} title="Delete note"
+                    className="w-8 h-8 rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-500/30 hover:bg-red-500/5 transition-all flex items-center justify-center">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Format toolbar */}
-            <div className="px-4 py-1.5 border-b border-border/50 flex items-center gap-0.5 flex-wrap">
-              {[
-                { icon: <Heading2 className="w-3.5 h-3.5" />, title: "Heading (⌘H)", action: () => insertFormat("## ", "", true) },
-                { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold (⌘B)", action: () => insertFormat("**", "**") },
-                { icon: <span className="text-xs font-italic leading-none italic">I</span>, title: "Italic (⌘I)", action: () => insertFormat("_", "_") },
-                { icon: <List className="w-3.5 h-3.5" />, title: "List (⌘⇧L)", action: () => insertFormat("- ", "", true) },
-                { icon: <Quote className="w-3.5 h-3.5" />, title: "Quote", action: () => insertFormat("> ", "", true) },
-                { icon: <span className="text-xs font-mono leading-none">`</span>, title: "Code (⌘K)", action: () => insertFormat("`", "`") },
-              ].map((btn, i) => (
-                <button key={i} onClick={btn.action} title={btn.title}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-                  {btn.icon}
-                </button>
-              ))}
+            {/* ── Toolbar ───────────────────────────────────────────────────── */}
+            <div className="px-6 py-1.5 border-b border-border/30 flex items-center gap-0.5 flex-wrap bg-muted/10">
+              {/* Group 1: Headings */}
+              <button onClick={() => insertFormat("# ", "", true)} title="Heading 1"
+                className="px-1.5 py-1 rounded-md text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                H1
+              </button>
+              <button onClick={() => insertFormat("## ", "", true)} title="Heading 2 (⌘H)"
+                className="px-1.5 py-1 rounded-md text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                H2
+              </button>
 
-              {/* Divider */}
-              <div className="w-px h-4 bg-border mx-1" />
+              <div className="w-px h-4 bg-border/60 mx-1" />
+
+              {/* Group 2: Inline formatting */}
+              <button onClick={() => insertFormat("**", "**")} title="Bold (⌘B)"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => insertFormat("_", "_")} title="Italic (⌘I)"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <Italic className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => insertFormat("~~", "~~")} title="Strikethrough"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <span className="text-[11px] font-bold line-through leading-none">S</span>
+              </button>
+              <button onClick={() => insertFormat("`", "`")} title="Inline code (⌘K)"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <span className="text-[12px] font-mono leading-none">`</span>
+              </button>
+
+              <div className="w-px h-4 bg-border/60 mx-1" />
+
+              {/* Group 3: Block elements */}
+              <button onClick={() => insertFormat("- ", "", true)} title="Bullet list (⌘⇧L)"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <List className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => insertFormat("> ", "", true)} title="Quote"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <Quote className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  const el = editorRef.current;
+                  if (!el || !activeId) return;
+                  const body = active?.body ?? "";
+                  const newBody = body.slice(0, el.selectionStart) + "\n---\n" + body.slice(el.selectionEnd);
+                  updateNote(activeId, { body: newBody });
+                }}
+                title="Horizontal rule"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="w-px h-4 bg-border/60 mx-1" />
 
               {/* Font size */}
-              <div className="flex items-center gap-0.5">
-                {(["sm", "base", "lg"] as FontSize[]).map(s => (
+              <div className="flex items-center gap-px bg-muted/40 rounded-lg p-0.5">
+                {([["sm", "text-[10px]"], ["base", "text-[12px]"], ["lg", "text-[14px]"]] as [FontSize, string][]).map(([s, cls]) => (
                   <button key={s} onClick={() => setFontSize(s)}
-                    className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors",
-                      fontSize === s ? "bg-orange-500/15 text-orange-500" : "text-muted-foreground hover:text-foreground")}>
-                    {s === "sm" ? "A" : s === "base" ? "A" : "A"}
-                    <span className="sr-only">{s}</span>
-                  </button>
+                    className={cn(
+                      "px-1.5 py-0.5 rounded-md font-bold leading-none transition-colors",
+                      cls,
+                      fontSize === s ? "bg-orange-500/15 text-orange-500" : "text-muted-foreground hover:text-foreground"
+                    )}>A</button>
                 ))}
               </div>
 
               {/* Font family toggle */}
               <button onClick={() => setFontFamily(f => f === "sans" ? "mono" : "sans")}
-                title="Toggle font (sans / mono)"
-                className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors",
-                  fontFamily === "mono" ? "bg-orange-500/15 text-orange-500" : "text-muted-foreground hover:text-foreground")}>
-                {fontFamily === "mono" ? "Mono" : "Sans"}
+                title="Toggle font family"
+                className={cn("px-2 py-1 rounded-lg text-[10px] font-bold transition-colors",
+                  fontFamily === "mono" ? "bg-orange-500/15 text-orange-500" : "text-muted-foreground hover:text-foreground hover:bg-accent")}>
+                {fontFamily === "mono" ? "Mono" : "Aa"}
               </button>
 
-              <div className="ml-auto text-[10px] text-muted-foreground/40">
-                {words > 0 && `${words}w · ${readTime} min`}
+              <div className="ml-auto text-[10px] text-muted-foreground/40 tabular-nums">
+                {words > 0 && `${words}w`}
               </div>
             </div>
 
-            {/* Editor textarea */}
+            {/* ── Editor textarea ────────────────────────────────────────────── */}
             <textarea
               ref={editorRef}
               value={active.body}
               onChange={e => updateNote(active.id, { body: e.target.value })}
               onKeyDown={handleEditorKeyDown}
               className={cn(
-                "flex-1 resize-none bg-transparent p-6 text-foreground placeholder:text-muted-foreground/40 focus:outline-none leading-relaxed",
+                "flex-1 resize-none bg-transparent px-8 py-6 text-foreground",
+                "placeholder:text-muted-foreground/25 focus:outline-none leading-[1.85] tracking-[0.01em]",
                 FONT_SIZES[fontSize],
                 FONT_FAMILIES[fontFamily],
               )}
-              placeholder={`Start writing…\n\n## Use ## for headings\n**bold** and _italic_ for emphasis\n- Lists with a dash\n> Quotes with >\n\`code\` with backticks\n\nKeyboard: ⌘B bold · ⌘H heading · ⌘I italic · Tab to indent`}
+              placeholder={"Start writing…\n\nTip: H1/H2 for headings · **bold** · _italic_ · - for lists · > for quotes"}
             />
           </>
         )}
@@ -794,6 +1023,7 @@ function NotesTab() {
     </div>
   );
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CALENDAR TAB
