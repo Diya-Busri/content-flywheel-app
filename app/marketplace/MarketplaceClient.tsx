@@ -21,6 +21,7 @@ type MarketplaceItem = {
   trendingCount: number;
   avgRating: number | null;
   reviewCount: number;
+  wishlistCount: number;
   featured: boolean;
 };
 
@@ -34,6 +35,16 @@ type ApiResponse = {
 };
 
 type Sort = "newest" | "best-sellers" | "trending" | "price-asc" | "price-desc" | "free";
+
+type RecommendedCreator = {
+  userId: string;
+  displayName: string;
+  bio: string | null;
+  profileImageUrl: string | null;
+  accentColor: string;
+  productCount: number;
+  followerCount: number;
+};
 
 const SORT_TABS: { id: Sort; label: string; emoji: string }[] = [
   { id: "trending",     label: "Trending",    emoji: "🔥" },
@@ -178,6 +189,12 @@ function ProductCard({
           >
             {inWishlist ? "❤️" : "🤍"}
           </button>
+          {/* Wishlist count badge */}
+          {item.wishlistCount > 0 && (
+            <span style={{ position: "absolute", top: "8px", right: "48px", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", color: "#fda4af", fontSize: "9px", fontWeight: 800, padding: "3px 7px", borderRadius: "999px", letterSpacing: "0.02em" }}>
+              ❤️ {item.wishlistCount}
+            </span>
+          )}
 
           {/* Social badge */}
           {badge && (
@@ -330,6 +347,63 @@ function ProductStrip({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Creator card (discovery strip) ──────────────────────────────────────────
+
+function CreatorCard({
+  creator,
+  isFollowing,
+  onFollow,
+}: {
+  creator: RecommendedCreator;
+  isFollowing: boolean;
+  onFollow: (creatorId: string) => void;
+}) {
+  const bg = creator.accentColor ?? "#f97316";
+  return (
+    <div style={{ flexShrink: 0, width: "200px", borderRadius: "16px", background: "#fff", border: "1px solid #f0f0f0", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", transition: "box-shadow 0.15s" }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.10)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)"; }}
+    >
+      {/* Banner stripe */}
+      <div style={{ height: "52px", background: bg, opacity: 0.85 }} />
+      <div style={{ padding: "0 14px 14px", marginTop: "-20px" }}>
+        {/* Avatar */}
+        {creator.profileImageUrl ? (
+          <img src={creator.profileImageUrl} alt={creator.displayName}
+            style={{ width: "44px", height: "44px", borderRadius: "50%", border: "3px solid #fff", objectFit: "cover", marginBottom: "8px" }} />
+        ) : (
+          <div style={{ width: "44px", height: "44px", borderRadius: "50%", background: bg, border: "3px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: 800, color: "#fff", marginBottom: "8px" }}>
+            {creatorInitials(creator.displayName)}
+          </div>
+        )}
+        <p style={{ margin: "0 0 2px", fontSize: "13px", fontWeight: 800, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{creator.displayName}</p>
+        <p style={{ margin: "0 0 8px", fontSize: "11px", color: "#6b7280" }}>
+          {creator.productCount} product{creator.productCount !== 1 ? "s" : ""}
+          {creator.followerCount > 0 && ` · ${creator.followerCount} follower${creator.followerCount !== 1 ? "s" : ""}`}
+        </p>
+        {creator.bio && (
+          <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#6b7280", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {creator.bio}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: "6px" }}>
+          <button
+            onClick={() => onFollow(creator.userId)}
+            style={{ flex: 1, padding: "5px 0", borderRadius: "8px", fontSize: "11px", fontWeight: 700, cursor: "pointer", border: isFollowing ? "1px solid #e5e7eb" : `1px solid ${bg}`, background: isFollowing ? "#f9fafb" : bg, color: isFollowing ? "#374151" : "#fff", transition: "all 0.15s" }}
+          >
+            {isFollowing ? "✓ Following" : "+ Follow"}
+          </button>
+          <a href={`/c/${creator.userId}`}
+            style={{ padding: "5px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: 700, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", textDecoration: "none", whiteSpace: "nowrap" }}
+          >
+            Store →
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MarketplaceClient() {
   const [data, setData]           = useState<ApiResponse | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -340,7 +414,10 @@ export default function MarketplaceClient() {
   const [page, setPage]           = useState(1);
   const [inputValue, setInputValue] = useState("");
   const [quickView, setQuickView]   = useState<MarketplaceItem | null>(null);
-  const [newItems, setNewItems]     = useState<MarketplaceItem[]>([]);
+  const [newItems, setNewItems]         = useState<MarketplaceItem[]>([]);
+  const [followingFeed, setFollowingFeed] = useState<MarketplaceItem[]>([]);
+  const [recommendedCreators, setRecommendedCreators] = useState<RecommendedCreator[]>([]);
+  const [followedCreators, setFollowedCreators] = useState<Set<string>>(new Set());
   const [minPrice, setMinPrice]     = useState("");
   const [maxPrice, setMaxPrice]     = useState("");
   const [minRating, setMinRating]   = useState("");
@@ -349,12 +426,33 @@ export default function MarketplaceClient() {
   const [recommended, setRecommended]       = useState<MarketplaceItem[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Load wishlist + recently viewed from localStorage
+  // Load wishlist from DB (falls back to localStorage for unauthenticated users)
   useEffect(() => {
-    try {
-      const w = JSON.parse(localStorage.getItem("cf_wishlist") ?? "[]") as string[];
-      setWishlist(new Set(w));
-    } catch { /* ignore */ }
+    fetch("/api/marketplace/wishlist")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.ids?.length >= 0) {
+          // Authenticated — use DB
+          setWishlist(new Set(d.ids as string[]));
+          // Sync localStorage to match DB
+          try { localStorage.setItem("cf_wishlist", JSON.stringify(d.ids)); } catch { /* ignore */ }
+        } else {
+          // Unauthenticated — fall back to localStorage
+          try {
+            const w = JSON.parse(localStorage.getItem("cf_wishlist") ?? "[]") as string[];
+            setWishlist(new Set(w));
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {
+        // Network failure — fall back to localStorage
+        try {
+          const w = JSON.parse(localStorage.getItem("cf_wishlist") ?? "[]") as string[];
+          setWishlist(new Set(w));
+        } catch { /* ignore */ }
+      });
+
+    // Load recently viewed from localStorage
     try {
       const raw = JSON.parse(localStorage.getItem("cf_recently_viewed") ?? "[]") as MarketplaceItem[];
       // Prune any stored items that fail basic validity (deleted/missing-image entries)
@@ -379,15 +477,23 @@ export default function MarketplaceClient() {
     try { localStorage.removeItem("cf_recently_viewed"); } catch { /* ignore */ }
   }, []);
 
-  const toggleWishlist = (itemId: string, e: React.MouseEvent) => {
+  const toggleWishlist = useCallback((itemId: string, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setWishlist((prev) => {
       const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      const adding = !next.has(itemId);
+      if (adding) next.add(itemId); else next.delete(itemId);
+      // Sync to localStorage (immediate)
       try { localStorage.setItem("cf_wishlist", JSON.stringify([...next])); } catch { /* ignore */ }
+      // Sync to DB in background (best-effort)
+      if (adding) {
+        fetch("/api/marketplace/wishlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId: itemId }) }).catch(() => {});
+      } else {
+        fetch(`/api/marketplace/wishlist?productId=${itemId}`, { method: "DELETE" }).catch(() => {});
+      }
       return next;
     });
-  };
+  }, []);
 
   // Track viewed items when quick view opens
   useEffect(() => {
@@ -459,11 +565,51 @@ export default function MarketplaceClient() {
       .catch(() => {});
   }, []);
 
+  // Fetch following feed + recommended creators + existing follows once
+  useEffect(() => {
+    fetch("/api/marketplace/following-feed")
+      .then((r) => r.json())
+      .then((d) => setFollowingFeed(d.items ?? []))
+      .catch(() => {});
+
+    fetch("/api/marketplace/recommended-creators?limit=10")
+      .then((r) => r.json())
+      .then((d) => setRecommendedCreators(d.creators ?? []))
+      .catch(() => {});
+
+    // Pre-load which creators the viewer already follows (for the Follow button state)
+    fetch("/api/marketplace/follow")
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d.followingIds)) setFollowedCreators(new Set(d.followingIds as string[])); })
+      .catch(() => {});
+  }, []);
+
   // Debounced search
   useEffect(() => {
     const t = setTimeout(() => { setQ(inputValue); setPage(1); }, 350);
     return () => clearTimeout(t);
   }, [inputValue]);
+
+  const toggleFollowCreator = useCallback((creatorId: string) => {
+    setFollowedCreators((prev) => {
+      const next = new Set(prev);
+      const isFollowing = next.has(creatorId);
+      if (isFollowing) {
+        next.delete(creatorId);
+        fetch(`/api/marketplace/follow?creatorId=${creatorId}`, { method: "DELETE" }).catch(() => {});
+      } else {
+        next.add(creatorId);
+        fetch("/api/marketplace/follow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creatorId }) }).catch(() => {});
+      }
+      return next;
+    });
+    // If now following, hide from recommended list
+    setRecommendedCreators((prev) => {
+      const isFollowing = followedCreators.has(creatorId);
+      if (!isFollowing) return prev.filter((c) => c.userId !== creatorId);
+      return prev;
+    });
+  }, [followedCreators]);
 
   const clearFilters = () => { setNiche(""); setFormat(""); setInputValue(""); setQ(""); setMinPrice(""); setMaxPrice(""); setMinRating(""); setPage(1); };
   const hasFilters = !!(niche || format || q || minPrice || maxPrice || minRating);
@@ -480,12 +626,13 @@ export default function MarketplaceClient() {
             <img src="/logo.png" alt="Content Flywheel" style={{ height: "44px", objectFit: "contain" }} />
           </a>
           {wishlist.size > 0 && (
-            <button
+            <Link
+              href="/dashboard/wishlist"
               title={`${wishlist.size} saved`}
-              style={{ position: "absolute", right: 0, background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700 }}
+              style={{ position: "absolute", right: 0, background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}
             >
-              ❤️ {wishlist.size}
-            </button>
+              ❤️ {wishlist.size} saved
+            </Link>
           )}
         </div>
 
@@ -607,6 +754,49 @@ export default function MarketplaceClient() {
         </div>
       )}
 
+      {/* ── Following strip ──────────────────────────────────────────────────── */}
+      {followingFeed.length > 0 && !hasFilters && (
+        <div style={{ background: "linear-gradient(to right, #0c1220, #0f1a2e)", borderBottom: "1px solid rgba(59,130,246,0.2)", padding: "20px 0" }}>
+          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+              <span style={{ fontSize: "16px" }}>👥</span>
+              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#bfdbfe" }}>From creators you follow</h2>
+              <span style={{ fontSize: "11px", color: "#3b82f6", background: "rgba(59,130,246,0.15)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>New</span>
+            </div>
+            <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
+              {followingFeed.map((item) => (
+                <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
+                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Recommended Creators strip ───────────────────────────────────────── */}
+      {recommendedCreators.length > 0 && !hasFilters && (
+        <div style={{ background: "linear-gradient(to right, #0d1117, #141b27)", borderBottom: "1px solid rgba(99,102,241,0.2)", padding: "20px 0" }}>
+          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+              <span style={{ fontSize: "16px" }}>✨</span>
+              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#c7d2fe" }}>Creators to discover</h2>
+              <span style={{ fontSize: "11px", color: "#6366f1", background: "rgba(99,102,241,0.15)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>Explore</span>
+            </div>
+            <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
+              {recommendedCreators.map((creator) => (
+                <CreatorCard
+                  key={creator.userId}
+                  creator={creator}
+                  isFollowing={followedCreators.has(creator.userId)}
+                  onFollow={toggleFollowCreator}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── New this week strip ──────────────────────────────────────────────── */}
       {newItems.length > 0 && !hasFilters && (
         <ProductStrip
@@ -633,6 +823,31 @@ export default function MarketplaceClient() {
           onRemoveItem={removeRecentlyViewed}
           onClearAll={clearRecentlyViewed}
         />
+      )}
+
+      {/* ── Quick category chips ─────────────────────────────────────────────── */}
+      {(data?.niches ?? []).length > 0 && !hasFilters && (
+        <div style={{ background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px", display: "flex", gap: "8px", overflowX: "auto", scrollbarWidth: "none" }}>
+            {(data?.niches ?? []).slice(0, 16).map((n) => (
+              <button
+                key={n}
+                onClick={() => { setNiche(n.toLowerCase()); setPage(1); }}
+                style={{ flexShrink: 0, padding: "5px 14px", borderRadius: "999px", border: "1px solid #e5e7eb", background: niche === n.toLowerCase() ? "#f97316" : "#f9fafb", color: niche === n.toLowerCase() ? "#fff" : "#374151", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s" }}
+              >
+                {n}
+              </button>
+            ))}
+            {niche && (
+              <button
+                onClick={() => { setNiche(""); setPage(1); }}
+                style={{ flexShrink: 0, padding: "5px 14px", borderRadius: "999px", border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+              >
+                ✕ Clear
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ── Product grid ────────────────────────────────────────────────────── */}
