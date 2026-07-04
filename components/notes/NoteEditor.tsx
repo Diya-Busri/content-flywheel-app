@@ -21,9 +21,9 @@ import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
 
 // ─── React ──────────────────────────────────────────────────────────────────
-import React, {
+import {
   useState, useEffect, useCallback, useRef, forwardRef,
-  useImperativeHandle, KeyboardEvent,
+  useImperativeHandle, KeyboardEvent, type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils";
 
@@ -88,10 +88,9 @@ const TextAlignExtension = Extension.create({
         attributes: {
           textAlign: {
             default: null,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            parseHTML: (el: any) => (el as HTMLElement).style.textAlign || null,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            renderHTML: (attrs: any) => attrs.textAlign ? { style: `text-align: ${attrs.textAlign}` } : {},
+            parseHTML: (el: Element) => (el as HTMLElement).style.textAlign || null,
+            renderHTML: (attrs: Record<string, string | null>) =>
+              attrs.textAlign ? { style: `text-align: ${attrs.textAlign}` } : {},
           },
         },
       },
@@ -428,7 +427,7 @@ interface PaletteItem {
   label: string;
   description?: string;
   group: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   action: () => void;
 }
 
@@ -500,7 +499,7 @@ function CommandPalette({ editor, isMac, onAiAction, onClose }: CommandPalettePr
 
   useEffect(() => setSelectedIndex(0), [query]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, filtered.length - 1)); }
     if (e.key === "ArrowUp")   { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, 0)); }
     if (e.key === "Enter")     { e.preventDefault(); filtered[selectedIndex]?.action(); }
@@ -583,7 +582,7 @@ function CommandPalette({ editor, isMac, onAiAction, onClose }: CommandPalettePr
 function TBtn({
   title, active, onClick, children, className
 }: {
-  title: string; active?: boolean; onClick: () => void; children: React.ReactNode; className?: string;
+  title: string; active?: boolean; onClick: () => void; children: ReactNode; className?: string;
 }) {
   return (
     <button
