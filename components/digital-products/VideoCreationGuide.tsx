@@ -47,6 +47,8 @@ import {
   Trash2,
   Pause,
   Sparkles,
+  Check,
+  Settings2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -442,6 +444,22 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [stability, setStability] = useState(0.5);
   const [similarity, setSimilarity] = useState(0.75);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+
+  // ── Voice Settings step ──────────────────────────────────────────────────
+  type SpeakingStyle = "Professional" | "Friendly" | "Energetic" | "Calm" | "Storytelling";
+  const SPEAKING_STYLES: { label: SpeakingStyle; stability: number; similarity: number; description: string }[] = [
+    { label: "Professional", stability: 0.5,  similarity: 0.75, description: "Clear & authoritative" },
+    { label: "Friendly",     stability: 0.4,  similarity: 0.70, description: "Warm & approachable" },
+    { label: "Energetic",    stability: 0.3,  similarity: 0.60, description: "Upbeat & punchy" },
+    { label: "Calm",         stability: 0.70, similarity: 0.85, description: "Slow & reassuring" },
+    { label: "Storytelling", stability: 0.45, similarity: 0.80, description: "Engaging narrative" },
+  ];
+  const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>("Professional");
+  const [rememberVoiceDefault, setRememberVoiceDefault] = useState(true);
+  /** True once user has explicitly chosen a voice (or already had one saved). */
+  const [voiceSettingsConfirmed, setVoiceSettingsConfirmed] = useState<boolean>(
+    () => !!(preferredVoiceId && preferredVoiceId.trim())
+  );
   const [fullVoiceoverUrl, setFullVoiceoverUrl] = useState<string | null>(() => guide.timelineVoiceoverUrl?.trim() || null);
   const [perSceneUrls, setPerSceneUrls] = useState<(string | null)[]>(() => {
     const urls = guide.timelineSceneVoiceoverUrls;
@@ -1828,6 +1846,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
    * Skips steps that are already done.
    */
   const handleGenerateEverything = useCallback(async () => {
+    if (!voiceSettingsConfirmed) {
+      toast({ title: "Choose your voice first", description: "Set up voice settings before building the video." });
+      setActiveTab("voice-settings");
+      return;
+    }
     if (scenes.length === 0) {
       toast({ title: "No scenes", description: "Add a scene breakdown first.", variant: "destructive" });
       return;
@@ -2417,13 +2440,12 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           const hasImages = Object.keys(guideSceneImageUrls).length > 0;
           const hasVoiceover = !!(fullVoiceoverUrl || perSceneUrls.some(Boolean));
           const hasVideoFile = autoGeneratePhase === null && autoGeneratingAll === false && hasImages && hasVoiceover;
-          const hasSocialKit = !!socialKit;
-          const steps: { done: boolean; label: string; tab: "script" | "scenes" | "voiceover" | "export" | "social-kit" }[] = [
-            { done: true,          label: "Script",    tab: "script" },
-            { done: hasImages,     label: "Images",    tab: "scenes" },
-            { done: hasVoiceover,  label: "Voiceover", tab: "voiceover" },
-            { done: hasVideoFile,  label: "Export",    tab: "export" },
-            { done: hasSocialKit,  label: "Social Kit",tab: "social-kit" },
+          const steps: { done: boolean; label: string; tab: "script" | "voice-settings" | "scenes" | "voiceover" | "export" }[] = [
+            { done: true,                    label: "Script",         tab: "script" },
+            { done: voiceSettingsConfirmed,  label: "Voice Settings", tab: "voice-settings" },
+            { done: hasImages,               label: "Scenes",         tab: "scenes" },
+            { done: hasVoiceover,            label: "Voiceover",      tab: "voiceover" },
+            { done: hasVideoFile,            label: "Export",         tab: "export" },
           ];
           const doneCount = steps.filter((s) => s.done).length;
           const nextStep = steps.find((s) => !s.done);
@@ -3245,15 +3267,18 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           <div className="flex justify-end mb-8">
             <Button
               className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6"
-              onClick={() => setActiveTab("scenes")}
+              onClick={() => setActiveTab("voice-settings")}
             >
-              Continue to Images →
+              Continue to Voice Settings →
             </Button>
           </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="hidden">
+            <TabsTrigger value="voice-settings" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
+              Voice Settings
+            </TabsTrigger>
             <TabsTrigger value="scenes" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Your Video Plan
               {guide.videoFormat?.aspectRatio && (
@@ -3281,6 +3306,159 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               Voiceover
             </TabsTrigger>
           </TabsList>
+
+          {/* ─────────────────────────── VOICE SETTINGS TAB ─────────────────────────── */}
+          <TabsContent value="voice-settings" className="mt-6 space-y-6">
+            <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
+              <CardHeader>
+                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
+                  <Settings2 className="w-4 h-4 text-orange-500" />
+                  Voice Settings
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-muted-foreground">
+                  Choose the voice, style, and speed for your video. These settings are used for all voiceovers — including "Build My Video".
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+
+                {/* ── 1. Voice picker ── */}
+                <div>
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Choose a voice</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {ELEVENLABS_VOICES.map((v) => {
+                      const selected = voiceId === v.voiceId;
+                      const loading = previewingVoiceId === v.voiceId;
+                      return (
+                        <div
+                          key={v.voiceId}
+                          onClick={() => setVoiceId(v.voiceId)}
+                          className={`rounded-lg border-2 p-3 flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                            selected
+                              ? "border-orange-500 bg-orange-500/10 text-foreground"
+                              : "border-gray-200 dark:border-border bg-gray-100 dark:bg-background hover:border-gray-300 dark:hover:border-[#3A3A3A]"
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {selected && <Check className="w-3.5 h-3.5 text-orange-500 shrink-0" />}
+                              <span className="block font-medium text-sm">{v.name}</span>
+                            </div>
+                            <span className="block text-xs text-gray-500 dark:text-muted-foreground mt-0.5">{v.description}</span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 h-8 w-8 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePreviewVoice(v.voiceId);
+                            }}
+                            disabled={loading}
+                            title="Preview voice"
+                          >
+                            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ── 2. Speaking style ── */}
+                <div>
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Speaking style</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SPEAKING_STYLES.map((style) => {
+                      const active = speakingStyle === style.label;
+                      return (
+                        <button
+                          key={style.label}
+                          type="button"
+                          onClick={() => {
+                            setSpeakingStyle(style.label);
+                            setStability(style.stability);
+                            setSimilarity(style.similarity);
+                          }}
+                          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                            active
+                              ? "bg-orange-500 border-orange-500 text-white"
+                              : "border-gray-200 dark:border-border bg-white dark:bg-background text-gray-600 dark:text-muted-foreground hover:border-orange-400 hover:text-orange-500"
+                          }`}
+                        >
+                          {style.label}
+                          <span className={`block text-xs font-normal mt-0.5 ${active ? "text-orange-100" : "text-gray-400 dark:text-gray-500"}`}>
+                            {style.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ── 3. Speaking speed ── */}
+                <div>
+                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Speaking speed</p>
+                  <div className="max-w-xs space-y-2">
+                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-muted-foreground">
+                      <span>Speed</span>
+                      <span className="font-medium text-foreground">{playbackSpeed.toFixed(1)}×</span>
+                    </div>
+                    <Slider
+                      value={[playbackSpeed]}
+                      onValueChange={([v]) => setPlaybackSpeed(v)}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
+                      <span>0.5× Slow</span>
+                      <span>2.0× Fast</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── 4. Remember as default ── */}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRememberVoiceDefault((v) => !v)}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
+                      rememberVoiceDefault
+                        ? "bg-orange-500 border-orange-500"
+                        : "border-gray-300 dark:border-border bg-white dark:bg-background"
+                    }`}
+                  >
+                    {rememberVoiceDefault && <Check className="w-3 h-3 text-white" />}
+                  </button>
+                  <span className="text-sm text-gray-600 dark:text-muted-foreground">
+                    Remember this as my default voice for future videos
+                  </span>
+                </div>
+
+                {/* ── 5. Confirm button ── */}
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-border">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("script")}
+                    className="text-sm text-gray-500 dark:text-muted-foreground hover:text-gray-700 dark:hover:text-gray-300"
+                  >
+                    ← Back to Script
+                  </button>
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 gap-2"
+                    onClick={() => {
+                      if (rememberVoiceDefault) setDefaultVoiceId(voiceId);
+                      setVoiceSettingsConfirmed(true);
+                      setActiveTab("scenes");
+                    }}
+                  >
+                    <Check className="w-4 h-4" />
+                    Confirm &amp; Continue to Scenes →
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="scenes" className="mt-6 space-y-4">
             {onScenesRegenerated && (
