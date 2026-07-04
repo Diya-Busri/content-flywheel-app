@@ -959,6 +959,45 @@ export function DesignEditor({ designId }: { designId: string }) {
     window.addEventListener("pointerup", onUp);
   }
 
+  /**
+   * Edge (midpoint) resize — constrains to single axis.
+   * edge: "n" | "s" | "e" | "w"
+   */
+  function onResizeEdgePointerDown(
+    e: React.PointerEvent,
+    id: string,
+    edge: "n" | "s" | "e" | "w"
+  ) {
+    e.stopPropagation(); e.preventDefault();
+    const el = data.elements.find((x) => x.id === id)!;
+    resizeRef.current = {
+      startX: e.clientX, startY: e.clientY,
+      origW: el.width, origH: el.height,
+    };
+    const origX = el.x, origY = el.y;
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const onMove = (ev: PointerEvent) => {
+      if (!resizeRef.current) return;
+      const dx = (ev.clientX - resizeRef.current.startX) / scale;
+      const dy = (ev.clientY - resizeRef.current.startY) / scale;
+      const { origW, origH } = resizeRef.current;
+      let newW = origW, newH = origH, newX = origX, newY = origY;
+      if (edge === "e") { newW = Math.max(20, origW + dx); }
+      else if (edge === "w") { newW = Math.max(20, origW - dx); newX = origX + (origW - newW); }
+      else if (edge === "s") { newH = Math.max(20, origH + dy); }
+      else { newH = Math.max(20, origH - dy); newY = origY + (origH - newH); } // n
+      updateElement(id, { width: newW, height: newH, x: newX, y: newY }, false);
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   function onRotatePointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation(); e.preventDefault();
     const el = data.elements.find((x) => x.id === id)!;
@@ -1191,7 +1230,7 @@ export function DesignEditor({ designId }: { designId: string }) {
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
               ref={canvasRef}
-              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${getProxiedBackgroundImageUrl(data.backgroundImage) ?? data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
+              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${getProxiedBackgroundImageUrl(data.backgroundImage) ?? data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "visible", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
               onClick={onCanvasClick}
             >
               {/* Blurred background image layer */}
@@ -1218,6 +1257,7 @@ export function DesignEditor({ designId }: { designId: string }) {
                   onPointerDown={onElementPointerDown}
                   onResizePointerDown={onResizePointerDown}
                   onResizeCornerPointerDown={onResizeCornerPointerDown}
+                  onResizeEdgePointerDown={onResizeEdgePointerDown}
                   onRotatePointerDown={onRotatePointerDown}
                   onUpdate={(patch) => updateElement(el.id, patch)} />
               ))}
@@ -1927,11 +1967,12 @@ function ToolBtn({ icon, label, onClick, isDark, danger }: { icon: React.ReactNo
 
 // ── Canvas element ─────────────────────────────────────────────────────────
 
-function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onResizeCornerPointerDown, onRotatePointerDown, onUpdate }: {
+function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onResizeCornerPointerDown, onResizeEdgePointerDown, onRotatePointerDown, onUpdate }: {
   el: DesignElement; selected: boolean;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   onResizePointerDown: (e: React.PointerEvent, id: string) => void;
   onResizeCornerPointerDown: (e: React.PointerEvent, id: string, corner: "nw" | "ne" | "sw" | "se") => void;
+  onResizeEdgePointerDown: (e: React.PointerEvent, id: string, edge: "n" | "s" | "e" | "w") => void;
   onRotatePointerDown: (e: React.PointerEvent, id: string) => void;
   onUpdate: (patch: Partial<DesignElement>) => void;
 }) {
@@ -2007,13 +2048,17 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
     </div>
   ) : null;
 
-  // 4-corner resize handles, shown when selected and not locked
+  // 4-corner + 4-edge resize handles, shown when selected and not locked
   const cornerHandles = selected && !el.locked ? (
     <>
       <CornerHandle corner="nw" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "nw")} />
       <CornerHandle corner="ne" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "ne")} />
       <CornerHandle corner="sw" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "sw")} />
       <CornerHandle corner="se" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "se")} />
+      <EdgeHandle edge="n" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "n")} />
+      <EdgeHandle edge="s" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "s")} />
+      <EdgeHandle edge="e" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "e")} />
+      <EdgeHandle edge="w" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "w")} />
     </>
   ) : null;
 
@@ -2077,6 +2122,34 @@ function CornerHandle({ corner, onPointerDown }: {
         background: "#f97316", border: "2.5px solid white", borderRadius: 5,
         cursor: cursors[corner], zIndex: 999, touchAction: "none",
         // Transparent padding to expand the touch target without increasing visible size
+        boxSizing: "content-box",
+      }}
+    />
+  );
+}
+
+/** Edge (midpoint) resize handle — single-axis resize (N/S = height, E/W = width) */
+function EdgeHandle({ edge, onPointerDown }: {
+  edge: "n" | "s" | "e" | "w";
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const isHorizontal = edge === "e" || edge === "w";
+  const cursors: Record<string, string> = { n: "n-resize", s: "s-resize", e: "e-resize", w: "w-resize" };
+  const pos: React.CSSProperties =
+    edge === "n" ? { top: -7, left: "50%", transform: "translateX(-50%)" } :
+    edge === "s" ? { bottom: -7, left: "50%", transform: "translateX(-50%)" } :
+    edge === "e" ? { right: -7, top: "50%", transform: "translateY(-50%)" } :
+                   { left: -7, top: "50%", transform: "translateY(-50%)" };
+  return (
+    <div
+      data-resize="true"
+      onPointerDown={onPointerDown}
+      style={{
+        position: "absolute", ...pos,
+        width: isHorizontal ? 14 : 36,
+        height: isHorizontal ? 36 : 14,
+        background: "white", border: "2px solid #f97316", borderRadius: 4,
+        cursor: cursors[edge], zIndex: 999, touchAction: "none",
         boxSizing: "content-box",
       }}
     />

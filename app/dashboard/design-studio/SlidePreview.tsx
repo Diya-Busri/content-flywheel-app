@@ -27,10 +27,13 @@ function PreviewElement({ el, scale }: { el: DesignElement; scale: number }) {
   };
 
   if (el.type === "text") {
+    // Use overflow:visible so text that fills the element box isn't clipped in preview thumbnails.
+    // The canvas container (SlidePreview root) provides the hard outer clip.
+    const textStyle: React.CSSProperties = { ...style, overflow: "visible" };
     return (
-      <div style={style}>
+      <div style={textStyle}>
         <div style={{
-          width: "100%", height: "100%",
+          width: "100%",
           background: el.textBackground ?? "transparent",
           fontFamily: el.fontFamily ?? "Inter",
           fontSize: (el.fontSize ?? 32) * scale,
@@ -41,10 +44,10 @@ function PreviewElement({ el, scale }: { el: DesignElement; scale: number }) {
           textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left",
           lineHeight: el.lineHeight ?? 1.3,
           letterSpacing: `${(el.letterSpacing ?? 0) * scale}px`,
-          wordBreak: "normal",
+          wordBreak: "break-word",
           overflowWrap: "break-word",
           whiteSpace: "pre-wrap",
-          overflow: "hidden",
+          overflow: "visible",
           padding: el.textBackground ? `${28 * scale}px ${40 * scale}px` : undefined,
           boxSizing: "border-box",
           borderRadius: el.textBackground ? 16 * scale : undefined,
