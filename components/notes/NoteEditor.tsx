@@ -1,7 +1,8 @@
 "use client";
 
 import { useEditor, EditorContent, ReactRenderer, Editor } from "@tiptap/react";
-import { BubbleMenu } from "@tiptap/extension-bubble-menu";
+// BubbleMenu is a TipTap Extension in v3, not a React component.
+// We implement our own selection-triggered floating toolbar below.
 import { StarterKit } from "@tiptap/starter-kit";
 import { Underline } from "@tiptap/extension-underline";
 import { TaskList, TaskItem } from "@tiptap/extension-list";
@@ -355,6 +356,9 @@ export function NoteEditor({
 }: NoteEditorProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [aiSelectionLoading, setAiSelectionLoading] = useState<string | null>(null);
+  const [bubbleVisible, setBubbleVisible] = useState(false);
+  const [bubbleCoords, setBubbleCoords] = useState({ top: 0, left: 0 });
+  const bubbleRef = useRef<HTMLDivElement>(null);
   const allNotesRef = useRef(allNotes);
   allNotesRef.current = allNotes;
 
@@ -464,6 +468,19 @@ export function NoteEditor({
     onUpdate: ({ editor }) => {
       onUpdate(JSON.stringify(editor.getJSON()), editor.getText({ blockSeparator: "\n" }));
     },
+    onSelectionUpdate: ({ editor }) => {
+      const { empty } = editor.state.selection;
+      if (empty) { setBubbleVisible(false); return; }
+      // Calculate position from ProseMirror DOM
+      try {
+        const { from } = editor.state.selection;
+        const coords = editor.view.coordsAtPos(from);
+        const editorDom = editor.view.dom;
+        const rect = editorDom.getBoundingClientRect();
+        setBubbleCoords({ top: coords.top - rect.top - 48, left: Math.max(0, coords.left - rect.left) });
+        setBubbleVisible(true);
+      } catch { setBubbleVisible(false); }
+    },
     immediatelyRender: false,
   }, [noteId]);
 
@@ -484,11 +501,13 @@ export function NoteEditor({
 
   return (
     <div className={cn("relative flex-1 flex flex-col overflow-hidden", className)}>
-      {/* ── Bubble Menu ──────────────────────────────────────────────── */}
-      <BubbleMenu
-        editor={editor}
-        tippyOptions={{ duration: 100, placement: "top", theme: "none", arrow: false }}
-        className="bubble-menu flex items-center gap-px bg-popover border border-border rounded-xl shadow-xl p-1 overflow-visible"
+      {/* ── Floating Selection Toolbar ───────────────────────────────── */}
+      {bubbleVisible && (
+      <div
+        ref={bubbleRef}
+        style={{ top: bubbleCoords.top, left: bubbleCoords.left }}
+        className="bubble-menu absolute z-40 flex items-center gap-px bg-popover border border-border rounded-xl shadow-xl p-1 overflow-visible pointer-events-auto"
+        onMouseDown={(e) => e.preventDefault()}
       >
         {/* Formatting group */}
         {[
@@ -554,7 +573,8 @@ export function NoteEditor({
             ))}
           </>
         )}
-      </BubbleMenu>
+      </div>
+      )}
 
       {/* ── Editor content ───────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto" onClick={() => editor.commands.focus()}>
