@@ -792,7 +792,7 @@ export function BulkContentDesigner() {
                       placeholder="e.g. GUIDE, LINK, FREE"
                       className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
                     />
-                    <p className={`text-xs mt-1 ${isDark ? "text-gray-600" : "text-gray-400"}`}>e.g. "Comment 'GUIDE' and I'll DM you the link"</p>
+                    <p className={`text-xs mt-1 ${isDark ? "text-gray-600" : "text-gray-400"}`}>e.g. &ldquo;Comment &apos;GUIDE&apos; and I&apos;ll DM you the link&rdquo;</p>
                   </div>
                 )}
 
