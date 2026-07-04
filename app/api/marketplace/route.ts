@@ -11,6 +11,13 @@ import { isNull, inArray, desc, gte, eq, sql, and, gt } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
+/** Returns true if a seller profile has an active subscription. */
+function isSellerActive(profile: { membership: string | null; status: string | null } | undefined): boolean {
+  if (!profile) return false;
+  const status = (profile.status ?? "").toLowerCase();
+  return profile.membership === "pro" && (status === "active" || status === "trialing");
+}
+
 /**
  * GET /api/marketplace
  * Query params: q, niche, format, sort (newest|best-sellers|trending|price-asc|price-desc|free), page
@@ -39,16 +46,59 @@ export async function GET(request: NextRequest) {
     comingSoon?: boolean;
   };
 
-  // ── Fetch all published products ──────────────────────────────────────────
+  // ── Fetch all non-deleted products ────────────────────────────────────────
   const rows = await db
-    .select({ id: productsTable.id, title: productsTable.title, niche: productsTable.niche, format: productsTable.format, marketingAssets: productsTable.marketingAssets, userId: productsTable.userId, createdAt: productsTable.createdAt })
+    .select({
+      id: productsTable.id,
+      title: productsTable.title,
+      niche: productsTable.niche,
+      format: productsTable.format,
+      marketingAssets: productsTable.marketingAssets,
+      userId: productsTable.userId,
+      createdAt: productsTable.createdAt,
+      status: productsTable.status,
+    })
     .from(productsTable)
     .where(isNull(productsTable.deletedAt))
     .orderBy(desc(productsTable.createdAt));
 
+  // ── Seller status filter: only active subscriptions ───────────────────────
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+  const allUserIds = Array.from(new Set(rows.map((r) => r.userId)));
+  const sellerProfileRows = allUserIds.length > 0
+    ? await db
+        .select({ userId: profilesTable.userId, membership: profilesTable.membership, status: profilesTable.status, email: profilesTable.email })
+        .from(profilesTable)
+        .where(inArray(profilesTable.userId, allUserIds))
+    : [];
+
+  const sellerProfileMap: Record<string, typeof sellerProfileRows[0]> = {};
+  for (const p of sellerProfileRows) sellerProfileMap[p.userId] = p;
+
+  const activeSellerIds = new Set(
+    sellerProfileRows
+      .filter((p) => {
+        const isAdminUser = adminEmail.length > 0 && (p.email ?? "").trim().toLowerCase() === adminEmail;
+        return isAdminUser || isSellerActive(p);
+      })
+      .map((p) => p.userId)
+  );
+
+  // ── Apply publish + seller-active + asset validity filters ────────────────
+  const nowMs = Date.now();
   const published = rows.filter((r) => {
     const ma = (r.marketingAssets ?? {}) as MA;
-    return ma.isNativePublished === true && !ma.comingSoon;
+    // Must be explicitly published to native store
+    if (ma.isNativePublished !== true) return false;
+    // Coming-soon products are not purchasable yet
+    if (ma.comingSoon) return false;
+    // Sale window expired — treat as unpublished
+    if (ma.saleEndsAt && new Date(ma.saleEndsAt).getTime() < nowMs) return false;
+    // Seller must have an active subscription (or be the admin)
+    if (!activeSellerIds.has(r.userId)) return false;
+    // Must have at least one usable cover image
+    if (!ma.coverThumbnailUrl && !ma.bookMockupUrl && !ma.thumbnailUrl) return false;
+    return true;
   });
 
   // ── Fetch sales counts (all-time + last 7 days) + ratings ─────────────────

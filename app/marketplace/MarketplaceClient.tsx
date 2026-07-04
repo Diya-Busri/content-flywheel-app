@@ -257,6 +257,13 @@ function ProductCard({
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Client-side guard: drop any stored item that fails the basic validity check. */
+function isValidStoredItem(item: MarketplaceItem): boolean {
+  return !!(item?.id && item?.title && item?.creatorUserId && item?.thumbnailUrl);
+}
+
 // ─── Horizontal scroll strip ──────────────────────────────────────────────────
 
 function ProductStrip({
@@ -267,6 +274,8 @@ function ProductStrip({
   wishlist,
   onQuickView,
   onNicheClick,
+  onRemoveItem,
+  onClearAll,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -275,6 +284,8 @@ function ProductStrip({
   wishlist: Set<string>;
   onQuickView: (item: MarketplaceItem) => void;
   onNicheClick: (niche: string) => void;
+  onRemoveItem?: (id: string) => void;
+  onClearAll?: () => void;
 }) {
   if (!items.length) return null;
   return (
@@ -283,11 +294,32 @@ function ProductStrip({
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
           {icon}
           <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#111827" }}>{title}</h2>
+          {onClearAll && (
+            <button
+              onClick={onClearAll}
+              style={{ marginLeft: "auto", fontSize: "11px", fontWeight: 700, color: "#9ca3af", background: "none", border: "1px solid #e5e7eb", borderRadius: "6px", padding: "3px 10px", cursor: "pointer", transition: "all 0.15s" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#ef4444"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#fecaca"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9ca3af"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#e5e7eb"; }}
+            >
+              Clear all
+            </button>
+          )}
         </div>
         <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
           {items.map((item) => (
-            <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
+            <div key={item.id} style={{ flexShrink: 0, width: "220px", position: "relative" }}>
               <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={onWishlist} onQuickView={onQuickView} onNicheClick={onNicheClick} />
+              {onRemoveItem && (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveItem(item.id); }}
+                  title="Remove from history"
+                  style={{ position: "absolute", top: "8px", left: "8px", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", border: "none", borderRadius: "50%", width: "26px", height: "26px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "15px", lineHeight: 1, zIndex: 10, transition: "background 0.15s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(239,68,68,0.85)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.55)"; }}
+                >
+                  ×
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -324,9 +356,27 @@ export default function MarketplaceClient() {
       setWishlist(new Set(w));
     } catch { /* ignore */ }
     try {
-      const rv = JSON.parse(localStorage.getItem("cf_recently_viewed") ?? "[]") as MarketplaceItem[];
-      setRecentlyViewed(rv.slice(0, 8));
+      const raw = JSON.parse(localStorage.getItem("cf_recently_viewed") ?? "[]") as MarketplaceItem[];
+      // Prune any stored items that fail basic validity (deleted/missing-image entries)
+      const valid = raw.filter(isValidStoredItem).slice(0, 8);
+      setRecentlyViewed(valid);
+      if (valid.length !== raw.length) {
+        try { localStorage.setItem("cf_recently_viewed", JSON.stringify(valid)); } catch { /* ignore */ }
+      }
     } catch { /* ignore */ }
+  }, []);
+
+  const removeRecentlyViewed = useCallback((id: string) => {
+    setRecentlyViewed((prev) => {
+      const next = prev.filter((i) => i.id !== id);
+      try { localStorage.setItem("cf_recently_viewed", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const clearRecentlyViewed = useCallback(() => {
+    setRecentlyViewed([]);
+    try { localStorage.removeItem("cf_recently_viewed"); } catch { /* ignore */ }
   }, []);
 
   const toggleWishlist = (itemId: string, e: React.MouseEvent) => {
@@ -364,17 +414,37 @@ export default function MarketplaceClient() {
     if (res.ok) {
       const json = await res.json();
       setData(json);
-      // Build "recommended for you" from niche history
+      const liveItems = json.items as MarketplaceItem[];
+
+      // Build "recommended for you" from niche history — only include items
+      // that the API confirmed are still valid and published
       try {
         const rv = JSON.parse(localStorage.getItem("cf_recently_viewed") ?? "[]") as MarketplaceItem[];
         const topNiches = [...new Set(rv.map((i) => i.niche.toLowerCase()))].slice(0, 3);
         if (topNiches.length > 0) {
-          const recs = (json.items as MarketplaceItem[])
+          const recs = liveItems
             .filter((i) => topNiches.includes(i.niche.toLowerCase()) && !rv.some((r) => r.id === i.id))
             .slice(0, 8);
           setRecommended(recs);
         }
       } catch { /* ignore */ }
+
+      // Cross-validate recently viewed: if an item appears in the live results
+      // for this page (same sort/filter) and is still valid, keep it; otherwise
+      // leave it untouched (it may just be off-page, not deleted)
+      setRecentlyViewed((prev) => {
+        const pruned = prev.filter((item) => {
+          // If the API explicitly returned this ID, it's valid — keep it
+          // If the API did NOT return it, we can't be sure it's deleted (might be filtered/paginated)
+          // So only remove items that fail our client-side validity check
+          return isValidStoredItem(item);
+        });
+        if (pruned.length !== prev.length) {
+          try { localStorage.setItem("cf_recently_viewed", JSON.stringify(pruned)); } catch { /* ignore */ }
+          return pruned;
+        }
+        return prev;
+      });
     }
     setLoading(false);
   }, [q, niche, format, sort, page, minPrice, maxPrice, minRating]);
@@ -560,6 +630,8 @@ export default function MarketplaceClient() {
           onWishlist={toggleWishlist}
           onQuickView={setQuickView}
           onNicheClick={(n) => { setNiche(n); setPage(1); }}
+          onRemoveItem={removeRecentlyViewed}
+          onClearAll={clearRecentlyViewed}
         />
       )}
 
