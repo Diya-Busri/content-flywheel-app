@@ -825,10 +825,10 @@ export function NoteEditor({
   const readMins  = Math.max(1, Math.ceil(charCount / 200));
 
   return (
-    <div className={cn("relative flex-1 flex flex-col overflow-hidden", className)}>
+    <div className={cn("relative flex-1 flex flex-col", className)}>
 
       {/* ── Minimal top toolbar ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 px-4 py-1.5 border-b border-border/40 bg-background/60 backdrop-blur-sm shrink-0 flex-wrap">
+      <div className="relative z-10 flex items-center gap-1 px-4 py-1.5 border-b border-border/40 bg-background shrink-0 flex-wrap">
 
         {/* Block type dropdown */}
         <div className="relative" ref={blockRef}>
@@ -849,7 +849,7 @@ export function NoteEditor({
                 { label: "Quote",    icon: <Quote className="w-3.5 h-3.5" />,   action: () => editor.chain().focus().toggleBlockquote().run() },
                 { label: "Code Block", icon: <Code className="w-3.5 h-3.5" />, action: () => editor.chain().focus().toggleCodeBlock().run() },
               ].map(item => (
-                <button key={item.label} onMouseDown={e => { e.preventDefault(); item.action(); setShowBlockMenu(false); }}
+                <button key={item.label} onClick={() => { item.action(); setShowBlockMenu(false); }}
                   className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left hover:bg-accent transition-colors text-foreground">
                   <span className="text-muted-foreground">{item.icon}</span>
                   {item.label}
@@ -893,7 +893,7 @@ export function NoteEditor({
                 { label: "Numbered List", icon: <ListOrdered className="w-3.5 h-3.5" />,  active: editor.isActive("orderedList"), action: () => editor.chain().focus().toggleOrderedList().run() },
                 { label: "Checklist",     icon: <CheckSquare className="w-3.5 h-3.5" />,  active: editor.isActive("taskList"),   action: () => editor.chain().focus().toggleTaskList().run() },
               ].map(item => (
-                <button key={item.label} onMouseDown={e => { e.preventDefault(); item.action(); setShowListMenu(false); }}
+                <button key={item.label} onClick={() => { item.action(); setShowListMenu(false); }}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
                     item.active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
@@ -930,7 +930,7 @@ export function NoteEditor({
                   { icon: <AlignJustify className="w-3.5 h-3.5" />, align: "justify", title: "Justify" },
                 ].map(item => (
                   <button key={item.align} title={item.title}
-                    onMouseDown={e => { e.preventDefault(); setAlign(item.align); }}
+                    onClick={() => setAlign(item.align)}
                     className="flex-1 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
                     {item.icon}
                   </button>
@@ -943,7 +943,7 @@ export function NoteEditor({
                 { label: "Strikethrough",  icon: <Strikethrough className="w-3.5 h-3.5" />,  active: editor.isActive("strike"),    action: () => editor.chain().focus().toggleStrike().run() },
                 { label: "Inline Code",    icon: <Code className="w-3.5 h-3.5" />,           active: editor.isActive("code"),      action: () => editor.chain().focus().toggleCode().run() },
               ].map(item => (
-                <button key={item.label} onMouseDown={e => { e.preventDefault(); item.action(); }}
+                <button key={item.label} onClick={item.action}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
                     item.active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
@@ -967,7 +967,7 @@ export function NoteEditor({
                   setShowMoreMenu(false);
                 }},
               ].map(item => (
-                <button key={item.label} onMouseDown={e => { e.preventDefault(); item.action(); }}
+                <button key={item.label} onClick={item.action}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
                     (item as { active?: boolean }).active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
@@ -978,7 +978,7 @@ export function NoteEditor({
               ))}
               {/* Color */}
               <div className="relative" ref={colorRef}>
-                <button onMouseDown={e => { e.preventDefault(); setShowColorPicker(v => !v); }}
+                <button onClick={() => setShowColorPicker(v => !v)}
                   className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left text-foreground hover:bg-accent transition-colors">
                   <span className="text-muted-foreground flex items-center gap-1">
                     <Type className="w-3.5 h-3.5" />
@@ -1104,7 +1104,7 @@ export function NoteEditor({
 
       {/* ── Editor content ────────────────────────────────────────────────── */}
       <div
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-h-0 overflow-y-auto"
         onClick={() => editor.commands.focus()}
       >
         <EditorContent editor={editor} className="h-full" />
