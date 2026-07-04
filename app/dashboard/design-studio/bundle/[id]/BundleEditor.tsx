@@ -22,6 +22,42 @@ import {
 
 type Slide = SelectDesign & { data: DesignData };
 
+/** Detect a human-readable label for a slide from its title keywords or position. */
+function getSlideLabel(slide: Slide, idx: number, total: number): string | null {
+  const t = (slide.title ?? "").toLowerCase();
+  const keywords: [string, string][] = [
+    ["hook", "Hook"],
+    ["cover", "Cover"],
+    ["intro", "Intro"],
+    ["problem", "Problem"],
+    ["pain", "Pain Point"],
+    ["solution", "Solution"],
+    ["statistic", "Statistic"],
+    ["stat ", "Statistic"],
+    ["benefit", "Benefit"],
+    ["feature", "Feature"],
+    ["testimonial", "Social Proof"],
+    ["social proof", "Social Proof"],
+    ["result", "Results"],
+    ["before", "Before/After"],
+    ["tip", "Tip"],
+    ["quote", "Quote"],
+    ["cta", "CTA"],
+    ["call to action", "CTA"],
+    ["outro", "Outro"],
+    ["close", "Outro"],
+    ["offer", "Offer"],
+    ["faq", "FAQ"],
+  ];
+  for (const [key, label] of keywords) {
+    if (t.includes(key)) return label;
+  }
+  // Position-based fallback only for otherwise-unlabelled slides
+  if (idx === 0 && total > 1) return "Hook";
+  if (idx === total - 1 && total > 1) return "CTA";
+  return null;
+}
+
 export function BundleEditor({ bundleId }: { bundleId: string }) {
   const { theme } = useDashboardTheme();
   const isDark = theme === "dark";
@@ -343,7 +379,12 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
                       : <SlidePreview data={slide.data} scale={thumbScale} />}
                   </div>
                   <div className={`px-1.5 py-1 text-[10px] font-medium flex items-center justify-between ${isDark ? "bg-[#111] text-gray-400" : "bg-gray-50 text-gray-500"}`}>
-                    <span>Slide {idx + 1}</span>
+                    <span className="flex items-center gap-1">
+                      <span>Slide {idx + 1}</span>
+                      {getSlideLabel(slide, idx, slides.length) && (
+                        <span className="text-orange-400">· {getSlideLabel(slide, idx, slides.length)}</span>
+                      )}
+                    </span>
                     {activeIdx === idx && <span className="text-orange-500 text-[10px]">●</span>}
                   </div>
                 </div>
@@ -386,6 +427,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
                 bundleTitle={title}
                 initialAssets={assets}
                 isDark={isDark}
+                slideCount={slides.length}
                 onAssetsChange={(a) => setAssets(a)}
               />
             </div>
@@ -410,6 +452,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
           bundleTitle={title}
           initialAssets={assets}
           isDark={isDark}
+          slideCount={slides.length}
           onAssetsChange={(a) => setAssets(a)}
         />
       </div>
@@ -433,10 +476,16 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
                     ? <img src={slide.previewUrl} alt="" className="w-full h-full object-cover" />
                     : <SlidePreview data={slide.data} scale={thumbScale} />}
                 </div>
-                {/* Slide number */}
-                <div className={`px-1.5 py-1 text-[10px] font-medium ${isDark ? "bg-[#111] text-gray-400" : "bg-gray-50 text-gray-500"}`}>
-                  Slide {idx + 1}
-                </div>
+                {/* Slide label */}
+                {(() => {
+                  const label = getSlideLabel(slide, idx, slides.length);
+                  return (
+                    <div className={`px-1.5 py-1 text-[10px] font-medium flex items-center gap-1 ${isDark ? "bg-[#111] text-gray-400" : "bg-gray-50 text-gray-500"}`}>
+                      <span>Slide {idx + 1}</span>
+                      {label && <span className="text-orange-400">· {label}</span>}
+                    </div>
+                  );
+                })()}
                 {/* Hover actions */}
                 <div className={`absolute top-1 right-1 hidden group-hover:flex flex-col gap-0.5`}>
                   <DropdownMenu>

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  Sparkles, Copy, Check, RotateCcw, ChevronDown, Hash,
+  Sparkles, Copy, Check, RotateCcw, Hash,
   MessageSquare, Zap, Target, Globe, Download, Loader2,
+  Layers, TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -134,6 +135,18 @@ function TextBlock({
   );
 }
 
+// Group label divider
+function GroupLabel({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500 whitespace-nowrap">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-gray-100 dark:bg-white/5" />
+    </div>
+  );
+}
+
 type SaveStatus = "idle" | "saving" | "saved";
 
 export function ContentAssetsPanel({
@@ -142,6 +155,7 @@ export function ContentAssetsPanel({
   bundleTitle,
   initialAssets,
   isDark,
+  slideCount,
   onAssetsChange,
 }: {
   bundleId: string;
@@ -149,10 +163,12 @@ export function ContentAssetsPanel({
   bundleTitle: string;
   initialAssets: ContentAssets | null | undefined;
   isDark: boolean;
+  slideCount?: number;
   onAssetsChange?: (assets: ContentAssets) => void;
 }) {
   const [assets, setAssets] = useState<ContentAssets | null>(initialAssets ?? null);
   const [generating, setGenerating] = useState(false);
+  const [sectionLoading, setSectionLoading] = useState<Record<string, boolean>>({});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [captionTab, setCaptionTab] = useState<"tiktok" | "instagram">("instagram");
@@ -160,8 +176,7 @@ export function ContentAssetsPanel({
   const [hashtagTab, setHashtagTab] = useState<"broad" | "niche" | "lowCompetition">("niche");
   const { copy, isCopied } = useCopy();
 
-  // Sync when the parent's bundle fetch resolves — only fills in if we have no
-  // local content yet (avoids overwriting in-progress edits).
+  // Sync when the parent's bundle fetch resolves
   useEffect(() => {
     if (initialAssets && !assets) {
       setAssets(initialAssets);
@@ -173,6 +188,7 @@ export function ContentAssetsPanel({
     ? "bg-[#1A1A1A] border-[#2A2A2A]"
     : "bg-white border-gray-200";
 
+  // ── Full generation ─────────────────────────────────────────────────────
   async function generate() {
     setGenerating(true);
     setError(null);
@@ -190,6 +206,45 @@ export function ContentAssetsPanel({
     } finally {
       setGenerating(false);
     }
+  }
+
+  // ── Section-level regeneration ───────────────────────────────────────────
+  async function generateSection(section: keyof ContentAssets) {
+    setSectionLoading((prev) => ({ ...prev, [section]: true }));
+    setError(null);
+    try {
+      const res = await fetch(`/api/design-bundles/${bundleId}/generate-assets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section }),
+      });
+      const json = await res.json() as { section?: string; value?: unknown; error?: string };
+      if (json.value !== undefined && json.section) {
+        patch(json.section as keyof ContentAssets, json.value as ContentAssets[keyof ContentAssets]);
+      } else {
+        setError(json.error ?? "Failed to regenerate. Please try again.");
+      }
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setSectionLoading((prev) => ({ ...prev, [section]: false }));
+    }
+  }
+
+  function RegenBtn({ section }: { section: keyof ContentAssets }) {
+    const loading = sectionLoading[section as string];
+    return (
+      <button
+        onClick={() => generateSection(section)}
+        disabled={loading}
+        title="Regenerate"
+        className={`shrink-0 w-6 h-6 rounded flex items-center justify-center transition-colors disabled:opacity-40 ${
+          isDark ? "text-gray-500 hover:text-orange-400" : "text-gray-400 hover:text-orange-500"
+        }`}
+      >
+        <RotateCcw className={`w-3 h-3 ${loading ? "animate-spin text-orange-400" : ""}`} />
+      </button>
+    );
   }
 
   function patch<K extends keyof ContentAssets>(key: K, value: ContentAssets[K]) {
@@ -215,7 +270,7 @@ export function ContentAssetsPanel({
   function buildCopyAll(): string {
     if (!assets) return "";
     const sections: string[] = [
-      `=== ${bundleTitle} — Social Media Package ===\n`,
+      `=== ${bundleTitle} — Campaign Package ===\n`,
       `--- INSTAGRAM CAPTION ---\n${assets.mainCaption.instagram}`,
       `--- TIKTOK CAPTION ---\n${assets.mainCaption.tiktok}`,
       `--- HOOKS ---\n${(assets.hooks ?? []).map((h, i) => `${i + 1}. ${h}`).join("\n")}`,
@@ -232,7 +287,43 @@ export function ContentAssetsPanel({
     return sections.join("\n\n");
   }
 
-  // ── Empty state ─────────────────────────────────────────────────────────────
+  // ── Campaign Overview stat pill ─────────────────────────────────────────
+  function StatPill({ icon, label, active }: { icon: React.ReactNode; label: string; active: boolean }) {
+    return (
+      <div className={`flex items-center gap-1 text-[11px] rounded-full px-2.5 py-1 border font-medium ${
+        active
+          ? isDark
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+            : "border-emerald-300 bg-emerald-50 text-emerald-700"
+          : isDark
+          ? "border-[#2A2A2A] text-gray-600"
+          : "border-gray-200 text-gray-400"
+      }`}>
+        {icon}
+        <span className="ml-0.5">{label}</span>
+      </div>
+    );
+  }
+
+  // ── Tab bar helper ───────────────────────────────────────────────────────
+  function Tab<T extends string>({ value, active, onClick }: { value: T; active: boolean; onClick: () => void }) {
+    return (
+      <button
+        onClick={onClick}
+        className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors capitalize ${
+          active
+            ? "bg-orange-500 text-white"
+            : isDark
+            ? "text-gray-400 hover:text-white hover:bg-white/5"
+            : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+        }`}
+      >
+        {value === "lowCompetition" ? "Low competition" : value === "twitter" ? "X / Twitter" : value}
+      </button>
+    );
+  }
+
+  // ── Empty state ─────────────────────────────────────────────────────────
   if (!assets) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 p-8 text-center">
@@ -269,33 +360,18 @@ export function ContentAssetsPanel({
     );
   }
 
-  // ── Tab bar helper ───────────────────────────────────────────────────────────
-  function Tab<T extends string>({ value, active, onClick }: { value: T; active: boolean; onClick: () => void }) {
-    return (
-      <button
-        onClick={onClick}
-        className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors capitalize ${
-          active
-            ? "bg-orange-500 text-white"
-            : isDark
-            ? "text-gray-400 hover:text-white hover:bg-white/5"
-            : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-        }`}
-      >
-        {value === "lowCompetition" ? "Low competition" : value === "twitter" ? "X / Twitter" : value}
-      </button>
-    );
-  }
-
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-2xl mx-auto p-6 space-y-8">
+      <div className="max-w-2xl mx-auto p-6 space-y-5">
 
-        {/* Header row */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Package</h2>
-            <div className={`flex items-center gap-2 mt-0.5 text-xs ${dimCls}`}>
+        {/* ── Campaign Overview ──────────────────────────────────────────── */}
+        <section className={`rounded-xl border p-4 ${cardCls}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-orange-500"><TrendingUp className="w-4 h-4" /></span>
+              <span className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Campaign Overview</span>
+            </div>
+            <div className={`flex items-center gap-2 text-xs ${dimCls}`}>
               {saveStatus === "saving" && (
                 <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Saving…</span>
               )}
@@ -303,10 +379,25 @@ export function ContentAssetsPanel({
                 <span className="flex items-center gap-1 text-emerald-500"><Check className="w-3 h-3" /> Saved</span>
               )}
               {saveStatus === "idle" && assets.generatedAt && (
-                <span>Last updated {new Date(assets.generatedAt).toLocaleDateString()}</span>
+                <span>Updated {new Date(assets.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
               )}
             </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+            {slideCount !== undefined && (
+              <StatPill icon={<Layers className="w-3 h-3" />} label={`${slideCount} slide${slideCount !== 1 ? "s" : ""}`} active={slideCount > 0} />
+            )}
+            <StatPill icon={<MessageSquare className="w-3 h-3" />} label="Captions" active={!!(assets.mainCaption?.instagram)} />
+            <StatPill icon={<Zap className="w-3 h-3" />} label={`${assets.hooks?.length ?? 0} hooks`} active={(assets.hooks?.length ?? 0) > 0} />
+            <StatPill icon={<Target className="w-3 h-3" />} label={`${assets.ctaSuggestions?.length ?? 0} CTAs`} active={(assets.ctaSuggestions?.length ?? 0) > 0} />
+            <StatPill icon={<Hash className="w-3 h-3" />} label="Hashtags" active={!!(assets.hashtagSets?.niche?.length)} />
+            <StatPill icon={<Globe className="w-3 h-3" />} label="4 variants" active={!!(assets.platformVariants?.instagram)} />
+          </div>
+        </section>
+
+        {/* Header row */}
+        <div className="flex items-center justify-between">
+          <div />
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -315,7 +406,7 @@ export function ContentAssetsPanel({
               className={`gap-1.5 text-xs ${isDark ? "border-[#2A2A2A] text-gray-300 hover:text-white" : ""}`}
             >
               {isCopied("all") ? <Check className="w-3 h-3" /> : <Download className="w-3 h-3" />}
-              Copy All
+              Copy Entire Campaign
             </Button>
             <Button
               size="sm"
@@ -324,7 +415,7 @@ export function ContentAssetsPanel({
               className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5 text-xs"
             >
               <RotateCcw className={`w-3 h-3 ${generating ? "animate-spin" : ""}`} />
-              {generating ? "Regenerating…" : "Regenerate"}
+              {generating ? "Regenerating…" : "Regenerate All"}
             </Button>
           </div>
         </div>
@@ -335,16 +426,21 @@ export function ContentAssetsPanel({
           </p>
         )}
 
-        {/* ── Captions ─────────────────────────────────────────────────────── */}
+        {/* ── SOCIAL COPY ───────────────────────────────────────────────── */}
+        <GroupLabel label="Social Copy" />
+
+        {/* Captions */}
         <section className={`rounded-xl border p-4 ${cardCls}`}>
           <SectionHeader
             icon={<MessageSquare className="w-4 h-4" />}
             title="Caption"
             action={
-              <div className="flex gap-1">
+              <div className="flex items-center gap-1">
                 {(["instagram", "tiktok"] as const).map((t) => (
                   <Tab key={t} value={t} active={captionTab === t} onClick={() => setCaptionTab(t)} />
                 ))}
+                <div className={`w-px h-4 mx-0.5 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+                <RegenBtn section="mainCaption" />
               </div>
             }
           />
@@ -369,21 +465,27 @@ export function ContentAssetsPanel({
           )}
         </section>
 
-        {/* ── Hooks ────────────────────────────────────────────────────────── */}
+        {/* ── ENGAGEMENT ───────────────────────────────────────────────── */}
+        <GroupLabel label="Engagement" />
+
+        {/* Hooks */}
         <section className={`rounded-xl border p-4 ${cardCls}`}>
           <SectionHeader
             icon={<Zap className="w-4 h-4" />}
             title="Posting Hooks"
             action={
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => copy((assets.hooks ?? []).join("\n"), "hooks-all")}
-                className={`gap-1.5 text-xs h-7 ${dimCls}`}
-              >
-                {isCopied("hooks-all") ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                Copy all
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copy((assets.hooks ?? []).join("\n"), "hooks-all")}
+                  className={`gap-1.5 text-xs h-7 ${dimCls}`}
+                >
+                  {isCopied("hooks-all") ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  Copy all
+                </Button>
+                <RegenBtn section="hooks" />
+              </div>
             }
           />
           <div className="space-y-2">
@@ -420,21 +522,24 @@ export function ContentAssetsPanel({
           </div>
         </section>
 
-        {/* ── CTAs ─────────────────────────────────────────────────────────── */}
+        {/* CTAs */}
         <section className={`rounded-xl border p-4 ${cardCls}`}>
           <SectionHeader
             icon={<Target className="w-4 h-4" />}
             title="CTA Suggestions"
             action={
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => copy((assets.ctaSuggestions ?? []).join("\n"), "ctas-all")}
-                className={`gap-1.5 text-xs h-7 ${dimCls}`}
-              >
-                {isCopied("ctas-all") ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                Copy all
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copy((assets.ctaSuggestions ?? []).join("\n"), "ctas-all")}
+                  className={`gap-1.5 text-xs h-7 ${dimCls}`}
+                >
+                  {isCopied("ctas-all") ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  Copy all
+                </Button>
+                <RegenBtn section="ctaSuggestions" />
+              </div>
             }
           />
           <div className="flex flex-wrap gap-2">
@@ -465,16 +570,21 @@ export function ContentAssetsPanel({
           </div>
         </section>
 
-        {/* ── Hashtags ─────────────────────────────────────────────────────── */}
+        {/* ── DISCOVERY ─────────────────────────────────────────────────── */}
+        <GroupLabel label="Discovery" />
+
+        {/* Hashtags */}
         <section className={`rounded-xl border p-4 ${cardCls}`}>
           <SectionHeader
             icon={<Hash className="w-4 h-4" />}
             title="Hashtag Sets"
             action={
-              <div className="flex gap-1">
+              <div className="flex items-center gap-1">
                 {(["niche", "broad", "lowCompetition"] as const).map((t) => (
                   <Tab key={t} value={t} active={hashtagTab === t} onClick={() => setHashtagTab(t)} />
                 ))}
+                <div className={`w-px h-4 mx-0.5 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+                <RegenBtn section="hashtagSets" />
               </div>
             }
           />
@@ -506,16 +616,21 @@ export function ContentAssetsPanel({
           </Button>
         </section>
 
-        {/* ── Platform Variants ─────────────────────────────────────────────── */}
+        {/* ── REPURPOSING ───────────────────────────────────────────────── */}
+        <GroupLabel label="Repurposing" />
+
+        {/* Platform Variants */}
         <section className={`rounded-xl border p-4 ${cardCls}`}>
           <SectionHeader
             icon={<Globe className="w-4 h-4" />}
             title="Platform Variants"
             action={
-              <div className="flex gap-1 flex-wrap justify-end">
+              <div className="flex items-center gap-1 flex-wrap justify-end">
                 {(["instagram", "tiktok", "threads", "twitter"] as const).map((t) => (
                   <Tab key={t} value={t} active={platformTab === t} onClick={() => setPlatformTab(t)} />
                 ))}
+                <div className={`w-px h-4 mx-0.5 ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`} />
+                <RegenBtn section="platformVariants" />
               </div>
             }
           />
