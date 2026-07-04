@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Check, GripVertical, X, ChevronDown, Bookmark, BookmarkCheck,
   Calendar, Tag, StickyNote, Target, ListTodo, ChevronLeft, ChevronRight,
-  Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap, Bold, List,
+  Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap, List,
   Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
   FileText, Lightbulb, ChevronUp, Loader2,
-  Sparkles, Wand2, Video, Package, Pin, AlignLeft, Mic, Layers, Minus, Italic
+  Pin, Minus
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -476,16 +476,6 @@ function cleanPreview(body: string): string {
 
 const AI_WRITING_ACTIONS = new Set(["improve-writing", "expand-idea", "summarise", "shorten", "rewrite"]);
 
-const AI_ACTIONS: { id: string; label: string; icon: JSX.Element; nav?: boolean }[] = [
-  { id: "improve-writing",    label: "Improve Writing",          icon: <Wand2 className="w-3 h-3" /> },
-  { id: "expand-idea",        label: "Expand Idea",              icon: <Sparkles className="w-3 h-3" /> },
-  { id: "summarise",          label: "Summarise",                icon: <AlignLeft className="w-3 h-3" /> },
-  { id: "turn-into-script",   label: "Turn into Script",         icon: <Mic className="w-3 h-3" />, nav: true },
-  { id: "turn-into-carousel", label: "Turn into Carousel",       icon: <Layers className="w-3 h-3" />, nav: true },
-  { id: "turn-into-video",    label: "Turn into Video Guide",    icon: <Video className="w-3 h-3" />, nav: true },
-  { id: "turn-into-product",  label: "Turn into Digital Product",icon: <Package className="w-3 h-3" />, nav: true },
-];
-
 function NotesTab() {
   const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
@@ -496,7 +486,7 @@ function NotesTab() {
   const [fontSize, setFontSize] = useState<FontSize>("base");
   const [fontFamily, setFontFamily] = useState<FontFamily>("sans");
   const [copied, setCopied] = useState(false);
-  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [, setAiLoading] = useState<string | null>(null);
   const [autoSaved, setAutoSaved] = useState(false);
   const [showConnected, setShowConnected] = useState(true);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -812,38 +802,6 @@ function NotesTab() {
           </div>
         ) : (
           <div className="flex flex-col h-full overflow-hidden">
-            {/* ── AI Action Bar ─────────────────────────────────────────────── */}
-            <div className="px-6 py-2.5 border-b border-border/50 bg-gradient-to-r from-orange-500/[0.03] to-amber-500/[0.03] dark:from-orange-500/[0.06] dark:to-amber-500/[0.06] shrink-0">
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-px">
-                <div className="flex items-center gap-1.5 shrink-0 mr-0.5">
-                  <Sparkles className="w-3 h-3 text-orange-500" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-orange-500/80">AI</span>
-                  <div className="w-px h-3.5 bg-orange-500/20 ml-0.5" />
-                </div>
-                {AI_ACTIONS.map(action => (
-                  <button
-                    key={action.id}
-                    onClick={() => handleAiAction(action.id)}
-                    disabled={!!aiLoading}
-                    className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap border transition-all duration-150 shrink-0",
-                      aiLoading === action.id
-                        ? "bg-orange-500/10 border-orange-500/30 text-orange-500"
-                        : "border-border/70 text-muted-foreground hover:text-foreground hover:border-orange-400/50 hover:bg-orange-500/5 disabled:opacity-40 disabled:cursor-not-allowed"
-                    )}>
-                    {aiLoading === action.id
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : action.icon
-                    }
-                    {action.label}
-                    {action.nav && aiLoading !== action.id && (
-                      <ChevronRight className="w-2.5 h-2.5 opacity-40 ml-0.5" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* ── Note header ───────────────────────────────────────────────── */}
             <div className="px-8 pt-6 pb-4 border-b border-border/40 shrink-0">
               <input
