@@ -68,9 +68,21 @@ export default function NewVideoGuidePage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
-    fetch("/api/products")
-      .then((r) => r.ok ? r.json() : { products: [] })
-      .then((data) => setProducts((data.products ?? []) as Product[]))
+    // Use the library API — same source as My Library page, consistently reliable
+    fetch("/api/library?type=products")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: unknown) => {
+        const items = Array.isArray(data) ? data : [];
+        const mapped: Product[] = items.map((p: Record<string, unknown>) => ({
+          id: String(p.id ?? ""),
+          title: String(p.title ?? "Untitled"),
+          niche: String(p.niche ?? p.format ?? ""),
+          marketingAssets: p.productDescription
+            ? { productDescription: String(p.productDescription) }
+            : null,
+        }));
+        setProducts(mapped);
+      })
       .catch(() => {});
   }, []);
 
