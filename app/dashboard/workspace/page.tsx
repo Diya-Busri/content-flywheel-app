@@ -2222,6 +2222,10 @@ interface FounderEntry {
   title: string;
   content: string;
   metadata: Record<string, unknown> | null;
+  aiSummary?: string | null;
+  usageCount?: number | null;
+  source?: string | null;
+  confidenceScore?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2848,6 +2852,114 @@ function FounderOSOverview({ onTabChange }: { onTabChange: (tab: WorkspaceTab) =
           })}
         </div>
       </div>
+
+      {/* Knowledge Pipeline */}
+      {(() => {
+        const withSummary = allEntries.filter(e => !!e.aiSummary).length;
+        const withUsage   = allEntries.filter(e => (e.usageCount ?? 0) > 0).length;
+        const highValue   = allEntries.filter(e => (e.usageCount ?? 0) >= 3).length;
+        const pipelineStages = [
+          { label: "Captured",      count: totalEntries,  Icon: BookOpen,   bg: "bg-slate-500/10",  color: "text-slate-500"  },
+          { label: "AI Summarised", count: withSummary,   Icon: Sparkles,   bg: "bg-purple-500/10", color: "text-purple-500" },
+          { label: "Searchable",    count: withSummary,   Icon: Search,     bg: "bg-blue-500/10",   color: "text-blue-500"   },
+          { label: "Coach Uses",    count: withUsage,     Icon: Brain,      bg: "bg-orange-500/10", color: "text-orange-500" },
+          { label: "High-Value",    count: highValue,     Icon: TrendingUp, bg: "bg-green-500/10",  color: "text-green-500"  },
+        ] as const;
+
+        const SOURCE_META: Record<string, { label: string; bar: string }> = {
+          manual:     { label: "Manual",   bar: "bg-slate-400"  },
+          research:   { label: "Research", bar: "bg-purple-500" },
+          coach:      { label: "Coach",    bar: "bg-blue-500"   },
+          analytics:  { label: "Analytics",bar: "bg-green-500"  },
+          experiment: { label: "Experiment",bar:"bg-orange-500" },
+        };
+        const sourceCounts = Object.entries(SOURCE_META).map(([src, meta]) => ({
+          ...meta,
+          src,
+          count: allEntries.filter(e => (e.source ?? "manual") === src).length,
+        }));
+        const maxSrc = Math.max(...sourceCounts.map(s => s.count), 1);
+        const topReferenced = [...allEntries]
+          .filter(e => (e.usageCount ?? 0) > 0)
+          .sort((a, b) => (b.usageCount ?? 0) - (a.usageCount ?? 0))
+          .slice(0, 5);
+
+        return (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Knowledge Pipeline</p>
+            <div className="rounded-2xl border border-border bg-card p-5">
+              {/* Pipeline flow */}
+              <div className="flex items-start overflow-x-auto pb-2 gap-0">
+                {pipelineStages.map((stage, idx) => (
+                  <div key={stage.label} className="flex items-start shrink-0">
+                    <div className="flex flex-col items-center min-w-[90px] px-2">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${stage.bg}`}>
+                        <stage.Icon className={`w-4 h-4 ${stage.color}`} />
+                      </div>
+                      <span className="text-base font-black tabular-nums text-foreground">
+                        {loading ? "…" : stage.count}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground text-center leading-tight mt-0.5">{stage.label}</span>
+                    </div>
+                    {idx < pipelineStages.length - 1 && (
+                      <div className="flex items-center pt-4 shrink-0">
+                        <div className="w-5 h-px bg-border" />
+                        <ChevronRight className="w-3 h-3 text-muted-foreground/40 -ml-1" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Source breakdown + most referenced */}
+              <div className="mt-4 pt-4 border-t border-border grid sm:grid-cols-2 gap-6">
+                {/* Source breakdown */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">By Source</p>
+                  <div className="space-y-2">
+                    {sourceCounts.map(s => (
+                      <div key={s.src} className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-16 truncate">{s.label}</span>
+                        <div className="flex-1 h-1.5 bg-muted/60 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${s.bar}`}
+                            style={{ width: `${Math.round((s.count / maxSrc) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-semibold text-foreground tabular-nums w-3 text-right">{s.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Most referenced by AI */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Most Referenced by AI</p>
+                  {loading ? (
+                    <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
+                  ) : topReferenced.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No entries referenced yet — the Coach will populate this as it uses your knowledge.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {topReferenced.map(e => (
+                        <div key={e.id} className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+                          <span className="text-xs text-foreground/80 flex-1 truncate">{e.title}</span>
+                          <span className="text-[10px] font-bold text-orange-500 tabular-nums">
+                            {e.usageCount}×
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Status snapshot — 3 panels */}
       <div className="grid lg:grid-cols-3 gap-4">

@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square, Video, MoreHorizontal } from "lucide-react";
+import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square, Video, MoreHorizontal, DatabaseZap, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1209,6 +1209,9 @@ function ChatPanel({
   const [isRecording, setIsRecording] = useState(false);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [saveResponseModal, setSaveResponseModal] = useState<{ content: string; index: number } | null>(null);
+  // Founder OS KB save state: Set of message indices already saved
+  const [savedToKB, setSavedToKB] = useState<Set<number>>(new Set());
+  const [savingToKBIndex, setSavingToKBIndex] = useState<number | null>(null);
   const [saveResponseTitle, setSaveResponseTitle] = useState("");
   const [savingToLibrary, setSavingToLibrary] = useState(false);
 
@@ -2263,6 +2266,53 @@ ${videoLines}`;
                         : msg.content
                         ? <span>{stripMarkdown(msg.content)}</span>
                         : null
+                    )}
+                    {/* Save to Founder OS — shown on completed assistant messages with real content */}
+                    {msg.role === "assistant" &&
+                      !(isLoading && i === messages.length - 1) &&
+                      msg.content &&
+                      msg.content.length > 40 &&
+                      !msg.structuredResponse && (
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/30">
+                        {savedToKB.has(i) ? (
+                          <span className="flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400 font-medium">
+                            <Check className="w-3 h-3" />Saved to Founder OS
+                          </span>
+                        ) : (
+                          <button
+                            onClick={async () => {
+                              setSavingToKBIndex(i);
+                              try {
+                                const text = msg.content ?? "";
+                                // Use first sentence (≤120 chars) as title
+                                const firstSentence = text.split(/[.!?]/)[0]?.trim() ?? text;
+                                const title = firstSentence.slice(0, 120) || "Coach insight";
+                                await fetch("/api/founder-knowledge/save", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    category: "research",
+                                    type: "insight",
+                                    title,
+                                    content: text.slice(0, 3000),
+                                    source: "coach",
+                                    tags: [coachMode],
+                                  }),
+                                });
+                                setSavedToKB(prev => new Set([...Array.from(prev), i]));
+                              } catch { /* non-blocking */ }
+                              finally { setSavingToKBIndex(null); }
+                            }}
+                            disabled={savingToKBIndex === i}
+                            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400 font-medium transition-colors disabled:opacity-50"
+                          >
+                            {savingToKBIndex === i
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <DatabaseZap className="w-3 h-3" />}
+                            {savingToKBIndex === i ? "Saving…" : "Save to Founder OS"}
+                          </button>
+                        )}
+                      </div>
                     )}
                     {msg.role === "assistant" && msg.voiceOverUrl && (
                       <div className="mt-2 flex flex-col gap-2">

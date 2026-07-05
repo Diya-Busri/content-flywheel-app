@@ -10,6 +10,7 @@ import {
   Send, AlertCircle, RefreshCw, Copy, Check,
   ArrowRight, Zap, Hash, Star, MessageSquare,
   Library, Trash2, Heart, Brain, Building2, FlaskConical,
+  DatabaseZap, BookOpen, Plus, GitMerge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -1078,12 +1079,179 @@ function ResearchLibraryPanel({
   );
 }
 
+// ─── Founder OS Knowledge Comparison ─────────────────────────────────────────
+
+interface KBMatch {
+  id: string;
+  title: string;
+  category: string;
+  aiSummary?: string | null;
+  relevance: number;
+  matchedBy: "vector" | "text";
+}
+
+interface KBComparison {
+  matches: KBMatch[];
+  loaded: boolean;
+  saving: boolean;
+  saved: boolean;
+}
+
+/** Searches Founder OS after research completes and offers to save new insights. */
+function useFounderKBComparison() {
+  const [state, setState] = useState<KBComparison>({ matches: [], loaded: false, saving: false, saved: false });
+
+  const search = useCallback(async (query: string) => {
+    setState(s => ({ ...s, loaded: false, matches: [] }));
+    try {
+      const res = await fetch("/api/founder-knowledge/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, limit: 4, minRelevance: 0.3 }),
+      });
+      if (!res.ok) return; // Non-admin — silently skip
+      const results = await res.json() as { entry: KBMatch; relevance: number; matchedBy: "vector" | "text" }[];
+      setState(s => ({
+        ...s,
+        loaded: true,
+        matches: results.map(r => ({ ...r.entry, relevance: r.relevance, matchedBy: r.matchedBy })),
+      }));
+    } catch {
+      // 403 for non-admin — silently ignore
+    }
+  }, []);
+
+  const saveInsights = useCallback(async (report: ResearchReport, query: string) => {
+    setState(s => ({ ...s, saving: true }));
+    try {
+      // Extract 3 key insights from the report
+      const insightsToSave = [
+        { title: `Research: ${query}`, content: report.summary, type: "insight" },
+        ...(report.insights?.slice(0, 3).map(ins => ({
+          title: ins.slice(0, 120),
+          content: ins,
+          type: "insight",
+        })) ?? []),
+      ].slice(0, 4);
+
+      await Promise.all(insightsToSave.map(ins =>
+        fetch("/api/founder-knowledge/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: "research",
+            type: ins.type,
+            title: ins.title,
+            content: ins.content,
+            source: "research",
+            tags: [query.slice(0, 50)],
+          }),
+        }).catch(() => {})
+      ));
+      setState(s => ({ ...s, saving: false, saved: true }));
+    } catch {
+      setState(s => ({ ...s, saving: false }));
+    }
+  }, []);
+
+  const reset = useCallback(() => {
+    setState({ matches: [], loaded: false, saving: false, saved: false });
+  }, []);
+
+  return { ...state, search, saveInsights, reset };
+}
+
+/** Panel shown after research completes — compares new findings against Founder OS KB. */
+function KnowledgeComparisonPanel({
+  query,
+  report,
+  comparison,
+  onSave,
+}: {
+  query: string;
+  report: ResearchReport;
+  comparison: KBComparison & { saveInsights: (r: ResearchReport, q: string) => Promise<void> };
+  onSave: () => void;
+}) {
+  if (!comparison.loaded && !comparison.saving && !comparison.saved) return null;
+
+  const hasMatches = comparison.matches.length > 0;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+          <DatabaseZap className="w-3.5 h-3.5 text-purple-500" />
+        </div>
+        <p className="text-xs font-bold text-foreground">Founder OS Knowledge Check</p>
+        {comparison.loaded && (
+          <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${hasMatches ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-muted text-muted-foreground"}`}>
+            {hasMatches ? `${comparison.matches.length} related ${comparison.matches.length === 1 ? "entry" : "entries"} found` : "No matches yet"}
+          </span>
+        )}
+        {!comparison.loaded && !comparison.saved && (
+          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
+        )}
+      </div>
+
+      {/* Existing KB matches */}
+      {hasMatches && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Related knowledge in your OS</p>
+          {comparison.matches.map(match => (
+            <div key={match.id} className="flex items-start gap-2 px-2.5 py-2 rounded-xl bg-purple-500/5 border border-purple-500/10">
+              <GitMerge className="w-3 h-3 text-purple-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-foreground truncate">{match.title}</p>
+                {match.aiSummary && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{match.aiSummary}</p>
+                )}
+              </div>
+              <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full capitalize shrink-0">
+                {match.category.replace(/-/g, " ")}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Save new insights */}
+      {!comparison.saved ? (
+        <div className="flex items-center justify-between pt-1 border-t border-border/40">
+          <p className="text-[11px] text-muted-foreground">
+            {hasMatches
+              ? "Save new insights from this report to grow your knowledge base"
+              : "No existing knowledge matches — save this research to start building your KB"}
+          </p>
+          <button
+            onClick={() => comparison.saveInsights(report, query).then(onSave)}
+            disabled={comparison.saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-600 text-white text-[11px] font-semibold transition-colors shrink-0 ml-3 disabled:opacity-60"
+          >
+            {comparison.saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+            {comparison.saving ? "Saving…" : "Save to Founder OS"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+          <Check className="w-3.5 h-3.5 text-green-500" />
+          <p className="text-[11px] text-green-600 dark:text-green-400 font-semibold">
+            Insights saved — Founder OS is now smarter
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ResearchTab ─────────────────────────────────────────────────────────
 
 export function ResearchTab({ onTabChange }: ResearchTabProps) {
   const router = useRouter();
   const { save, saving, saved } = useSaveToResearch();
   const lib = useResearchLibrary();
+  const kb = useFounderKBComparison();
 
   // Core state
   const [state, setState]             = useState<ResearchState>("idle");
@@ -1173,6 +1341,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     setReport(null);
     setError(null);
     setChatMessages([]);
+    kb.reset();
     setChatInput("");
     setAdvancedMode(false);
     setOpenSections(new Set(["summary", "insights", "content", "product", "plan"]));
@@ -1192,6 +1361,8 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
       setState("done");
       // Auto-save to library
       if (r) lib.saveReport(q, type, r);
+      // Async: compare against Founder OS KB (non-blocking, admin-only)
+      void kb.search(q);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Research failed");
       setState("idle");
@@ -1576,6 +1747,14 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 pb-12">
+
+      {/* ── Knowledge Comparison Panel (admin-only, non-blocking) ─────────── */}
+      <KnowledgeComparisonPanel
+        query={query}
+        report={report}
+        comparison={{ ...kb, saveInsights: kb.saveInsights }}
+        onSave={() => {}}
+      />
 
       {/* ── Report header ─────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 py-2">
