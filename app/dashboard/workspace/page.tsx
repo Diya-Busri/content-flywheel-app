@@ -8,6 +8,7 @@ import {
   Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
   FileText, Lightbulb, ChevronUp, Loader2,
   Pin, Minus, Copy, Clock,
+  LayoutDashboard, Package, Sparkles, ArrowRight, TrendingUp, PlayCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { ResearchTab } from "@/components/workspace/ResearchTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WorkspaceTab = "todos" | "notes" | "calendar" | "goals"
+type WorkspaceTab = "dashboard" | "todos" | "notes" | "calendar" | "goals"
   | "research" | "marketing-psychology" | "copywriting" | "content-ideas"
   | "analytics" | "distribution" | "experiments";
 type Priority = "high" | "medium" | "low";
@@ -201,11 +202,12 @@ function RingProgress({ pct, color, size = 80 }: { pct: number; color: string; s
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
 
 const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
-  { id: "todos",    label: "To-Do List",       icon: <ListTodo className="w-4 h-4" /> },
-  { id: "notes",    label: "Notes",            icon: <StickyNote className="w-4 h-4" /> },
-  { id: "calendar", label: "Content Calendar", icon: <Calendar className="w-4 h-4" /> },
-  { id: "goals",    label: "Goals",            icon: <Target className="w-4 h-4" /> },
-  { id: "research", label: "Research",         icon: <BookOpen className="w-4 h-4" /> },
+  { id: "dashboard", label: "Dashboard",        icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: "todos",    label: "To-Do List",        icon: <ListTodo className="w-4 h-4" /> },
+  { id: "notes",    label: "Notes",             icon: <StickyNote className="w-4 h-4" /> },
+  { id: "calendar", label: "Calendar",          icon: <Calendar className="w-4 h-4" /> },
+  { id: "goals",    label: "Goals",             icon: <Target className="w-4 h-4" /> },
+  { id: "research", label: "Research",          icon: <BookOpen className="w-4 h-4" /> },
 ];
 
 const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
@@ -216,6 +218,395 @@ const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] =
   { id: "distribution",          label: "Distribution",         icon: <Megaphone className="w-4 h-4" /> },
   { id: "experiments",           label: "Experiments",          icon: <FlaskConical className="w-4 h-4" /> },
 ];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WORKSPACE DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface ActiveProduct { id: string; title: string; status: string; format?: string; updatedAt?: string; }
+
+function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) => void }) {
+  const router = useRouter();
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [goals, setGoals] = useState<Goal[]>(DEFAULT_GOALS);
+  const [activeProduct, setActiveProduct] = useState<ActiveProduct | null>(null);
+  const [productLoading, setProductLoading] = useState(true);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [plan, setPlan] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  // Load local data
+  useEffect(() => {
+    try { const t = localStorage.getItem("cf_todos"); if (t) setTodos(JSON.parse(t) as Todo[]); } catch {}
+    try { const n = localStorage.getItem("cf_notes"); if (n) setNotes(JSON.parse(n) as Note[]); } catch {}
+    try { const g = localStorage.getItem("cf_goals"); if (g) setGoals(JSON.parse(g) as Goal[]); } catch {}
+  }, []);
+
+  // Fetch most recent product
+  useEffect(() => {
+    fetch("/api/products")
+      .then(r => r.ok ? r.json() : { products: [] })
+      .then(({ products }) => {
+        const p = (products as ActiveProduct[]).find(p => p.status !== "archived") ?? null;
+        setActiveProduct(p);
+      })
+      .catch(() => {})
+      .finally(() => setProductLoading(false));
+  }, []);
+
+  // Derived data
+  const today = new Date().toISOString().slice(0, 10);
+  const activeTodos = todos.filter(t => !t.completed);
+  const todayTodos = activeTodos.filter(t => !t.dueDate || t.dueDate <= today);
+  const highPriorityTodos = [...todayTodos].sort((a, b) => {
+    const ord: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+    return ord[a.priority] - ord[b.priority];
+  }).slice(0, 5);
+  const overdueCount = activeTodos.filter(t => t.dueDate && t.dueDate < today).length;
+  const completedToday = todos.filter(t => t.completed).length;
+  const totalToday = todos.length;
+  const progressPct = totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0;
+
+  const recentNotes = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
+
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  })();
+  const dateStr = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+
+  // AI recommendations based on data
+  const recommendations: { icon: string; text: string; action?: string; tab?: WorkspaceTab; href?: string }[] = [];
+  if (overdueCount > 0) recommendations.push({ icon: "⚠️", text: `${overdueCount} task${overdueCount > 1 ? "s are" : " is"} overdue — tackle these first today.`, tab: "todos" });
+  if (activeTodos.length === 0) recommendations.push({ icon: "✅", text: "All tasks done! Add new tasks to keep your momentum going.", tab: "todos" });
+  if (notes.length === 0) recommendations.push({ icon: "📝", text: "Start a note — capture your ideas before they disappear.", tab: "notes" });
+  if (goals.every(g => g.current === 0)) recommendations.push({ icon: "🎯", text: "Update your goal progress to stay motivated and on track.", tab: "goals" });
+  if (!activeProduct && !productLoading) recommendations.push({ icon: "📦", text: "You have no active product. Create your first digital product now!", href: "/dashboard/digital-products/create-from-research" });
+  if (activeProduct?.status === "draft") recommendations.push({ icon: "🚀", text: `"${activeProduct.title}" is still a draft — finish and publish it!`, href: `/dashboard/digital-products/${activeProduct.id}/edit` });
+  if (recommendations.length === 0) recommendations.push({ icon: "✨", text: "You're doing great! Research a new niche to find your next product opportunity.", tab: "research" });
+
+  // AI Plan My Day
+  const handlePlanDay = async () => {
+    setPlanLoading(true); setPlanError(null); setPlan(null);
+    const taskList = highPriorityTodos.map(t => `- [${t.priority}] ${t.text}${t.dueDate ? ` (due ${t.dueDate})` : ""}`).join("\n");
+    const goalList = goals.map(g => `${g.label}: ${g.current}/${g.target} ${g.unit}`).join(", ");
+    const productInfo = activeProduct ? `Active product: "${activeProduct.title}" (${activeProduct.status})` : "No active product";
+    const prompt = `You are a productivity coach for a digital creator and online entrepreneur. Based on their current situation, create a focused daily action plan.
+
+Current data:
+Tasks (${activeTodos.length} active, ${overdueCount} overdue):
+${taskList || "No tasks yet"}
+Goals: ${goalList || "None set"}
+${productInfo}
+Notes: ${notes.length} saved
+
+Create a concise, motivating daily action plan with 3-5 prioritised actions. Format as a numbered list. Be direct and specific. Keep each item to 1 sentence. End with one motivational sentence.`;
+
+    try {
+      const res = await fetch("/api/research/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: prompt, mode: "plan" }),
+      });
+      const json = await res.json() as { summary?: string; error?: string };
+      if (json.summary) setPlan(json.summary);
+      else if (json.error) setPlanError(json.error);
+      else setPlanError("No plan returned.");
+    } catch {
+      setPlanError("Could not generate plan. Try again.");
+    } finally { setPlanLoading(false); }
+  };
+
+  const QUICK_ACTIONS: { label: string; emoji: string; desc: string; onClick: () => void }[] = [
+    { label: "Create Product", emoji: "📦", desc: "Start from research", onClick: () => router.push("/dashboard/digital-products/create-from-research") },
+    { label: "AI Research", emoji: "🔍", desc: "Find opportunities", onClick: () => onTabChange("research") },
+    { label: "New Note", emoji: "📝", desc: "Capture an idea", onClick: () => onTabChange("notes") },
+    { label: "Add Task", emoji: "✅", desc: "Plan your work", onClick: () => onTabChange("todos") },
+    { label: "Design Studio", emoji: "🎨", desc: "Create visuals", onClick: () => router.push("/dashboard/design-studio") },
+    { label: "Content Calendar", emoji: "📅", desc: "Schedule posts", onClick: () => onTabChange("calendar") },
+  ];
+
+  return (
+    <div className="space-y-6 max-w-6xl">
+      {/* ── Greeting header ─────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">{greeting} 👋</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">{dateStr}</p>
+        </div>
+        <button
+          onClick={handlePlanDay}
+          disabled={planLoading}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold shadow-sm hover:shadow-md transition-all hover:from-orange-600 hover:to-amber-600 disabled:opacity-60"
+        >
+          {planLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {planLoading ? "Planning your day…" : "✨ Plan My Day"}
+        </button>
+      </div>
+
+      {/* ── AI Daily Plan ───────────────────────────────────────────────── */}
+      {(plan || planError) && (
+        <div className={cn("rounded-2xl border p-5", plan ? "border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-amber-500/5" : "border-red-500/30 bg-red-500/5")}>
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-orange-500" />
+            <p className="text-sm font-bold text-foreground">Your AI Plan for Today</p>
+            <button onClick={() => { setPlan(null); setPlanError(null); }} className="ml-auto text-muted-foreground hover:text-foreground transition-colors"><X className="w-4 h-4" /></button>
+          </div>
+          {plan && <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{plan}</div>}
+          {planError && <p className="text-sm text-red-500">{planError}</p>}
+        </div>
+      )}
+
+      {/* ── Quick actions ────────────────────────────────────────────────── */}
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Quick Actions</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {QUICK_ACTIONS.map(a => (
+            <button key={a.label} onClick={a.onClick}
+              className="flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border border-border bg-card hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
+              <span className="text-xl">{a.emoji}</span>
+              <div>
+                <p className="text-xs font-bold text-foreground group-hover:text-orange-500 transition-colors">{a.label}</p>
+                <p className="text-[10px] text-muted-foreground">{a.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Main 2-col grid ──────────────────────────────────────────────── */}
+      <div className="grid lg:grid-cols-5 gap-6">
+
+        {/* LEFT: Today's Focus + Goals */}
+        <div className="lg:col-span-3 space-y-6">
+
+          {/* Today's Focus */}
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <ListTodo className="w-4 h-4 text-orange-500" />
+                <p className="text-sm font-bold text-foreground">Today&apos;s Focus</p>
+                {overdueCount > 0 && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
+                    <AlertCircle className="w-2.5 h-2.5" />{overdueCount} overdue
+                  </span>
+                )}
+              </div>
+              <button onClick={() => onTabChange("todos")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+                All tasks <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* Progress bar */}
+            {totalToday > 0 && (
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                </div>
+                <span className="text-[11px] text-muted-foreground font-medium whitespace-nowrap">{completedToday}/{totalToday} done</span>
+              </div>
+            )}
+
+            {highPriorityTodos.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground mb-3">No tasks yet — what will you tackle today?</p>
+                <button onClick={() => onTabChange("todos")} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 mx-auto">
+                  <Plus className="w-3.5 h-3.5" />Add your first task
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {highPriorityTodos.map(todo => {
+                  const cat = CATEGORIES.find(c => c.id === todo.category);
+                  const overdue = todo.dueDate && todo.dueDate < today;
+                  return (
+                    <div key={todo.id} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-background transition-colors",
+                      overdue ? "border-red-500/20 bg-red-500/5" : "border-border/60 hover:border-border")}>
+                      <span className={cn("w-2 h-2 rounded-full shrink-0", PRIORITY[todo.priority].dot)} />
+                      <span className="flex-1 text-sm text-foreground truncate">{todo.text}</span>
+                      {cat && <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full shrink-0", cat.color)}>{cat.name}</span>}
+                      {todo.dueDate && <span className={cn("text-[10px] font-medium shrink-0", overdue ? "text-red-400" : "text-muted-foreground")}>{fmtDate(todo.dueDate)}</span>}
+                    </div>
+                  );
+                })}
+                {activeTodos.length > 5 && (
+                  <button onClick={() => onTabChange("todos")} className="text-xs text-muted-foreground hover:text-orange-500 transition-colors pt-1">
+                    +{activeTodos.length - 5} more tasks →
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Goals */}
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-orange-500" />
+                <p className="text-sm font-bold text-foreground">Goals</p>
+              </div>
+              <button onClick={() => onTabChange("goals")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+                Manage <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {goals.map(goal => {
+                const pct = Math.min(100, goal.target > 0 ? Math.round((goal.current / goal.target) * 100) : 0);
+                const done = pct >= 100;
+                return (
+                  <div key={goal.id} className="flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      <RingProgress pct={pct} color={done ? "#22c55e" : goal.color} size={48} />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-[10px] font-black" style={{ color: done ? "#22c55e" : goal.color }}>{pct}%</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{goal.label}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex-1 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: done ? "#22c55e" : goal.color }} />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{goal.unit}{goal.current.toLocaleString()} / {goal.unit}{goal.target.toLocaleString()}</span>
+                      </div>
+                    </div>
+                    {done && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: Active Product + Notes */}
+        <div className="lg:col-span-2 space-y-6">
+
+          {/* Active Product */}
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-orange-500" />
+                <p className="text-sm font-bold text-foreground">Active Project</p>
+              </div>
+              <button onClick={() => router.push("/dashboard/library")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+                Library <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            {productLoading ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />Loading…
+              </div>
+            ) : activeProduct ? (
+              <div>
+                <div className="p-4 rounded-xl border border-border bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/digital-products/${activeProduct.id}/edit`)}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="text-sm font-semibold text-foreground leading-snug">{activeProduct.title}</p>
+                    <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0",
+                      activeProduct.status === "complete" ? "bg-green-500/10 text-green-600 dark:text-green-400" :
+                      activeProduct.status === "draft" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground")}>
+                      {activeProduct.status}
+                    </span>
+                  </div>
+                  {activeProduct.format && <p className="text-[11px] text-muted-foreground capitalize">{activeProduct.format}</p>}
+                  <div className="mt-3 flex gap-2">
+                    {activeProduct.status === "draft" ? (
+                      <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/digital-products/${activeProduct.id}/edit`); }}
+                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors">
+                        Continue editing →
+                      </button>
+                    ) : (
+                      <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/design-studio`); }}
+                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors">
+                        Create visuals →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3">
+                  <Package className="w-5 h-5 text-muted-foreground/40" />
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">No active product yet</p>
+                <button onClick={() => router.push("/dashboard/digital-products/create-from-research")}
+                  className="text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors">
+                  Create your first product →
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Notes */}
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <StickyNote className="w-4 h-4 text-orange-500" />
+                <p className="text-sm font-bold text-foreground">Recent Notes</p>
+              </div>
+              <button onClick={() => onTabChange("notes")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+                All notes <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            {recentNotes.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-xs text-muted-foreground mb-3">No notes yet — capture your first idea</p>
+                <button onClick={() => onTabChange("notes")} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 mx-auto">
+                  <Plus className="w-3.5 h-3.5" />New note
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentNotes.map(note => {
+                  const preview = cleanPreview(note.body).slice(0, 80);
+                  return (
+                    <button key={note.id} onClick={() => onTabChange("notes")}
+                      className="w-full text-left p-3 rounded-xl border border-border/60 bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors group">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-xs font-semibold text-foreground truncate group-hover:text-orange-500 transition-colors">{note.title || "Untitled"}</p>
+                        {note.tag && <span className={cn("text-[9px] font-bold px-1.5 py-px rounded-full border shrink-0", NOTE_TAGS[note.tag as NoteTag]?.pill)}>{NOTE_TAGS[note.tag as NoteTag]?.label}</span>}
+                      </div>
+                      {preview && <p className="text-[11px] text-muted-foreground line-clamp-1">{preview}</p>}
+                      <p className="text-[10px] text-muted-foreground/40 mt-1">{formatRelativeTime(note.updatedAt)}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── AI Recommendations ──────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="w-4 h-4 text-orange-500" />
+          <p className="text-sm font-bold text-foreground">AI Recommendations</p>
+          <span className="text-[10px] font-medium text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full">Based on your activity</span>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {recommendations.map((rec, i) => (
+            <button key={i}
+              onClick={() => {
+                if (rec.href) router.push(rec.href);
+                else if (rec.tab) onTabChange(rec.tab);
+              }}
+              className={cn("flex items-start gap-3 p-3.5 rounded-xl border bg-background text-left transition-all group",
+                (rec.href || rec.tab) ? "hover:border-orange-500/30 hover:bg-orange-500/5 cursor-pointer" : "cursor-default border-border/60")}
+            >
+              <span className="text-lg shrink-0 leading-none mt-0.5">{rec.icon}</span>
+              <p className="text-xs text-foreground/80 group-hover:text-foreground transition-colors leading-relaxed">{rec.text}</p>
+              {(rec.href || rec.tab) && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 mt-0.5 ml-auto transition-colors" />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TO-DO TAB
@@ -2336,10 +2727,11 @@ function GlobalKBSearch({ onClose, onTabChange }: GlobalKBSearchProps) {
 
 export default function WorkspacePage() {
   const isAdmin = useWorkspaceAdmin();
-  const [tab, setTab] = useState<WorkspaceTab>("todos");
+  const [tab, setTab] = useState<WorkspaceTab>("dashboard");
   const [searchOpen, setSearchOpen] = useState(false);
 
   const tabDesc: Record<WorkspaceTab, string> = {
+    dashboard:            "Your execution hub — tasks, goals, projects and AI recommendations",
     todos:                "Stay on top of your daily content tasks",
     notes:                "Capture ideas, scripts, and notes",
     calendar:             "Plan and schedule your content drops",
@@ -2422,6 +2814,7 @@ export default function WorkspacePage() {
       </div>
 
       {/* Standard tab content */}
+      {tab === "dashboard" && <WorkspaceDashboard onTabChange={setTab} />}
       {tab === "todos"    && <TodoTab />}
       {tab === "notes"    && <NotesTab />}
       {tab === "calendar" && <CalendarTab />}
