@@ -2276,7 +2276,7 @@ ${videoLines}`;
                       <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/30">
                         {savedToKB.has(i) ? (
                           <span className="flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400 font-medium">
-                            <Check className="w-3 h-3" />Saved to Founder OS
+                            <Check className="w-3 h-3" />Saved to Memory
                           </span>
                         ) : (
                           <button
@@ -2284,21 +2284,28 @@ ${videoLines}`;
                               setSavingToKBIndex(i);
                               try {
                                 const text = msg.content ?? "";
-                                // Use first sentence (≤120 chars) as title
                                 const firstSentence = text.split(/[.!?]/)[0]?.trim() ?? text;
                                 const title = firstSentence.slice(0, 120) || "Coach insight";
-                                await fetch("/api/founder-knowledge/save", {
+                                const payload = {
+                                  category: "coaching",
+                                  type: "insight",
+                                  title,
+                                  content: text.slice(0, 3000),
+                                  source: "coach",
+                                  tags: [coachMode],
+                                };
+                                // Save to personal user memory (all users)
+                                await fetch("/api/user-memory/save", {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    category: "research",
-                                    type: "insight",
-                                    title,
-                                    content: text.slice(0, 3000),
-                                    source: "coach",
-                                    tags: [coachMode],
-                                  }),
+                                  body: JSON.stringify(payload),
                                 });
+                                // Also try Founder OS (admin only — 403 for non-admins, silently ignored)
+                                void fetch("/api/founder-knowledge/save", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ ...payload, category: "research" }),
+                                }).catch(() => {});
                                 setSavedToKB(prev => new Set([...Array.from(prev), i]));
                               } catch { /* non-blocking */ }
                               finally { setSavingToKBIndex(null); }
@@ -2309,7 +2316,7 @@ ${videoLines}`;
                             {savingToKBIndex === i
                               ? <Loader2 className="w-3 h-3 animate-spin" />
                               : <DatabaseZap className="w-3 h-3" />}
-                            {savingToKBIndex === i ? "Saving…" : "Save to Founder OS"}
+                            {savingToKBIndex === i ? "Saving…" : "Save to Memory"}
                           </button>
                         )}
                       </div>

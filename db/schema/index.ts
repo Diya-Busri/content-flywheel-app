@@ -59,3 +59,6 @@ export * from "./bundles-schema";
 export * from "./page-sessions-schema";
 export * from "./featured-products-schema";
 export * from "./founder-workspace-schema";
+export * from "./product-wishlists-schema";
+export * from "./creator-follows-schema";
+export * from "./user-memory-schema";

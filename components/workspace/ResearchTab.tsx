@@ -1363,6 +1363,27 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
       if (r) lib.saveReport(q, type, r);
       // Async: compare against Founder OS KB (non-blocking, admin-only)
       void kb.search(q);
+      // Auto-save to personal user memory (all users, fire-and-forget)
+      if (r) {
+        const summaryContent = [
+          r.summary ?? "",
+          ...(r.insights ?? []).slice(0, 3),
+          r.recommendedOpportunity?.name ? `Opportunity: ${r.recommendedOpportunity.name}` : "",
+        ].filter(Boolean).join("\n\n").slice(0, 4000);
+        void fetch("/api/user-memory/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: "research",
+            type: "report",
+            title: `Research: ${q.slice(0, 100)}`,
+            content: summaryContent,
+            source: "research",
+            tags: [q.slice(0, 50), type].filter(Boolean),
+            metadata: { query: q, researchType: type },
+          }),
+        }).catch(() => {});
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Research failed");
       setState("idle");

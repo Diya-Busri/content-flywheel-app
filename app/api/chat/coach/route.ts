@@ -11,6 +11,7 @@ import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { logEvent } from "@/lib/log-event";
 import { searchFounderKnowledge } from "@/lib/founder-knowledge";
+import { getUserMemoryContext } from "@/lib/user-memory";
 
 export const runtime = "nodejs";
 
@@ -532,6 +533,25 @@ export async function POST(req: Request) {
       ].filter(Boolean).join("\n");
     }
 
+    // ── Personal User Memory injection (all authenticated users) ──────────
+    // Search the user's personal memory for relevant context before generating.
+    // This is completely isolated per user — no cross-contamination.
+    let userMemoryBlock = "";
+    if (userId) {
+      try {
+        const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
+        const searchQuery = typeof lastUserMsg?.content === "string" && lastUserMsg.content.trim()
+          ? lastUserMsg.content.trim().slice(0, 500)
+          : "";
+
+        if (searchQuery) {
+          userMemoryBlock = await getUserMemoryContext(userId, searchQuery, 5);
+        }
+      } catch (err) {
+        console.warn("[chat/coach] user memory lookup failed:", err);
+      }
+    }
+
     // ── Founder OS Knowledge injection (admin only) ────────────────────────
     // Before generating, search the knowledge base with the user's last message.
     // Top relevant entries are injected as context so the coach references real
@@ -598,7 +618,7 @@ When you reference one of these insights, you can say something like: "Based on 
 
     // Inject structured response guide for modes where strategic questions are common
     const supportsStructured = ["business", "finance", "content", "goals"].includes(coachMode);
-    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, supportsStructured ? STRUCTURED_RESPONSE_GUIDE : "", personalisation, brandVoiceBlock, whatNextBlock, founderKBBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
+    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, supportsStructured ? STRUCTURED_RESPONSE_GUIDE : "", personalisation, brandVoiceBlock, whatNextBlock, userMemoryBlock, founderKBBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {

@@ -17,11 +17,12 @@ import { cn } from "@/lib/utils";
 import { useWorkspaceAdmin } from "@/components/workspace-admin-context";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import { ResearchTab } from "@/components/workspace/ResearchTab";
+import UserMemoryTab from "@/components/workspace/UserMemoryTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type WorkspaceTab = "dashboard" | "todos" | "notes" | "calendar" | "goals"
-  | "research" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
+  | "research" | "memory" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
   | "analytics" | "distribution" | "experiments";
 type Priority = "high" | "medium" | "low";
 type TodoFilter = "all" | "active" | "completed";
@@ -232,6 +233,7 @@ const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
   { id: "calendar", label: "Calendar",          icon: <Calendar className="w-4 h-4" /> },
   { id: "goals",    label: "Goals",             icon: <Target className="w-4 h-4" /> },
   { id: "research", label: "Research",          icon: <BookOpen className="w-4 h-4" /> },
+  { id: "memory",   label: "AI Memory",         icon: <Sparkles className="w-4 h-4" /> },
 ];
 
 const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
@@ -4138,6 +4140,7 @@ export default function WorkspacePage() {
     calendar:             "Plan and schedule your content drops",
     goals:                "Track revenue, growth, and product targets",
     "research":           "AI Business Analyst — discover opportunities, understand markets, take action",
+    "memory":             "Your personal AI memory — everything the platform has learned about your business",
     "founder-os":         "Your internal OS — the memory and intelligence layer for Content Flywheel",
     "marketing-psychology": "Psychological triggers and buyer behavior principles",
     "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
@@ -4246,8 +4249,10 @@ export default function WorkspacePage() {
       {tab === "calendar" && <CalendarTab />}
       {tab === "goals"    && <GoalsTab />}
 
+      {tab === "research" && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
+      {tab === "memory"   && <UserMemoryTab />}
+
       {/* Admin-only tab content */}
-      {tab === "research"                          && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
       {isAdmin && tab === "founder-os"             && <FounderOSOverview onTabChange={setTab} />}
       {isAdmin && tab === "marketing-psychology"  && <MarketingPsychologyTab />}
       {isAdmin && tab === "copywriting"           && <CopywritingTab />}
