@@ -47,6 +47,7 @@ import { useChatCoach } from "@/hooks/useChatCoach";
 import type { CoachMessage } from "@/hooks/useChatCoach";
 import { cn } from "@/lib/utils";
 import { YouTubeScriptActionPanel } from "./YouTubeScriptActionPanel";
+import { CoachResponseRenderer } from "@/components/coach/CoachResponseRenderer";
 
 const SESSIONS_KEY = "ai-coach-sessions";
 const SIDEBAR_COLLAPSED_KEY = "ai_coach_sidebar_collapsed";
@@ -2181,13 +2182,15 @@ ${videoLines}`;
                     <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">CF Coach</span>
                   </div>
                 )}
-                <div className={cn("flex flex-col gap-1 min-w-0", msg.role === "user" ? "items-end" : "items-start")}>
+                <div className={cn("flex flex-col gap-1 min-w-0", msg.role === "user" ? "items-end" : "items-start", msg.structuredResponse ? "flex-1" : "")}>
                   <div
                     className={cn(
-                      "rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap shadow-sm max-w-[90%] sm:max-w-[32rem]",
+                      "rounded-2xl shadow-sm",
                       msg.role === "user"
-                        ? "bg-orange-500 text-white dark:bg-orange-500"
-                        : "bg-card text-foreground border border-border"
+                        ? "px-4 py-3 text-sm whitespace-pre-wrap bg-orange-500 text-white dark:bg-orange-500 max-w-[90%] sm:max-w-[32rem]"
+                        : msg.structuredResponse
+                        ? "p-4 bg-card text-foreground border border-border w-full"
+                        : "px-4 py-3 text-sm whitespace-pre-wrap bg-card text-foreground border border-border max-w-[90%] sm:max-w-[32rem]"
                     )}
                   >
                     {msg.role === "user" && msg.imageUrls && msg.imageUrls.length > 0 && (
@@ -2239,20 +2242,27 @@ ${videoLines}`;
                         ))}
                       </div>
                     )}
-                    {(msg.role === "user" && msg.content && msg.content !== "(no text)" && (
+                    {/* User message text */}
+                    {msg.role === "user" && msg.content && msg.content !== "(no text)" && (
                       <span className={(msg.imageUrls?.length || msg.attachedFiles?.length || msg.attachedVideos?.length) ? "block mt-2" : ""}>
                         {stripMarkdown(msg.content)}
                       </span>
-                    )) ||
-                      (msg.role === "assistant" && (msg.content || (isLoading && i === messages.length - 1)) && (
-                        <span>{stripMarkdown(msg.content || "")}</span>
-                      ))}
-                    {msg.role === "assistant" && isLoading && i === messages.length - 1 && !msg.content && (
-                      <span className="inline-flex gap-1 items-center">
+                    )}
+                    {/* Assistant: always show dots while streaming the last message */}
+                    {msg.role === "assistant" && isLoading && i === messages.length - 1 && (
+                      <span className="inline-flex gap-1 items-center py-1">
                         <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce [animation-delay:-0.3s]" />
                         <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce [animation-delay:-0.15s]" />
                         <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" />
                       </span>
+                    )}
+                    {/* Assistant: render structured cards or plain text once streaming ends */}
+                    {msg.role === "assistant" && !(isLoading && i === messages.length - 1) && (
+                      msg.structuredResponse
+                        ? <CoachResponseRenderer response={msg.structuredResponse} onSendMessage={sendMessage} />
+                        : msg.content
+                        ? <span>{stripMarkdown(msg.content)}</span>
+                        : null
                     )}
                     {msg.role === "assistant" && msg.voiceOverUrl && (
                       <div className="mt-2 flex flex-col gap-2">

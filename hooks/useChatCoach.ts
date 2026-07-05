@@ -32,10 +32,57 @@ export function isImageRequest(text: string): boolean {
   return IMAGE_ACTION_WORDS.test(t) && IMAGE_SUBJECT_WORDS.test(t);
 }
 
+/** Structured JSON response returned by the coach for strategic questions. */
+export type CoachStructuredResponse = {
+  isStructured: true;
+  summary?: {
+    paragraph: string;
+    overallRecommendation: string;
+    opportunityScore: number;
+  };
+  opportunity?: {
+    productName: string;
+    targetAudience: string;
+    estimatedPrice: string;
+    difficulty: "Easy" | "Medium" | "Hard";
+    profitPotential: "Low" | "Medium" | "High" | "Very High";
+    demand: "Low" | "Medium" | "High" | "Very High";
+    competition: "Low" | "Medium" | "High" | "Very High";
+  };
+  whyThisWorks?: string[];
+  actionPlan?: {
+    week: number;
+    title: string;
+    tasks: string[];
+    actions?: string[];
+  }[];
+  contentOpportunities?: {
+    platform: string;
+    hook: string;
+    contentType: string;
+    difficulty: "Easy" | "Medium" | "Hard";
+  }[];
+  pricingStrategy?: {
+    recommended: string;
+    reasoning: string;
+    alternatives?: string[];
+    expectedConversion?: string;
+  };
+  commonMistakes?: string[];
+  followUpQuestions?: string[];
+  nextActions?: {
+    label: string;
+    action: string;
+    primary?: boolean;
+  }[];
+};
+
 export type CoachMessage = {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
+  /** Structured JSON response for strategic questions — renders as premium cards. */
+  structuredResponse?: CoachStructuredResponse;
   /** Assistant message: URL of generated voice-over audio (e.g. from Supabase). */
   voiceOverUrl?: string;
   /** User message: image data URLs for inline display and vision API */
@@ -360,6 +407,31 @@ export function useChatCoach(pageContext: string, options: UseChatCoachOptions =
             return next;
           });
         } else {
+          // Try parsing as a structured response (GPT returns JSON for strategic questions)
+          const trimmed = accumulated.trim();
+          if (trimmed.startsWith("{")) {
+            try {
+              const parsed = JSON.parse(trimmed) as CoachStructuredResponse;
+              if (parsed.isStructured === true) {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const last = next[next.length - 1];
+                  if (last?.role === "assistant") {
+                    next[next.length - 1] = {
+                      ...last,
+                      content: parsed.summary?.paragraph ?? accumulated,
+                      structuredResponse: parsed,
+                    };
+                  }
+                  return next;
+                });
+                onAssistantComplete?.(parsed.summary?.paragraph ?? accumulated);
+                return;
+              }
+            } catch {
+              // Not valid JSON — fall through to plain text handling
+            }
+          }
           onAssistantComplete?.(accumulated);
         }
       } catch (err) {

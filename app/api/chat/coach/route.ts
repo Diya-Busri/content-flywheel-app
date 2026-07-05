@@ -191,6 +191,87 @@ const PLATFORM_TOOLS_NOTE = `PLATFORM TOOLS — what Content Flywheel can do rig
 - Video editing / timeline: still being improved. Be honest — say CF has a Video Timeline in development but for now CapCut (free, mobile) or DaVinci Resolve (free, desktop) are solid options if they need full video editing.
 Never hard-sell a CF feature that isn't ready. Be honest about what's available.`;
 
+// Structured response guide — injected for business/finance/content modes
+const STRUCTURED_RESPONSE_GUIDE = `STRUCTURED RESPONSE FORMAT — CRITICAL:
+
+For strategic questions about products, business ideas, niches, monetisation, pricing, content strategy, marketing plans, or any opportunity analysis — respond ONLY with the following JSON object. No markdown, no prose, no text outside the JSON.
+
+For casual, conversational, or simple follow-up messages (e.g. "thanks", "tell me more", "what do you mean?", "hi", "how do I sign up?") — respond normally as plain text.
+
+DECISION RULE: If answering the question would produce a structured recommendation, analysis, or plan → use JSON. Quick conversational exchange → plain text.
+
+JSON format for strategic responses:
+{
+  "isStructured": true,
+  "summary": {
+    "paragraph": "2-3 sentences: the core opportunity or insight — specific and bold, not generic",
+    "overallRecommendation": "One precise sentence: exactly what to do next",
+    "opportunityScore": 7
+  },
+  "opportunity": {
+    "productName": "Specific, marketable product or opportunity name",
+    "targetAudience": "Exact target persona (e.g. 'NHS nurses who want to earn extra income')",
+    "estimatedPrice": "£X",
+    "difficulty": "Easy|Medium|Hard",
+    "profitPotential": "Low|Medium|High|Very High",
+    "demand": "Low|Medium|High|Very High",
+    "competition": "Low|Medium|High|Very High"
+  },
+  "whyThisWorks": [
+    "Specific reason backed by market logic — never generic",
+    "..."
+  ],
+  "actionPlan": [
+    {
+      "week": 1,
+      "title": "Validate & Launch",
+      "tasks": ["Specific task 1", "Specific task 2", "Specific task 3"],
+      "actions": ["Create Product", "Generate Carousel"]
+    }
+  ],
+  "contentOpportunities": [
+    {
+      "platform": "YouTube|TikTok|Instagram|Twitter|LinkedIn",
+      "hook": "Exact hook line for this piece of content",
+      "contentType": "Short-form|Long-form|Carousel|Tutorial|Story",
+      "difficulty": "Easy|Medium|Hard"
+    }
+  ],
+  "pricingStrategy": {
+    "recommended": "£X",
+    "reasoning": "Why this price is optimal for this audience and product",
+    "alternatives": ["£Y for bundle", "£Z for early access"],
+    "expectedConversion": "X–Y%"
+  },
+  "commonMistakes": [
+    "Specific common mistake in this space — not generic",
+    "..."
+  ],
+  "followUpQuestions": [
+    "Can you make this cheaper?",
+    "Give me competitors for this idea",
+    "Validate this idea for me",
+    "Show me content ideas for this"
+  ],
+  "nextActions": [
+    { "label": "Create Product", "action": "create-product", "primary": true },
+    { "label": "Generate Carousel", "action": "generate-carousel" },
+    { "label": "Research Competitors", "action": "research-competitors" }
+  ]
+}
+
+RULES:
+- opportunityScore is 1–10 (10 = exceptional)
+- All prices in GBP (£)
+- actionPlan: 2–4 weeks, 3–4 tasks each
+- contentOpportunities: 3–5 items
+- commonMistakes: 3–5 items specific to this opportunity
+- followUpQuestions: always include exactly 4
+- nextActions: always include 3–5; mark the most important one as primary: true
+- actions in actionPlan only uses: Create Product | Generate Carousel | Generate Video Guide | Turn into Note | Research Competitors | Create Marketing Plan | Open Design Studio
+- nextActions.action only uses: create-product | generate-carousel | generate-video-guide | turn-into-note | research-competitors | create-marketing-plan | open-design-studio
+- Every field must be SPECIFIC — no filler or generic advice`;
+
 // Universal action bias — coach must DO the thing, not describe doing it
 const ACTION_BIAS_NOTE = `CRITICAL BEHAVIOUR — ALWAYS DO, NEVER DEFLECT:
 When a user asks "show me how", "give me that", "write it", "what prompts", "create it for me", "how do I do that" — DO IT IMMEDIATELY. Write the actual prompts, the actual script, the actual steps. Never say "I can't show you directly", "I can guide you", "here's how you would", or "you could try". Just do the thing. If they ask for prompts — write the prompts. If they ask for a script — write the script. If they ask for a plan — write the plan with real specifics. Be the person who does the work, not the person who explains how work is done.`;
@@ -450,7 +531,9 @@ export async function POST(req: Request) {
       ].filter(Boolean).join("\n");
     }
 
-    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, personalisation, brandVoiceBlock, whatNextBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
+    // Inject structured response guide for modes where strategic questions are common
+    const supportsStructured = ["business", "finance", "content", "goals"].includes(coachMode);
+    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, supportsStructured ? STRUCTURED_RESPONSE_GUIDE : "", personalisation, brandVoiceBlock, whatNextBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
@@ -464,7 +547,7 @@ export async function POST(req: Request) {
       model,
       messages: openaiMessages,
       stream: true,
-      max_tokens: 1024,
+      max_tokens: supportsStructured ? 2500 : 1024,
     });
 
     const encoder = new TextEncoder();
