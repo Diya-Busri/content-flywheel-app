@@ -291,6 +291,9 @@ function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) 
   const completedToday = todos.filter(t => t.completed).length;
   const totalToday = todos.length;
   const progressPct = totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0;
+  const goalAvgPct = goals.length > 0
+    ? Math.round(goals.reduce((sum, g) => sum + Math.min(100, g.target > 0 ? (g.current / g.target) * 100 : 0), 0) / goals.length)
+    : 0;
 
   const recentNotes = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
 
@@ -410,6 +413,51 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
           {planError && <p className="text-sm text-red-500">{planError}</p>}
         </div>
       )}
+
+      {/* ── Stat cards ───────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Active tasks */}
+        <button onClick={() => onTabChange("todos")}
+          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-blue-500/30 hover:bg-blue-500/5 transition-all text-left group">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Active Tasks</p>
+          <p className="text-3xl font-black text-blue-500 tabular-nums">{activeTodos.length}</p>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
+            <ListTodo className="w-3 h-3" /><span>To-Do List →</span>
+          </div>
+        </button>
+
+        {/* Notes */}
+        <button onClick={() => onTabChange("notes")}
+          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-amber-500/30 hover:bg-amber-500/5 transition-all text-left group">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Notes</p>
+          <p className="text-3xl font-black text-amber-500 tabular-nums">{notes.length}</p>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
+            <StickyNote className="w-3 h-3" /><span>Notes →</span>
+          </div>
+        </button>
+
+        {/* Goals avg */}
+        <button onClick={() => onTabChange("goals")}
+          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-green-500/30 hover:bg-green-500/5 transition-all text-left group">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Avg Goal</p>
+          <p className={cn("text-3xl font-black tabular-nums", goalAvgPct >= 100 ? "text-green-500" : goalAvgPct >= 50 ? "text-orange-500" : "text-foreground")}>
+            {goalAvgPct}%
+          </p>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
+            <Target className="w-3 h-3" /><span>Goals →</span>
+          </div>
+        </button>
+
+        {/* Done today */}
+        <button onClick={() => onTabChange("todos")}
+          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Done Today</p>
+          <p className="text-3xl font-black text-orange-500 tabular-nums">{completedToday}</p>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
+            <CheckCircle2 className="w-3 h-3" /><span>{progressPct}% complete →</span>
+          </div>
+        </button>
+      </div>
 
       {/* ── Quick actions ────────────────────────────────────────────────── */}
       <div>
@@ -614,7 +662,11 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
                 {recentNotes.map(note => {
                   const preview = cleanPreview(note.body).slice(0, 80);
                   return (
-                    <button key={note.id} onClick={() => onTabChange("notes")}
+                    <button key={note.id}
+                      onClick={() => {
+                        try { sessionStorage.setItem("cf_open_note", note.id); } catch {}
+                        onTabChange("notes");
+                      }}
                       className="w-full text-left p-3 rounded-xl border border-border/60 bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors group">
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <p className="text-xs font-semibold text-foreground truncate group-hover:text-orange-500 transition-colors">{note.title || "Untitled"}</p>
@@ -3339,6 +3391,16 @@ export default function WorkspacePage() {
   const [tab, setTab] = useState<WorkspaceTab>("dashboard");
   const [searchOpen, setSearchOpen] = useState(false);    // Global workspace search (all users)
   const [kbSearchOpen, setKbSearchOpen] = useState(false); // KB search (admins only)
+  const [todoCount, setTodoCount] = useState(0);
+
+  // Keep tab badge count fresh whenever the user switches tabs
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("cf_todos");
+      const arr = raw ? (JSON.parse(raw) as { completed: boolean }[]) : [];
+      setTodoCount(arr.filter(t => !t.completed).length);
+    } catch {}
+  }, [tab]);
 
   const tabDesc: Record<WorkspaceTab, string> = {
     dashboard:            "Your execution hub — tasks, goals, projects and AI recommendations",
@@ -3418,7 +3480,16 @@ export default function WorkspacePage() {
             <button key={t.id} onClick={() => setTab(t.id)}
               className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px",
                 tab === t.id ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")}>
-              {t.icon}{t.label}
+              {t.icon}
+              {t.label}
+              {t.id === "todos" && todoCount > 0 && (
+                <span className={cn(
+                  "text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none tabular-nums",
+                  tab === "todos" ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground"
+                )}>
+                  {todoCount > 99 ? "99+" : todoCount}
+                </span>
+              )}
             </button>
           ))}
 
