@@ -33,7 +33,7 @@ import {
   Code, Link2, Wand2, Sparkles, AlignLeft, AlignCenter, AlignRight,
   AlignJustify, ChevronDown, Check, List, ListOrdered, CheckSquare,
   Quote, Minus, Table2, Type, Heading1, Heading2, Heading3,
-  Undo, Redo, Highlighter, MoreHorizontal, Search, X,
+  Undo, Redo, Highlighter, Search, X,
   Mic, Layers, Video, Package, Maximize2, Minimize2, BookOpen,
 } from "lucide-react";
 
@@ -695,7 +695,7 @@ export function NoteEditor({
 
   // UI state
   const [showColorPicker, setShowColorPicker]     = useState(false);
-  const [showMoreMenu, setShowMoreMenu]           = useState(false);
+  const [showAlignMenu, setShowAlignMenu]         = useState(false);
   const [showBlockMenu, setShowBlockMenu]         = useState(false);
   const [showListMenu, setShowListMenu]           = useState(false);
   const [showCmdPalette, setShowCmdPalette]       = useState(false);
@@ -709,11 +709,12 @@ export function NoteEditor({
   const ctxMenuRef                                = useRef<HTMLDivElement>(null);
 
   // Refs
-  const bubbleRef    = useRef<HTMLDivElement>(null);
-  const moreRef      = useRef<HTMLDivElement>(null);
-  const blockRef     = useRef<HTMLDivElement>(null);
-  const listRef      = useRef<HTMLDivElement>(null);
-  const colorRef     = useRef<HTMLDivElement>(null);
+  const bubbleRef      = useRef<HTMLDivElement>(null);
+  const alignRef       = useRef<HTMLDivElement>(null);
+  const tableButtonRef = useRef<HTMLButtonElement>(null);
+  const blockRef       = useRef<HTMLDivElement>(null);
+  const listRef        = useRef<HTMLDivElement>(null);
+  const colorRef       = useRef<HTMLDivElement>(null);
   const allNotesRef  = useRef(allNotes);
   allNotesRef.current = allNotes;
 
@@ -727,10 +728,10 @@ export function NoteEditor({
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (moreRef.current   && !moreRef.current.contains(e.target as Node))  setShowMoreMenu(false);
-      if (blockRef.current  && !blockRef.current.contains(e.target as Node)) setShowBlockMenu(false);
-      if (listRef.current   && !listRef.current.contains(e.target as Node))  setShowListMenu(false);
-      if (colorRef.current  && !colorRef.current.contains(e.target as Node)) setShowColorPicker(false);
+      if (alignRef.current   && !alignRef.current.contains(e.target as Node))  setShowAlignMenu(false);
+      if (blockRef.current   && !blockRef.current.contains(e.target as Node))  setShowBlockMenu(false);
+      if (listRef.current    && !listRef.current.contains(e.target as Node))   setShowListMenu(false);
+      if (colorRef.current   && !colorRef.current.contains(e.target as Node))  setShowColorPicker(false);
       if (ctxMenuRef.current && !ctxMenuRef.current.contains(e.target as Node)) setCtxMenu(null);
     };
     document.addEventListener("mousedown", handler);
@@ -924,219 +925,214 @@ export function NoteEditor({
   return (
     <div className={cn("relative flex-1 flex flex-col", className)}>
 
-      {/* ── Minimal top toolbar ───────────────────────────────────────────── */}
-      <div className="relative z-10 flex items-center gap-1 px-4 py-1.5 border-b border-border/40 bg-background shrink-0 flex-wrap">
+      {/* ── Toolbar (single row, scrollable on narrow viewports) ────────────── */}
+      <div className="relative z-10 border-b border-border/40 bg-background shrink-0 overflow-x-auto">
+        <div className="flex items-center gap-1 px-4 py-1.5 min-w-max">
 
-        {/* Block type dropdown */}
-        <div className="relative" ref={blockRef}>
-          <button
-            onMouseDown={e => { e.preventDefault(); setShowBlockMenu(v => !v); }}
-            className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          >
-            {blockLabel}
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
-          {showBlockMenu && (
-            <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
-              {[
-                { label: "Text",     icon: <Type className="w-3.5 h-3.5" />,    action: () => editor.chain().focus().setParagraph().run() },
-                { label: "Heading 1", icon: <Heading1 className="w-3.5 h-3.5" />, action: () => editor.chain().focus().setHeading({ level: 1 }).run() },
-                { label: "Heading 2", icon: <Heading2 className="w-3.5 h-3.5" />, action: () => editor.chain().focus().setHeading({ level: 2 }).run() },
-                { label: "Heading 3", icon: <Heading3 className="w-3.5 h-3.5" />, action: () => editor.chain().focus().setHeading({ level: 3 }).run() },
-                { label: "Quote",    icon: <Quote className="w-3.5 h-3.5" />,   action: () => editor.chain().focus().toggleBlockquote().run() },
-                { label: "Code Block", icon: <Code className="w-3.5 h-3.5" />, action: () => editor.chain().focus().toggleCodeBlock().run() },
-              ].map(item => (
-                <button key={item.label} onClick={() => { item.action(); setShowBlockMenu(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left hover:bg-accent transition-colors text-foreground">
-                  <span className="text-muted-foreground">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <Divider />
-
-        {/* Bold / Italic */}
-        <TBtn title={`Bold (${mod}B)`} active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
-          <Bold className="w-3.5 h-3.5" />
-        </TBtn>
-        <TBtn title={`Italic (${mod}I)`} active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
-          <Italic className="w-3.5 h-3.5" />
-        </TBtn>
-
-        <Divider />
-
-        {/* Lists dropdown */}
-        <div className="relative" ref={listRef}>
-          <button
-            onMouseDown={e => { e.preventDefault(); setShowListMenu(v => !v); }}
-            className={cn(
-              "flex items-center gap-1 h-7 px-1.5 rounded-md transition-colors text-xs shrink-0",
-              (editor.isActive("bulletList") || editor.isActive("orderedList") || editor.isActive("taskList"))
-                ? "bg-orange-500/12 text-orange-500"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          {/* Block type dropdown */}
+          <div className="relative shrink-0" ref={blockRef}>
+            <button
+              onMouseDown={e => { e.preventDefault(); setShowBlockMenu(v => !v); }}
+              className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              {blockLabel}
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            {showBlockMenu && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
+                {[
+                  { label: "Text",       icon: <Type className="w-3.5 h-3.5" />,     action: () => editor.chain().focus().setParagraph().run() },
+                  { label: "Heading 1",  icon: <Heading1 className="w-3.5 h-3.5" />, action: () => editor.chain().focus().setHeading({ level: 1 }).run() },
+                  { label: "Heading 2",  icon: <Heading2 className="w-3.5 h-3.5" />, action: () => editor.chain().focus().setHeading({ level: 2 }).run() },
+                  { label: "Heading 3",  icon: <Heading3 className="w-3.5 h-3.5" />, action: () => editor.chain().focus().setHeading({ level: 3 }).run() },
+                  { label: "Quote",      icon: <Quote className="w-3.5 h-3.5" />,    action: () => editor.chain().focus().toggleBlockquote().run() },
+                  { label: "Code Block", icon: <Code className="w-3.5 h-3.5" />,     action: () => editor.chain().focus().toggleCodeBlock().run() },
+                ].map(item => (
+                  <button key={item.label} onClick={() => { item.action(); setShowBlockMenu(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left hover:bg-accent transition-colors text-foreground">
+                    <span className="text-muted-foreground">{item.icon}</span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             )}
-            title="Lists"
-          >
-            <List className="w-3.5 h-3.5" />
-            <ChevronDown className="w-2.5 h-2.5 opacity-60" />
-          </button>
-          {showListMenu && (
-            <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
-              {[
-                { label: "Bullet List",   icon: <List className="w-3.5 h-3.5" />,         active: editor.isActive("bulletList"),  action: () => editor.chain().focus().toggleBulletList().run() },
-                { label: "Numbered List", icon: <ListOrdered className="w-3.5 h-3.5" />,  active: editor.isActive("orderedList"), action: () => editor.chain().focus().toggleOrderedList().run() },
-                { label: "Checklist",     icon: <CheckSquare className="w-3.5 h-3.5" />,  active: editor.isActive("taskList"),   action: () => editor.chain().focus().toggleTaskList().run() },
-              ].map(item => (
-                <button key={item.label} onClick={() => { item.action(); setShowListMenu(false); }}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
-                    item.active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
-                  )}>
-                  <span className={item.active ? "text-orange-500" : "text-muted-foreground"}>{item.icon}</span>
-                  {item.label}
-                  {item.active && <Check className="w-3 h-3 ml-auto" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
 
-        <Divider />
+          <Divider />
 
-        {/* More → alignment, colors, underline, strike, table, divider */}
-        <div className="relative" ref={moreRef}>
-          <button
-            onMouseDown={e => { e.preventDefault(); setShowMoreMenu(v => !v); }}
-            className="flex items-center gap-1 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title="More formatting"
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
-          {showMoreMenu && (
-            <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[220px]">
-              {/* Alignment */}
-              <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Alignment</p>
-              <div className="flex items-center gap-1 px-3 pb-2">
+          {/* Bold · Italic · Underline · Strikethrough */}
+          <TBtn title={`Bold (${mod}B)`} active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
+            <Bold className="w-3.5 h-3.5" />
+          </TBtn>
+          <TBtn title={`Italic (${mod}I)`} active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
+            <Italic className="w-3.5 h-3.5" />
+          </TBtn>
+          <TBtn title={`Underline (${mod}U)`} active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+            <UnderlineIcon className="w-3.5 h-3.5" />
+          </TBtn>
+          <TBtn title="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
+            <Strikethrough className="w-3.5 h-3.5" />
+          </TBtn>
+
+          <Divider />
+
+          {/* Alignment dropdown */}
+          <div className="relative shrink-0" ref={alignRef}>
+            <button
+              onMouseDown={e => { e.preventDefault(); setShowAlignMenu(v => !v); }}
+              className="flex items-center gap-1 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="Text Alignment"
+            >
+              <AlignLeft className="w-3.5 h-3.5" />
+              <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+            </button>
+            {showAlignMenu && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl p-1 flex gap-0.5">
                 {[
                   { icon: <AlignLeft className="w-3.5 h-3.5" />,    align: "left",    title: "Align Left" },
-                  { icon: <AlignCenter className="w-3.5 h-3.5" />,  align: "center",  title: "Align Center" },
+                  { icon: <AlignCenter className="w-3.5 h-3.5" />,  align: "center",  title: "Align Centre" },
                   { icon: <AlignRight className="w-3.5 h-3.5" />,   align: "right",   title: "Align Right" },
                   { icon: <AlignJustify className="w-3.5 h-3.5" />, align: "justify", title: "Justify" },
                 ].map(item => (
                   <button key={item.align} title={item.title}
-                    onClick={() => setAlign(item.align)}
-                    className="flex-1 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    onClick={() => { setAlign(item.align); setShowAlignMenu(false); }}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
                     {item.icon}
                   </button>
                 ))}
               </div>
-              {/* Text formatting */}
-              <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Formatting</p>
-              {[
-                { label: "Underline",      icon: <UnderlineIcon className="w-3.5 h-3.5" />,  active: editor.isActive("underline"), action: () => editor.chain().focus().toggleUnderline().run() },
-                { label: "Strikethrough",  icon: <Strikethrough className="w-3.5 h-3.5" />,  active: editor.isActive("strike"),    action: () => editor.chain().focus().toggleStrike().run() },
-                { label: "Inline Code",    icon: <Code className="w-3.5 h-3.5" />,           active: editor.isActive("code"),      action: () => editor.chain().focus().toggleCode().run() },
-              ].map(item => (
-                <button key={item.label} onClick={item.action}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
-                    item.active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
-                  )}>
-                  <span className={item.active ? "text-orange-500" : "text-muted-foreground"}>{item.icon}</span>
-                  {item.label}
-                  {item.active && <Check className="w-3 h-3 ml-auto text-orange-500" />}
-                </button>
-              ))}
-              {/* Insert */}
-              <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Insert</p>
-              {/* Table — opens size picker */}
-              <button
-                onClick={(e) => {
-                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                  pendingTableRange.current = null;
-                  setTablePickerPos({ top: rect.bottom + 4, left: rect.left });
-                  setTablePickerOpen(true);
-                  setShowMoreMenu(false);
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
-              >
-                <span className="text-muted-foreground"><Table2 className="w-3.5 h-3.5" /></span>
-                Table
-                <span className="ml-auto text-[10px] text-muted-foreground/40">pick size</span>
-              </button>
-              {[
-                { label: "Divider", icon: <Minus className="w-3.5 h-3.5" />,  action: () => { editor.chain().focus().setHorizontalRule().run(); setShowMoreMenu(false); } },
-                { label: "Link",    icon: <Link2 className="w-3.5 h-3.5" />,  active: editor.isActive("link"), action: () => {
-                  if (editor.isActive("link")) { editor.chain().focus().unsetLink().run(); }
-                  else {
-                    const url = window.prompt("URL:");
-                    if (url) editor.chain().focus().setLink({ href: url }).run();
-                  }
-                  setShowMoreMenu(false);
-                }},
-              ].map(item => (
-                <button key={item.label} onClick={item.action}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
-                    (item as { active?: boolean }).active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
-                  )}>
-                  <span className={cn("text-muted-foreground", (item as { active?: boolean }).active && "text-orange-500")}>{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-              {/* Color */}
-              <div className="relative" ref={colorRef}>
-                <button onClick={() => setShowColorPicker(v => !v)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left text-foreground hover:bg-accent transition-colors">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <Type className="w-3.5 h-3.5" />
-                    <Highlighter className="w-3 h-3" />
-                  </span>
-                  Colors &amp; Highlight
-                  <ChevronDown className="w-3 h-3 ml-auto text-muted-foreground/50" />
-                </button>
-                {showColorPicker && (
-                  <div className="absolute top-0 left-full ml-1 z-50 bg-popover border border-border rounded-xl shadow-xl">
-                    <ColorPicker editor={editor} onClose={() => setShowColorPicker(false)} />
-                  </div>
-                )}
+            )}
+          </div>
+
+          <Divider />
+
+          {/* Lists dropdown */}
+          <div className="relative shrink-0" ref={listRef}>
+            <button
+              onMouseDown={e => { e.preventDefault(); setShowListMenu(v => !v); }}
+              className={cn(
+                "flex items-center gap-1 h-7 px-1.5 rounded-md transition-colors text-xs",
+                (editor.isActive("bulletList") || editor.isActive("orderedList") || editor.isActive("taskList"))
+                  ? "bg-orange-500/12 text-orange-500"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              )}
+              title="Lists"
+            >
+              <List className="w-3.5 h-3.5" />
+              <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+            </button>
+            {showListMenu && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
+                {[
+                  { label: "Bullet List",   icon: <List className="w-3.5 h-3.5" />,        active: editor.isActive("bulletList"),  action: () => editor.chain().focus().toggleBulletList().run() },
+                  { label: "Numbered List", icon: <ListOrdered className="w-3.5 h-3.5" />, active: editor.isActive("orderedList"), action: () => editor.chain().focus().toggleOrderedList().run() },
+                  { label: "Checklist",     icon: <CheckSquare className="w-3.5 h-3.5" />, active: editor.isActive("taskList"),   action: () => editor.chain().focus().toggleTaskList().run() },
+                ].map(item => (
+                  <button key={item.label} onClick={() => { item.action(); setShowListMenu(false); }}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
+                      item.active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
+                    )}>
+                    <span className={item.active ? "text-orange-500" : "text-muted-foreground"}>{item.icon}</span>
+                    {item.label}
+                    {item.active && <Check className="w-3 h-3 ml-auto" />}
+                  </button>
+                ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          <Divider />
+
+          {/* Link */}
+          <TBtn title="Link" active={editor.isActive("link")} onClick={() => {
+            if (editor.isActive("link")) { editor.chain().focus().unsetLink().run(); }
+            else {
+              const url = window.prompt("URL:");
+              if (url) editor.chain().focus().setLink({ href: url }).run();
+            }
+          }}>
+            <Link2 className="w-3.5 h-3.5" />
+          </TBtn>
+
+          {/* Table — opens size picker */}
+          <button
+            ref={tableButtonRef}
+            title="Table"
+            onMouseDown={e => {
+              e.preventDefault();
+              const rect = tableButtonRef.current?.getBoundingClientRect();
+              if (rect) {
+                pendingTableRange.current = null;
+                setTablePickerPos({ top: rect.bottom + 4, left: rect.left });
+                setTablePickerOpen(true);
+              }
+            }}
+            className="h-7 px-1.5 rounded-md flex items-center justify-center transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+          >
+            <Table2 className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Horizontal rule */}
+          <TBtn title="Divider" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+            <Minus className="w-3.5 h-3.5" />
+          </TBtn>
+
+          <Divider />
+
+          {/* Text Color & Highlight */}
+          <div className="relative shrink-0" ref={colorRef}>
+            <button
+              title="Text Color & Highlight"
+              onMouseDown={e => { e.preventDefault(); setShowColorPicker(v => !v); }}
+              className="flex items-center gap-0.5 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Type className="w-3.5 h-3.5" />
+              <Highlighter className="w-3 h-3" />
+              <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+            </button>
+            {showColorPicker && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl">
+                <ColorPicker editor={editor} onClose={() => setShowColorPicker(false)} />
+              </div>
+            )}
+          </div>
+
+          {/* Inline Code */}
+          <TBtn title="Inline Code" active={editor.isActive("code")} onClick={() => editor.chain().focus().toggleCode().run()}>
+            <Code className="w-3.5 h-3.5" />
+          </TBtn>
+
+          <Divider />
+
+          {/* Undo / Redo */}
+          <TBtn title={`Undo (${mod}Z)`} onClick={() => editor.chain().focus().undo().run()}>
+            <Undo className="w-3.5 h-3.5" />
+          </TBtn>
+          <TBtn title={`Redo (${mod}⇧Z)`} onClick={() => editor.chain().focus().redo().run()}>
+            <Redo className="w-3.5 h-3.5" />
+          </TBtn>
+
+          <Divider />
+
+          {/* Word count + reading time */}
+          <span className="text-[10px] text-muted-foreground/40 whitespace-nowrap select-none shrink-0">
+            {charCount}w · {readMins}m
+          </span>
+
+          <Divider />
+
+          {/* Command palette trigger */}
+          <button
+            onMouseDown={e => { e.preventDefault(); setShowCmdPalette(true); }}
+            title={`Command Palette (${mod}K)`}
+            className="flex items-center gap-1 h-7 px-2 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+          >
+            <Search className="w-3 h-3" />
+            <span className="text-[10px] opacity-60">{mod}K</span>
+          </button>
+
         </div>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Undo / Redo */}
-        <TBtn title={`Undo (${mod}Z)`} onClick={() => editor.chain().focus().undo().run()}>
-          <Undo className="w-3.5 h-3.5" />
-        </TBtn>
-        <TBtn title={`Redo (${mod}⇧Z)`} onClick={() => editor.chain().focus().redo().run()}>
-          <Redo className="w-3.5 h-3.5" />
-        </TBtn>
-
-        <Divider />
-
-        {/* Word count + reading time */}
-        <span className="text-[10px] text-muted-foreground/40 whitespace-nowrap select-none">
-          {charCount}w · {readMins}m
-        </span>
-
-        <Divider />
-
-        {/* Command palette trigger */}
-        <button
-          onMouseDown={e => { e.preventDefault(); setShowCmdPalette(true); }}
-          title={`Command Palette (${mod}K)`}
-          className="flex items-center gap-1 h-7 px-2 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-        >
-          <Search className="w-3 h-3" />
-          <span className="text-[10px] opacity-60">{mod}K</span>
-        </button>
       </div>
 
       {/* ── Floating selection bubble ─────────────────────────────────────── */}
