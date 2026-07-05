@@ -88,6 +88,24 @@ interface AiRecommendation {
   reasoning: string;
 }
 
+interface Scorecard {
+  opportunityScore: number;    // 0–100
+  confidenceLevel: number;     // 0–100
+  timeToLaunch: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+  competitionLevel: "Low" | "Medium" | "High" | "Very High";
+  revenuePotential: string;
+  audienceDemand: "Low" | "Medium" | "High" | "Very High";
+  recommendedPriority: "Build Now" | "Validate First" | "Create Content First" | "Research More";
+}
+
+interface BestNextActionData {
+  action: string;
+  reasoning: string;
+  estimatedPrice: string;
+  timeToFirstSale: string;
+}
+
 interface ResearchReport {
   summary: string;
   insights: string[];
@@ -102,6 +120,8 @@ interface ResearchReport {
   recommendedOpportunity?: RecommendedOpp;
   buildPath?: BuildPath;
   aiRecommendation?: AiRecommendation;
+  scorecard?: Scorecard;
+  bestNextAction?: BestNextActionData;
   // legacy — may exist in old saved reports
   trendingProblems?: string[];
 }
@@ -278,6 +298,66 @@ const LAUNCH_ROADMAP = [
   { label: "Generate Publishing Kit", emoji: "🚀", route: "/dashboard/video-guide/new" },
   { label: "Launch",                  emoji: "⚡", route: "/dashboard/library" },
 ];
+
+// ─── Markdown stripper ────────────────────────────────────────────────────────
+
+/** Strip raw markdown syntax from AI-generated text fields. */
+function stripMd(text: string): string {
+  if (!text || typeof text !== "string") return text ?? "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/#{1,6}\s*/g, "")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Render AI chat assistant content with basic markdown to JSX. */
+function renderChatContent(text: string) {
+  const cleaned = text
+    .replace(/\*\*(.*?)\*\*/g, "BOLD:$1:BOLD")
+    .replace(/#{1,3}\s+(.*)/g, "HEADING:$1:HEADING");
+  const lines = cleaned.split("\n");
+  return lines.map((line, i) => {
+    const isHeading = /^HEADING:(.*):HEADING$/.test(line);
+    const isBullet = /^[-•*]\s/.test(line);
+    const isNum = /^\d+\.\s/.test(line);
+    const renderLine = (l: string) => {
+      const parts = l.split(/(BOLD:.*?:BOLD)/g);
+      return parts.map((p, j) =>
+        p.startsWith("BOLD:") && p.endsWith(":BOLD")
+          ? <strong key={j}>{p.slice(5, -5)}</strong>
+          : p
+      );
+    };
+    if (isHeading) {
+      const content = line.replace(/^HEADING:(.*):HEADING$/, "$1");
+      return <p key={i} className="font-semibold text-foreground mt-3 mb-1">{content}</p>;
+    }
+    if (isBullet) {
+      const content = line.replace(/^[-•*]\s/, "");
+      return (
+        <div key={i} className="flex items-start gap-2 my-0.5">
+          <span className="text-orange-500 shrink-0 mt-1 text-[10px]">●</span>
+          <span>{renderLine(content)}</span>
+        </div>
+      );
+    }
+    if (isNum) {
+      const match = line.match(/^(\d+)\.\s(.*)/);
+      if (match) return (
+        <div key={i} className="flex items-start gap-2 my-0.5">
+          <span className="text-orange-500 shrink-0 font-semibold text-[12px] mt-px">{match[1]}.</span>
+          <span>{renderLine(match[2])}</span>
+        </div>
+      );
+    }
+    if (!line.trim()) return <div key={i} className="h-2" />;
+    return <p key={i} className="my-0.5">{renderLine(line)}</p>;
+  });
+}
 
 // ─── Research Library hook ────────────────────────────────────────────────────
 
@@ -467,8 +547,8 @@ function RecommendedOpportunityCard({ opp }: { opp: RecommendedOpp }) {
         <span className="ml-auto text-[10px] font-medium text-orange-500/60 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">AI Recommended</span>
       </div>
       <div className="p-5 space-y-4">
-        <h3 className="text-[18px] font-bold text-foreground leading-snug">{opp.name}</h3>
-        <p className="text-[13px] text-foreground/80 leading-relaxed">{opp.why}</p>
+        <h3 className="text-[18px] font-bold text-foreground leading-snug">{stripMd(opp.name)}</h3>
+        <p className="text-[13px] text-foreground/80 leading-relaxed">{stripMd(opp.why)}</p>
         <div className="grid grid-cols-2 gap-2">
           {metrics.map(m => (
             <div key={m.label} className="flex items-center justify-between px-3 py-2 rounded-xl bg-background border border-border">
@@ -642,13 +722,185 @@ function AiRecommendationCard({ rec, router }: {
         </span>
       </div>
       <div className="p-5 space-y-4">
-        <p className="text-[16px] font-bold text-foreground leading-snug">&ldquo;{rec.nextStep}&rdquo;</p>
-        <p className="text-[13px] text-foreground/75 leading-relaxed">{rec.reasoning}</p>
+        <p className="text-[16px] font-bold text-foreground leading-snug">&ldquo;{stripMd(rec.nextStep)}&rdquo;</p>
+        <p className="text-[13px] text-foreground/75 leading-relaxed">{stripMd(rec.reasoning)}</p>
         <button
           onClick={cta.action}
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-semibold transition-all"
         >
           <Zap className="w-4 h-4" />{cta.label}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Business Scorecard ───────────────────────────────────────────────────────
+
+const SCORE_COLORS = {
+  green:  "bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20 text-green-700 dark:text-green-400",
+  amber:  "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400",
+  red:    "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400",
+  blue:   "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-400",
+  purple: "bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/20 text-purple-700 dark:text-purple-400",
+  orange: "bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20 text-orange-700 dark:text-orange-400",
+} as const;
+
+function scorecardColor(value: string | number): keyof typeof SCORE_COLORS {
+  if (typeof value === "number") {
+    if (value >= 75) return "green";
+    if (value >= 50) return "amber";
+    return "red";
+  }
+  const v = value.toLowerCase();
+  if (v === "easy" || v === "low" || v === "build now" || v === "very high") return "green";
+  if (v === "medium" || v === "validate first" || v === "high") return "amber";
+  if (v === "hard" || v === "very high competition" || v === "create content first" || v === "research more") return "red";
+  return "blue";
+}
+
+function ScorecardMetric({
+  icon, title, value, subLabel, colorKey,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string | number;
+  subLabel?: string;
+  colorKey: keyof typeof SCORE_COLORS;
+}) {
+  return (
+    <div className={cn("rounded-xl border p-3 flex flex-col gap-1.5", SCORE_COLORS[colorKey])}>
+      <div className="flex items-center gap-1.5">
+        <span className="opacity-70 shrink-0">{icon}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{title}</span>
+      </div>
+      <div className="font-bold text-[18px] leading-tight">{value}</div>
+      {subLabel && <div className="text-[11px] opacity-60 leading-tight">{subLabel}</div>}
+    </div>
+  );
+}
+
+function BusinessScorecard({ scorecard, report }: { scorecard: Scorecard; report: ResearchReport }) {
+  const metrics = [
+    {
+      icon: <Sparkles className="w-3.5 h-3.5" />,
+      title: "Opportunity Score",
+      value: `${scorecard.opportunityScore}/100`,
+      subLabel: scorecard.opportunityScore >= 75 ? "Strong opportunity" : scorecard.opportunityScore >= 50 ? "Moderate opportunity" : "Needs validation",
+      colorKey: scorecardColor(scorecard.opportunityScore),
+    },
+    {
+      icon: <BarChart3 className="w-3.5 h-3.5" />,
+      title: "Confidence Level",
+      value: `${scorecard.confidenceLevel}%`,
+      subLabel: "Research confidence",
+      colorKey: scorecardColor(scorecard.confidenceLevel),
+    },
+    {
+      icon: <Zap className="w-3.5 h-3.5" />,
+      title: "Time to Launch",
+      value: scorecard.timeToLaunch,
+      subLabel: "With Content Flywheel",
+      colorKey: "orange" as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Target className="w-3.5 h-3.5" />,
+      title: "Difficulty",
+      value: scorecard.difficulty,
+      subLabel: scorecard.difficulty === "Easy" ? "Beginner-friendly" : scorecard.difficulty === "Medium" ? "Some experience needed" : "Expert-level",
+      colorKey: scorecard.difficulty === "Easy" ? "green" : scorecard.difficulty === "Medium" ? "amber" : "red" as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Users className="w-3.5 h-3.5" />,
+      title: "Competition",
+      value: scorecard.competitionLevel,
+      subLabel: scorecard.competitionLevel === "Low" ? "Wide open" : scorecard.competitionLevel === "Medium" ? "Manageable" : "Competitive space",
+      colorKey: (scorecard.competitionLevel === "Low" ? "green" : scorecard.competitionLevel === "Medium" ? "amber" : "red") as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <TrendingUp className="w-3.5 h-3.5" />,
+      title: "Revenue Potential",
+      value: scorecard.revenuePotential,
+      subLabel: "Estimated monthly",
+      colorKey: "green" as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Globe className="w-3.5 h-3.5" />,
+      title: "Audience Demand",
+      value: scorecard.audienceDemand,
+      subLabel: scorecard.audienceDemand === "Very High" || scorecard.audienceDemand === "High" ? "Strong market pull" : "Growing audience",
+      colorKey: (scorecard.audienceDemand === "Very High" || scorecard.audienceDemand === "High" ? "green" : "amber") as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Lightbulb className="w-3.5 h-3.5" />,
+      title: "Recommended Priority",
+      value: scorecard.recommendedPriority,
+      subLabel: "AI assessment",
+      colorKey: (scorecard.recommendedPriority === "Build Now" ? "green" : scorecard.recommendedPriority === "Validate First" ? "amber" : "blue") as keyof typeof SCORE_COLORS,
+    },
+  ] as const;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border/40 bg-gradient-to-r from-orange-500/5 to-transparent">
+        <BarChart3 className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Business Scorecard</span>
+        <span className="text-[11px] text-muted-foreground/50 ml-1">— understand the opportunity in 10 seconds</span>
+      </div>
+      <div className="p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {metrics.map((m, i) => (
+            <ScorecardMetric key={i} icon={m.icon} title={m.title} value={m.value} subLabel={m.subLabel} colorKey={m.colorKey} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Best Next Action Card ─────────────────────────────────────────────────────
+
+function BestNextActionCard({
+  bestNextAction, router,
+}: {
+  bestNextAction: BestNextActionData;
+  router: ReturnType<typeof useRouter>;
+}) {
+  return (
+    <div className="rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-orange-500/8 via-background to-amber-500/5 overflow-hidden">
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-orange-500/20 bg-orange-500/8">
+        <span className="text-[18px] leading-none">🚀</span>
+        <span className="font-bold text-[14px] text-orange-600 dark:text-orange-400">Best Next Action</span>
+      </div>
+      <div className="p-5 space-y-4">
+        <div>
+          <h3 className="text-[18px] font-bold text-foreground leading-snug">{stripMd(bestNextAction.action)}</h3>
+          <p className="text-[13px] text-foreground/75 leading-relaxed mt-2">{stripMd(bestNextAction.reasoning)}</p>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          {bestNextAction.estimatedPrice && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground">💰 Selling price</span>
+              <span className="text-[13px] font-bold text-green-600 dark:text-green-400">{bestNextAction.estimatedPrice}</span>
+            </div>
+          )}
+          {bestNextAction.timeToFirstSale && (
+            <>
+              <div className="w-px h-4 bg-border" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground">⏱ First sale</span>
+                <span className="text-[13px] font-bold text-foreground">{bestNextAction.timeToFirstSale}</span>
+              </div>
+            </>
+          )}
+        </div>
+        <button
+          onClick={() => router.push("/dashboard/library")}
+          className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-bold transition-all shadow-sm"
+        >
+          <Package className="w-4 h-4" />
+          Build This Product
+          <ArrowRight className="w-4 h-4 ml-1" />
         </button>
       </div>
     </div>
@@ -1006,6 +1258,39 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           </p>
         </div>
 
+        {/* Powered by AI Research — onboarding card */}
+        <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-transparent p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Brain className="w-4 h-4 text-orange-500" />
+            <span className="font-semibold text-[14px] text-foreground">Powered by AI Research</span>
+          </div>
+          <p className="text-[13px] text-foreground/70 leading-relaxed">
+            Ask any business question and get a full structured report — with evidence, competitor analysis, product ideas, a step-by-step action plan, and a business scorecard.
+          </p>
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50">Example searches</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                "Find a profitable niche for nurses",
+                "Research competitors in Notion templates",
+                "What content is trending in productivity?",
+                "Validate my ebook idea for freelancers",
+                "Best digital products for teachers",
+                "How to price my Notion template",
+              ].map(ex => (
+                <button
+                  key={ex}
+                  onClick={() => setInputQuery(ex)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-accent hover:border-orange-500/20 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-all"
+                >
+                  <Search className="w-3 h-3 shrink-0 opacity-50" />
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Research Type Selector */}
         <ResearchTypeSelector selected={researchType} onSelect={setResearchType} />
 
@@ -1205,6 +1490,16 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
         </div>
       </div>
 
+      {/* ── Business Scorecard ────────────────────────────────────────────── */}
+      {report.scorecard && (
+        <BusinessScorecard scorecard={report.scorecard} report={report} />
+      )}
+
+      {/* ── Best Next Action ──────────────────────────────────────────────── */}
+      {report.bestNextAction && (
+        <BestNextActionCard bestNextAction={report.bestNextAction} router={router} />
+      )}
+
       {/* ── Recommended Opportunity ────────────────────────────────────────── */}
       {report.recommendedOpportunity && (
         <RecommendedOpportunityCard opp={report.recommendedOpportunity} />
@@ -1220,7 +1515,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
       <Section id="summary" title="Executive Summary" icon={<FileText className="w-4 h-4" />} open={openSections.has("summary")} onToggle={toggleSection}>
         <div className="space-y-3">
           {report.summary.split(/\n\n+/).map((para, i) => (
-            <p key={i} className="text-[14px] text-foreground/90 leading-relaxed">{para}</p>
+            <p key={i} className="text-[14px] text-foreground/90 leading-relaxed">{stripMd(para)}</p>
           ))}
           <QuickActions actions={[
             { label: "Save to Research", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("summary", `Summary: ${query}`, report.summary) },
@@ -1235,7 +1530,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           {report.insights.map((insight, i) => (
             <li key={i} className="flex items-start gap-3">
               <span className="w-5 h-5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-              <p className="text-[14px] text-foreground/90 leading-relaxed">{insight}</p>
+              <p className="text-[14px] text-foreground/90 leading-relaxed">{stripMd(insight)}</p>
             </li>
           ))}
         </ul>
@@ -1256,8 +1551,8 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                     {ev.source}
                   </span>
                 </div>
-                <p className="text-[13px] font-semibold text-foreground leading-relaxed">{ev.finding}</p>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{ev.context}</p>
+                <p className="text-[13px] font-semibold text-foreground leading-relaxed">{stripMd(ev.finding)}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(ev.context)}</p>
               </div>
             ))}
           </div>
@@ -1274,7 +1569,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             {report.rootCauses.map((cause, i) => (
               <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-purple-500/5 border border-purple-500/10 hover:border-purple-500/20 transition-colors">
                 <span className="text-purple-500 shrink-0 mt-0.5 font-bold text-[12px]">{i + 1}.</span>
-                <p className="text-[13px] text-foreground/90 leading-relaxed">{cause}</p>
+                <p className="text-[13px] text-foreground/90 leading-relaxed">{stripMd(cause)}</p>
               </div>
             ))}
           </div>
@@ -1292,11 +1587,11 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             <div key={i} className="p-4 rounded-xl border border-border bg-background hover:bg-accent/20 transition-colors group">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-[13px] font-semibold text-foreground">{opp.title}</p>
+                  <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
                   <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/8 border-blue-500/20 text-blue-500 dark:text-blue-400">{opp.format}</span>
                   <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold", DIFFICULTY_COLORS[opp.difficulty] ?? DIFFICULTY_COLORS.Medium)}>{opp.difficulty}</span>
                 </div>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{opp.description}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
               </div>
               <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={() => router.push("/dashboard/video-guide/new")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all">
@@ -1322,10 +1617,10 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             <div key={i} className="p-4 rounded-xl border border-border bg-background hover:bg-accent/20 transition-colors group">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-[13px] font-semibold text-foreground">{opp.title}</p>
+                  <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
                   <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/8 border-purple-500/20 text-purple-500 dark:text-purple-400">{opp.type}</span>
                 </div>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{opp.description}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
                 <p className="text-[12px] font-bold text-green-600 dark:text-green-400">{opp.priceRange}</p>
               </div>
               <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1353,12 +1648,12 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             {report.businessOpportunities.map((opp, i) => (
               <div key={i} className="p-4 rounded-xl border border-border bg-background space-y-2">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-[13px] font-semibold text-foreground">{opp.title}</p>
+                  <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
                   <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold shrink-0", BIZ_OPP_COLORS[opp.type] ?? "bg-muted/30 border-border text-muted-foreground")}>
                     {opp.type}
                   </span>
                 </div>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{opp.description}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
               </div>
             ))}
           </div>
@@ -1374,15 +1669,15 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           <div className="space-y-3">
             {report.competitorInsights.map((comp, i) => (
               <div key={i} className="p-4 rounded-xl border border-border bg-background space-y-3">
-                <p className="text-[13px] font-bold text-foreground">{comp.name}</p>
+                <p className="text-[13px] font-bold text-foreground">{stripMd(comp.name)}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Strength</p>
-                    <p className="text-[12px] text-muted-foreground leading-relaxed">{comp.strength}</p>
+                    <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(comp.strength)}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400">Your Opportunity</p>
-                    <p className="text-[12px] text-green-700 dark:text-green-300 leading-relaxed font-medium">{comp.gap}</p>
+                    <p className="text-[12px] text-green-700 dark:text-green-300 leading-relaxed font-medium">{stripMd(comp.gap)}</p>
                   </div>
                 </div>
                 {(comp.popularProducts || comp.contentStrategy || comp.whatToLearn) && (
@@ -1390,19 +1685,19 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                     {comp.popularProducts && (
                       <div className="space-y-0.5">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Popular Products</p>
-                        <p className="text-[12px] text-muted-foreground">{comp.popularProducts}</p>
+                        <p className="text-[12px] text-muted-foreground">{stripMd(comp.popularProducts)}</p>
                       </div>
                     )}
                     {comp.contentStrategy && (
                       <div className="space-y-0.5">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Content Strategy</p>
-                        <p className="text-[12px] text-muted-foreground">{comp.contentStrategy}</p>
+                        <p className="text-[12px] text-muted-foreground">{stripMd(comp.contentStrategy)}</p>
                       </div>
                     )}
                     {comp.whatToLearn && (
                       <div className="space-y-0.5 p-2.5 rounded-lg bg-orange-500/5 border border-orange-500/15">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500/70">Key Lesson</p>
-                        <p className="text-[12px] text-foreground/80 italic">{comp.whatToLearn}</p>
+                        <p className="text-[12px] text-foreground/80 italic">{stripMd(comp.whatToLearn)}</p>
                       </div>
                     )}
                   </div>
@@ -1450,8 +1745,8 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                 {step.step}
               </div>
               <div className="flex-1 space-y-2">
-                <p className="text-[13px] font-semibold text-foreground">{step.action}</p>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{step.detail}</p>
+                <p className="text-[13px] font-semibold text-foreground">{stripMd(step.action)}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(step.detail)}</p>
                 {step.cta && <CtaButton cta={step.cta} router={router} onTabChange={onTabChange} />}
               </div>
             </div>
@@ -1492,7 +1787,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                       : "bg-muted/50 border border-border text-foreground/90 rounded-bl-sm"
                   )}>
                     {msg.role === "assistant" ? (
-                      <div className="whitespace-pre-line">{msg.content}</div>
+                      <div className="space-y-0.5 text-[13px] leading-relaxed">{renderChatContent(msg.content)}</div>
                     ) : (
                       msg.content
                     )}

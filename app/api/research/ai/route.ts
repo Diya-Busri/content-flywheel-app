@@ -179,6 +179,24 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text) with this ex
     "nextStep": "One precise, actionable instruction — exactly what to do right now",
     "category": "Build Now|Validate First|Create Content First|Research More",
     "reasoning": "2-3 sentences: why this is the highest-leverage next action given the specific findings"
+  },
+
+  "scorecard": {
+    "opportunityScore": 85,
+    "confidenceLevel": 88,
+    "timeToLaunch": "7 days",
+    "difficulty": "Easy",
+    "competitionLevel": "Medium",
+    "revenuePotential": "£1k–£5k/month",
+    "audienceDemand": "High",
+    "recommendedPriority": "Build Now"
+  },
+
+  "bestNextAction": {
+    "action": "Specific product name or action to take — e.g. 'Build a Notion Budget Planner for Nurses'",
+    "reasoning": "1-2 sentences: why this specific action is the highest-leverage move right now",
+    "estimatedPrice": "£X–£Y",
+    "timeToFirstSale": "e.g. '1–2 weeks'"
   }
 }
 
@@ -190,7 +208,14 @@ RULES:
 - Action plan escalates: quick win first, bigger bets later
 - cta values must be one of the exact strings listed
 - buildPath.withFlywheel.steps only uses: Generate Product|Edit in Design Studio|Generate Carousel|Generate Video Guide|Generate Publishing Kit
-- aiRecommendation.category must be one of the 4 exact strings listed`;
+- aiRecommendation.category must be one of the 4 exact strings listed
+- scorecard.opportunityScore is 0–100 (calculate from demand, competition, monetisation potential, and market timing)
+- scorecard.confidenceLevel is 0–100 (calculate from evidence quality, specificity, and market signal strength)
+- scorecard.difficulty is Easy|Medium|Hard
+- scorecard.competitionLevel is Low|Medium|High|Very High
+- scorecard.audienceDemand is Low|Medium|High|Very High
+- scorecard.recommendedPriority must be one of: Build Now|Validate First|Create Content First|Research More
+- bestNextAction.action must be a specific, concrete product or campaign name — never a generic description`;
 
 function buildSystemPrompt(researchType: string): string {
   const focus = TYPE_FOCUS[researchType] ?? TYPE_FOCUS["custom"];
