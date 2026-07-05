@@ -7,7 +7,8 @@ import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { productReviewsTable } from "@/db/schema/product-reviews-schema";
 import { featuredProductsTable } from "@/db/schema/featured-products-schema";
-import { isNull, inArray, desc, gte, eq, sql, and, gt } from "drizzle-orm";
+import { productWishlistsTable } from "@/db/schema/product-wishlists-schema";
+import { isNull, isNotNull, inArray, desc, gte, eq, sql, and, gt, not } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,12 @@ export async function GET(request: NextRequest) {
       status: productsTable.status,
     })
     .from(productsTable)
-    .where(isNull(productsTable.deletedAt))
+    .where(and(
+      isNull(productsTable.deletedAt),
+      isNull(productsTable.archivedAt),
+      isNull(productsTable.removedAt),       // admin-removed products never appear
+      isNull(productsTable.moderationStatus), // admin-hidden or suspended products never appear
+    ))
     .orderBy(desc(productsTable.createdAt));
 
   // ── Seller status filter: only active subscriptions ───────────────────────
@@ -101,8 +107,9 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
-  // ── Fetch sales counts (all-time + last 7 days) + ratings ─────────────────
-  const [allTimeSales, trendingSales, ratingsRows] = await Promise.all([
+  // ── Fetch sales counts (all-time + last 7 days) + ratings + wishlist counts ─
+  const publishedIds = published.map((r) => r.id);
+  const [allTimeSales, trendingSales, ratingsRows, wishlistRows] = await Promise.all([
     db.select({ productId: productOrdersTable.productId, count: sql<number>`count(*)::int` })
       .from(productOrdersTable)
       .where(eq(productOrdersTable.status, "completed"))
@@ -121,14 +128,24 @@ export async function GET(request: NextRequest) {
       .from(productReviewsTable)
       .where(eq(productReviewsTable.approved, true))
       .groupBy(productReviewsTable.productId),
+
+    // Wishlist save counts per product
+    publishedIds.length > 0
+      ? db.select({ productId: productWishlistsTable.productId, count: sql<number>`count(*)::int` })
+          .from(productWishlistsTable)
+          .where(inArray(productWishlistsTable.productId, publishedIds))
+          .groupBy(productWishlistsTable.productId)
+      : Promise.resolve([]),
   ]);
 
   const salesMap:    Record<string, number> = {};
   const trendingMap: Record<string, number> = {};
   const ratingsMap:  Record<string, { avgRating: number; reviewCount: number }> = {};
+  const wishlistMap: Record<string, number> = {};
   for (const r of allTimeSales)  salesMap[r.productId]    = r.count;
   for (const r of trendingSales) trendingMap[r.productId] = r.count;
   for (const r of ratingsRows)   ratingsMap[r.productId]  = { avgRating: r.avgRating, reviewCount: r.reviewCount };
+  for (const r of wishlistRows)  wishlistMap[r.productId] = r.count;
 
   // ── Text / niche / format / free / newThisWeek filter ───────────────────
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -233,6 +250,7 @@ export async function GET(request: NextRequest) {
       trendingCount: trendingMap[r.id] ?? 0,
       avgRating:     ratingsMap[r.id]?.avgRating ?? null,
       reviewCount:   ratingsMap[r.id]?.reviewCount ?? 0,
+      wishlistCount: wishlistMap[r.id] ?? 0,
       featured:      featuredIds.has(r.id),
     };
   });
