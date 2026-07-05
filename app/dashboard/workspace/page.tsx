@@ -8,7 +8,7 @@ import {
   Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
   FileText, Lightbulb, ChevronUp, Loader2,
   Pin, Minus, Copy, Clock,
-  LayoutDashboard, Package, Sparkles, ArrowRight, TrendingUp, PlayCircle,
+  LayoutDashboard, Package, Sparkles, ArrowRight, TrendingUp, PlayCircle, Bot,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,12 @@ import { useWorkspaceAdmin } from "@/components/workspace-admin-context";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import { ResearchTab } from "@/components/workspace/ResearchTab";
 import BusinessBrainTab from "@/components/workspace/BusinessBrainTab";
+import AgentCentreTab from "@/components/workspace/AgentCentreTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type WorkspaceTab = "dashboard" | "todos" | "notes" | "calendar" | "goals"
-  | "research" | "memory" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
+  | "research" | "memory" | "agents" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
   | "analytics" | "distribution" | "experiments";
 type Priority = "high" | "medium" | "low";
 type TodoFilter = "all" | "active" | "completed";
@@ -234,6 +235,7 @@ const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
   { id: "goals",    label: "Goals",             icon: <Target className="w-4 h-4" /> },
   { id: "research", label: "Research",          icon: <BookOpen className="w-4 h-4" /> },
   { id: "memory",   label: "Business Brain",     icon: <Brain className="w-4 h-4" /> },
+  { id: "agents",   label: "Agent Team",         icon: <Bot className="w-4 h-4" /> },
 ];
 
 const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
@@ -4141,6 +4143,7 @@ export default function WorkspacePage() {
     goals:                "Track revenue, growth, and product targets",
     "research":           "AI Business Analyst — discover opportunities, understand markets, take action",
     "memory":             "Business Brain — an AI that continuously learns your business, getting smarter every day",
+    "agents":             "Agent Team — 6 specialised AI agents that proactively monitor, analyse, and improve your business",
     "founder-os":         "Your internal OS — the memory and intelligence layer for Content Flywheel",
     "marketing-psychology": "Psychological triggers and buyer behavior principles",
     "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
@@ -4251,6 +4254,7 @@ export default function WorkspacePage() {
 
       {tab === "research" && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
       {tab === "memory"   && <BusinessBrainTab />}
+      {tab === "agents"   && <AgentCentreTab />}
 
       {/* Admin-only tab content */}
       {isAdmin && tab === "founder-os"             && <FounderOSOverview onTabChange={setTab} />}
