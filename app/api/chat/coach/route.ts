@@ -10,6 +10,7 @@ import { coachSettingsTable } from "@/db/schema/coach-settings-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { logEvent } from "@/lib/log-event";
+import { searchFounderKnowledge } from "@/lib/founder-knowledge";
 
 export const runtime = "nodejs";
 
@@ -531,9 +532,73 @@ export async function POST(req: Request) {
       ].filter(Boolean).join("\n");
     }
 
+    // ── Founder OS Knowledge injection (admin only) ────────────────────────
+    // Before generating, search the knowledge base with the user's last message.
+    // Top relevant entries are injected as context so the coach references real
+    // insights instead of generic advice.
+    let founderKBBlock = "";
+    const isAdmin = userId
+      ? (process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "") !== "" &&
+        (() => {
+          // We already have the user's email from the currentUser() we fetched
+          // above for the brand voice block — re-use it.
+          try {
+            // Use the ADMIN_EMAIL env var; the actual Clerk email was already
+            // verified by the rate-limit path. We do a lightweight check here.
+            return true; // resolved below
+          } catch { return false; }
+        })()
+      : false;
+
+    if (userId && isAdmin) {
+      try {
+        const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+        // Quick check: fetch the current user's primary email
+        const { clerkClient } = await import("@clerk/nextjs/server");
+        const clerkUser = await clerkClient().users.getUser(userId);
+        const userEmail = clerkUser.emailAddresses?.[0]?.emailAddress?.trim().toLowerCase() ?? "";
+
+        if (userEmail === adminEmail && adminEmail) {
+          // Get the most recent user message to use as the search query
+          const lastUserMsg = [...messages]
+            .reverse()
+            .find(m => m.role === "user");
+          const searchQuery = typeof lastUserMsg?.content === "string" && lastUserMsg.content.trim()
+            ? lastUserMsg.content.trim().slice(0, 500)
+            : "";
+
+          if (searchQuery) {
+            const kbResults = await searchFounderKnowledge(userId, searchQuery, {
+              limit: 5,
+              minRelevance: 0.3,
+            });
+
+            if (kbResults.length > 0) {
+              const kbLines = kbResults.map((r, i) => {
+                const e = r.entry;
+                const summary = e.aiSummary ? ` — ${e.aiSummary}` : "";
+                const cat = e.category.replace(/-/g, " ");
+                return `${i + 1}. [${cat}] ${e.title}${summary}`;
+              });
+
+              founderKBBlock = `FOUNDER OS KNOWLEDGE BASE — RELEVANT INSIGHTS:
+The following entries from your personal knowledge base are relevant to this conversation. Reference them naturally when applicable. If a past finding directly answers the question, lead with it.
+
+${kbLines.join("\n")}
+
+When you reference one of these insights, you can say something like: "Based on what you've found before..." or "Your research on X showed..." — make it feel like memory, not a database lookup.`;
+            }
+          }
+        }
+      } catch (err) {
+        // Non-blocking — never let KB lookup break the coach
+        console.warn("[chat/coach] founder KB lookup failed:", err);
+      }
+    }
+
     // Inject structured response guide for modes where strategic questions are common
     const supportsStructured = ["business", "finance", "content", "goals"].includes(coachMode);
-    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, supportsStructured ? STRUCTURED_RESPONSE_GUIDE : "", personalisation, brandVoiceBlock, whatNextBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
+    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, supportsStructured ? STRUCTURED_RESPONSE_GUIDE : "", personalisation, brandVoiceBlock, whatNextBlock, founderKBBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
