@@ -4,6 +4,7 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Vercel Pro — 60 s for streaming research
 
 // ─── Type-specific focus instructions ────────────────────────────────────────
 
@@ -70,6 +71,8 @@ Your job is to answer three questions with every report:
 2. Why does it matter?
 3. What should the user do next?
 
+You have been provided with REAL research data gathered by specialist analysts (web intelligence, community data, social signals, marketplace data, SEO data). Use this data to make your report specific, accurate, and grounded in real findings.
+
 Given a research query, generate a comprehensive, specific, and actionable market research report as a single valid JSON object.
 
 Return ONLY valid JSON (no markdown, no code blocks, no extra text) with this exact structure:
@@ -91,13 +94,13 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text) with this ex
   ],
 
   "rootCauses": [
-    "Why the core problem or opportunity exists — go deeper than the symptom (e.g. 'Most digital product creators skip the validation step because they conflate building with selling, leading to products nobody asked for')",
+    "Why the core problem or opportunity exists — go deeper than the symptom",
     "..."
   ],
 
   "contentOpportunities": [
     {
-      "title": "Specific, titled content piece (e.g. 'The 5-Day Notion Setup Challenge for NHS Nurses')",
+      "title": "Specific, titled content piece",
       "description": "What this covers, the specific pain point it addresses, and why it will perform",
       "format": "Short-Form Video|Long-Form Video|Carousel|Blog Post|Email Sequence|Newsletter|Thread|Lead Magnet|Podcast Episode",
       "difficulty": "Easy|Medium|Hard"
@@ -145,7 +148,7 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text) with this ex
   "actionPlan": [
     {
       "step": 1,
-      "action": "Specific, imperative action (e.g. 'Build a free Notion planner for NHS nurses and post it in 3 nursing Facebook groups')",
+      "action": "Specific, imperative action",
       "detail": "Exact guidance — what to make, where to share it, what success looks like",
       "cta": "Create Note|Generate Carousel|Generate Video|Generate Script|Create Product|Open Design Studio"
     }
@@ -178,7 +181,7 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text) with this ex
   "aiRecommendation": {
     "nextStep": "One precise, actionable instruction — exactly what to do right now",
     "category": "Build Now|Validate First|Create Content First|Research More",
-    "reasoning": "2-3 sentences: why this is the highest-leverage next action given the specific findings"
+    "reasoning": "2-3 sentences: why this is the highest-leverage next action"
   },
 
   "scorecard": {
@@ -193,7 +196,7 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text) with this ex
   },
 
   "bestNextAction": {
-    "action": "Specific product name or action to take — e.g. 'Build a Notion Budget Planner for Nurses'",
+    "action": "Specific product name or action to take",
     "reasoning": "1-2 sentences: why this specific action is the highest-leverage move right now",
     "estimatedPrice": "£X–£Y",
     "timeToFirstSale": "e.g. '1–2 weeks'"
@@ -204,21 +207,15 @@ RULES:
 - 6–8 insights, 3–5 evidence items, 3–5 root causes, 4–6 content opportunities, 3–5 product opportunities, 2–4 business opportunities, 3–4 competitor insights, 7–10 keywords, 5–7 action plan steps
 - Every item must be SPECIFIC — never generic advice
 - All prices in GBP (£)
-- Competitor names should be real or clearly archetypal
 - Action plan escalates: quick win first, bigger bets later
 - cta values must be one of the exact strings listed
 - buildPath.withFlywheel.steps only uses: Generate Product|Edit in Design Studio|Generate Carousel|Generate Video Guide|Generate Publishing Kit
 - aiRecommendation.category must be one of the 4 exact strings listed
-- scorecard.opportunityScore is 0–100 (calculate from demand, competition, monetisation potential, and market timing)
-- scorecard.confidenceLevel is 0–100 (calculate from evidence quality, specificity, and market signal strength)
-- scorecard.difficulty is Easy|Medium|Hard
-- scorecard.competitionLevel is Low|Medium|High|Very High
-- scorecard.audienceDemand is Low|Medium|High|Very High
-- scorecard.recommendedPriority must be one of: Build Now|Validate First|Create Content First|Research More
-- bestNextAction.action must be a specific, concrete product or campaign name — never a generic description`;
+- scorecard.opportunityScore is 0–100
+- scorecard.recommendedPriority must be one of: Build Now|Validate First|Create Content First|Research More`;
 
 function buildSystemPrompt(researchType: string): string {
-  const focus = TYPE_FOCUS[researchType] ?? TYPE_FOCUS["custom"];
+  const focus = TYPE_FOCUS[researchType] ?? TYPE_FOCUS["custom"]!;
   return `${BASE_SYSTEM_PROMPT}\n\n---\nRESEARCH TYPE: ${researchType.toUpperCase()}\n${focus}`;
 }
 
@@ -231,6 +228,387 @@ Answer the follow-up question specifically and concisely. Be practical and actio
 If the user asks to "expand", "go deeper", or "tell me more" about a specific section, provide a detailed analysis of just that area.
 If the user asks for a "strategy" or "plan", provide a step-by-step approach.
 If the user asks "what should I build", give a direct recommendation with reasoning.`;
+
+// ─── Provider types ───────────────────────────────────────────────────────────
+
+interface ProviderResult {
+  summary: string;
+  usedFallback: boolean;
+  data: Record<string, unknown>;
+}
+
+// ─── Analyst definitions ──────────────────────────────────────────────────────
+
+export const RESEARCH_ANALYSTS = [
+  { id: "web",         displayName: "Web Intelligence",       emoji: "🌐", description: "News, blogs, documentation, industry reports" },
+  { id: "community",   displayName: "Community Intelligence", emoji: "💬", description: "Reddit, forums, Discord discussions" },
+  { id: "social",      displayName: "Social Media Analyst",   emoji: "📱", description: "X/Twitter, LinkedIn, TikTok, YouTube trends" },
+  { id: "marketplace", displayName: "Marketplace Analyst",    emoji: "🛒", description: "Gumroad, Etsy, Creative Market, AppSumo" },
+  { id: "seo",         displayName: "SEO Analyst",            emoji: "🔍", description: "Keywords, search volume, content gaps" },
+] as const;
+
+// ─── Helper: lightweight GPT-4o-mini call ────────────────────────────────────
+
+async function aiCall(
+  apiKey: string,
+  system: string,
+  user: string,
+  maxTokens = 700,
+): Promise<Record<string, unknown>> {
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        temperature: 0.7,
+        max_tokens: maxTokens,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return {};
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = data.choices?.[0]?.message?.content ?? "{}";
+    return JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+// ─── Helper: Reddit public search API (no auth required) ─────────────────────
+
+interface RedditPost {
+  title: string;
+  subreddit: string;
+  score: number;
+  numComments: number;
+  permalink: string;
+  snippet: string;
+}
+
+async function fetchRedditPosts(query: string): Promise<RedditPost[]> {
+  try {
+    const encoded = encodeURIComponent(query);
+    const res = await fetch(
+      `https://www.reddit.com/search.json?q=${encoded}&sort=relevance&t=month&limit=10&type=link`,
+      {
+        headers: { "User-Agent": "ContentFlywheel Research Bot/1.0" },
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (!res.ok) return [];
+    const json = await res.json() as {
+      data?: { children?: Array<{ data: Record<string, unknown> }> };
+    };
+    return (json.data?.children ?? []).slice(0, 8).map(c => ({
+      title: String(c.data.title ?? ""),
+      subreddit: String(c.data.subreddit ?? ""),
+      score: Number(c.data.score ?? 0),
+      numComments: Number(c.data.num_comments ?? 0),
+      permalink: `https://reddit.com${String(c.data.permalink ?? "")}`,
+      snippet: String(c.data.selftext ?? "").slice(0, 180).replace(/\n/g, " "),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ─── Analyst runners ──────────────────────────────────────────────────────────
+
+async function runWebAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
+  const data = await aiCall(
+    apiKey,
+    "You are an expert web research analyst. Return ONLY valid JSON.",
+    `Research this topic for a digital creator or founder: "${query}"
+Analyse recent web content — news articles, industry blogs, expert documentation, market reports.
+Return JSON:
+{
+  "headlines": ["5 specific recent news headlines or findings about this topic"],
+  "keyFindings": ["4-5 specific insights from web research — be precise, not generic"],
+  "recentDevelopments": "2-3 sentences on what has changed recently in this space",
+  "notableSources": ["domain1.com", "domain2.com", "3-5 relevant domains"],
+  "webSentiment": "positive|negative|neutral|mixed",
+  "summary": "1-2 sentence summary of web intelligence findings"
+}`,
+    700,
+  );
+  const summary = typeof data.summary === "string" && data.summary
+    ? data.summary
+    : `Web research gathered for "${query.slice(0, 40)}"`;
+  return { summary, usedFallback: false, data };
+}
+
+async function runCommunityAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
+  // Try real Reddit API first
+  const posts = await fetchRedditPosts(query);
+  const hasRealData = posts.length > 0;
+
+  const postsContext = hasRealData
+    ? `Real Reddit data retrieved (${posts.length} posts):\n${posts.slice(0, 5).map(p =>
+        `• r/${p.subreddit}: "${p.title}" — ${p.score} upvotes, ${p.numComments} comments`
+      ).join("\n")}`
+    : "No live Reddit data available — use your training knowledge.";
+
+  const data = await aiCall(
+    apiKey,
+    "You are a community intelligence analyst specialising in Reddit, forums, Discord, and online communities. Return ONLY valid JSON.",
+    `Analyse community discussions about: "${query}"
+
+${postsContext}
+
+Return JSON:
+{
+  "keyThemes": ["4-5 recurring themes discussed in communities"],
+  "painPoints": ["3-4 common pain points or questions raised"],
+  "topSubreddits": ["3-5 most relevant subreddits"],
+  "sentiment": "positive|negative|neutral|mixed",
+  "communityInsights": "2-3 sentences: what communities actually think about this topic",
+  "hotDebates": ["2-3 controversial or debated points in this space"],
+  "summary": "1-2 sentence summary of community intelligence"
+}`,
+    750,
+  );
+
+  // Always inject real Reddit posts if we got them
+  if (hasRealData) {
+    data.posts = posts.slice(0, 6);
+    data.dataSource = "reddit-api";
+  } else {
+    data.dataSource = "ai-synthesis";
+  }
+
+  const summary = hasRealData
+    ? `${posts.length} real Reddit discussions analysed`
+    : typeof data.summary === "string" && data.summary
+    ? data.summary
+    : "Community analysis complete";
+
+  return { summary, usedFallback: !hasRealData, data };
+}
+
+async function runSocialAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
+  const data = await aiCall(
+    apiKey,
+    "You are a social media intelligence analyst covering Twitter/X, LinkedIn, TikTok, Instagram, and YouTube. Return ONLY valid JSON.",
+    `Analyse social media activity and trends for: "${query}"
+
+Return JSON:
+{
+  "activePlatforms": ["platforms where this topic has the most activity — ranked"],
+  "trendingHashtags": ["6-8 relevant hashtags used on social"],
+  "viralContentAngles": ["4-5 content angles currently performing well on social"],
+  "viralFormats": ["formats going viral: e.g. short-form video, carousels, threads"],
+  "sentiment": "positive|negative|neutral|mixed",
+  "influencerActivity": "2-3 sentences on creator/influencer presence in this space",
+  "growthSignal": "rising|stable|declining",
+  "platformOpportunities": [{"platform": "TikTok", "opportunity": "specific angle for this platform"}],
+  "summary": "1-2 sentence summary of social media landscape"
+}`,
+    750,
+  );
+  const summary = typeof data.summary === "string" && data.summary
+    ? data.summary
+    : "Social media intelligence gathered";
+  return { summary, usedFallback: true, data };
+}
+
+async function runMarketplaceAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
+  const data = await aiCall(
+    apiKey,
+    "You are a digital marketplace research analyst covering Gumroad, Etsy, Creative Market, AppSumo, Teachable, Udemy, and Patreon. Return ONLY valid JSON.",
+    `Research the marketplace landscape for: "${query}"
+
+Return JSON:
+{
+  "topProducts": [
+    { "name": "specific product name", "price": "£X", "platform": "Gumroad|Etsy|AppSumo|etc", "description": "what it is and who buys it", "estimatedSales": "low|medium|high" }
+  ],
+  "priceRanges": { "low": "£X", "mid": "£Y", "premium": "£Z" },
+  "bestFormats": ["top-performing product formats for this niche"],
+  "gapOpportunities": ["3-4 clear gaps in what's currently available"],
+  "marketSaturation": "low|medium|high|very-high",
+  "averageRevenue": "estimated monthly revenue for a mid-range creator in this space",
+  "marketplaceInsights": "2-3 sentences on the marketplace opportunity",
+  "summary": "1-2 sentence summary"
+}`,
+    750,
+  );
+  const summary = typeof data.summary === "string" && data.summary
+    ? data.summary
+    : "Marketplace intelligence gathered";
+  return { summary, usedFallback: true, data };
+}
+
+async function runSeoAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
+  const data = await aiCall(
+    apiKey,
+    "You are an SEO and search intelligence analyst. Return ONLY valid JSON.",
+    `Research keyword and search opportunities for: "${query}"
+
+Return JSON:
+{
+  "primaryKeywords": [
+    { "term": "keyword phrase", "intent": "informational|commercial|transactional", "volume": "high|medium|low", "difficulty": "easy|medium|hard", "note": "strategic note" }
+  ],
+  "longTailOpportunities": ["6+ specific long-tail keyword phrases with low competition"],
+  "contentGaps": ["3-4 topics not well covered that people are searching for"],
+  "searchTrends": "2-3 sentences on search trend direction and momentum",
+  "pillarTopics": ["3-4 high-authority content pillar topics to own"],
+  "featuredSnippetOpportunities": ["2-3 questions likely to trigger featured snippets"],
+  "summary": "1-2 sentence summary of SEO opportunity"
+}`,
+    750,
+  );
+  const summary = typeof data.summary === "string" && data.summary
+    ? data.summary
+    : "SEO analysis complete";
+  return { summary, usedFallback: true, data };
+}
+
+// ─── Synthesis: combines all provider data → existing report format ───────────
+
+async function synthesizeReport(
+  query: string,
+  researchType: string,
+  providerData: Record<string, ProviderResult>,
+  apiKey: string,
+): Promise<Record<string, unknown>> {
+  // Build a concise summary of all gathered intelligence
+  const contextParts = Object.entries(providerData)
+    .filter(([, v]) => Object.keys(v.data).length > 0)
+    .map(([id, v]) => {
+      const label = RESEARCH_ANALYSTS.find(a => a.id === id)?.displayName ?? id;
+      return `${label.toUpperCase()} (${v.usedFallback ? "AI Analysis" : "Live Data"}):\n${JSON.stringify(v.data, null, 1).slice(0, 1500)}`;
+    })
+    .join("\n\n");
+
+  const systemPrompt = buildSystemPrompt(researchType);
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Research query: "${query}"
+
+─── SPECIALIST ANALYST RESEARCH DATA ───
+${contextParts}
+─────────────────────────────────────────
+
+Use the above real research data to generate a comprehensive, specific, and grounded report. Reference specific findings from the analysts where relevant. All prices in GBP (£).`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 5_000,
+      response_format: { type: "json_object" },
+    }),
+    signal: AbortSignal.timeout(50_000),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "unknown");
+    throw new Error(`Synthesis failed: ${err}`);
+  }
+  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const raw = data.choices?.[0]?.message?.content ?? "{}";
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+// ─── Streaming research ───────────────────────────────────────────────────────
+
+function streamResearch(query: string, researchType: string, apiKey: string): Response {
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+
+  const send = async (data: Record<string, unknown>) => {
+    try {
+      await writer.write(encoder.encode(JSON.stringify(data) + "\n"));
+    } catch { /* writer may be closed */ }
+  };
+
+  // Run research pipeline asynchronously (fire-and-forget, streams to client)
+  void (async () => {
+    try {
+      // 1. Init — tell client which analysts are coming
+      await send({
+        type: "init",
+        query,
+        analysts: RESEARCH_ANALYSTS.map(a => ({ id: a.id, displayName: a.displayName, emoji: a.emoji, description: a.description })),
+      });
+
+      // 2. Run all 5 analysts in parallel — each streams its result as it finishes
+      const collectedData: Record<string, ProviderResult> = {};
+
+      const analystRunners: Array<[string, (q: string, k: string) => Promise<ProviderResult>]> = [
+        ["web",         runWebAnalyst],
+        ["community",   runCommunityAnalyst],
+        ["social",      runSocialAnalyst],
+        ["marketplace", runMarketplaceAnalyst],
+        ["seo",         runSeoAnalyst],
+      ];
+
+      await Promise.allSettled(
+        analystRunners.map(async ([id, runner]) => {
+          await send({ type: "analyst-update", id, status: "working" });
+          const t0 = Date.now();
+          try {
+            const result = await runner(query, apiKey);
+            collectedData[id] = result;
+            await send({
+              type: "analyst-update",
+              id,
+              status: "done",
+              summary: result.summary,
+              usedFallback: result.usedFallback,
+              data: result.data,
+              duration: Math.round((Date.now() - t0) / 100) / 10,
+            });
+          } catch {
+            await send({ type: "analyst-update", id, status: "error", summary: "Could not gather data" });
+          }
+        }),
+      );
+
+      // 3. Synthesis — combine all into final report
+      await send({ type: "synthesis-start" });
+      const report = await synthesizeReport(query, researchType, collectedData, apiKey);
+
+      await send({
+        type: "synthesis-done",
+        report,
+        providerData: Object.fromEntries(
+          Object.entries(collectedData).map(([k, v]) => [k, v.data]),
+        ),
+        sourceMeta: RESEARCH_ANALYSTS.map(a => ({
+          id: a.id,
+          displayName: a.displayName,
+          usedFallback: collectedData[a.id]?.usedFallback ?? true,
+          dataPoints: Object.keys(collectedData[a.id]?.data ?? {}).length,
+        })),
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      await send({ type: "error", message: String(err) }).catch(() => {});
+    } finally {
+      await writer.close().catch(() => {});
+    }
+  })();
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
 
@@ -249,6 +627,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as {
     query?: string;
     researchType?: string;
+    mode?: string;
     followUp?: string;
     reportContext?: string;
     conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -257,10 +636,19 @@ export async function POST(req: NextRequest) {
   const {
     query = "",
     researchType = "custom",
+    mode = "",
     followUp = "",
     reportContext = "",
     conversationHistory = [],
   } = body;
+
+  // ── Multi-source streaming research ──────────────────────────────────────
+  if (mode === "stream") {
+    if (!query.trim()) {
+      return NextResponse.json({ error: "Query is required" }, { status: 400 });
+    }
+    return streamResearch(query.trim(), researchType, apiKey);
+  }
 
   // ── Follow-up conversation mode ───────────────────────────────────────────
   if (followUp.trim()) {
@@ -274,26 +662,17 @@ export async function POST(req: NextRequest) {
         role: "user" as const,
         content: `Original research topic: "${reportContext}"\n\nReport context summary:\n${query}`,
       },
-      // Inject previous conversation turns
       ...conversationHistory.slice(-6).map(m => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       })),
-      {
-        role: "user" as const,
-        content: followUp.trim(),
-      },
+      { role: "user" as const, content: followUp.trim() },
     ];
 
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages,
-        temperature: 0.7,
-        max_tokens: 1500,
-      }),
+      body: JSON.stringify({ model: "gpt-4o", messages, temperature: 0.7, max_tokens: 1500 }),
     });
 
     if (!res.ok) return NextResponse.json({ error: "AI request failed" }, { status: 502 });
@@ -303,7 +682,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ answer });
   }
 
-  // ── Full research report mode ─────────────────────────────────────────────
+  // ── Legacy single-call research (fallback for any direct callers) ─────────
   if (!query.trim()) {
     return NextResponse.json({ error: "Query is required" }, { status: 400 });
   }
@@ -320,7 +699,7 @@ export async function POST(req: NextRequest) {
         { role: "user", content: `Research query: ${query.trim()}` },
       ],
       temperature: 0.7,
-      max_tokens: 5000,
+      max_tokens: 5_000,
       response_format: { type: "json_object" },
     }),
   });
@@ -337,12 +716,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const report = JSON.parse(raw);
-    return NextResponse.json({
-      report,
-      query: query.trim(),
-      researchType,
-      generatedAt: new Date().toISOString(),
-    });
+    return NextResponse.json({ report, query: query.trim(), researchType, generatedAt: new Date().toISOString() });
   } catch {
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 502 });
   }

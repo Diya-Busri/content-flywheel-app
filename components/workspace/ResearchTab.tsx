@@ -143,6 +143,39 @@ interface ChatMessage {
 
 type ResearchState = "idle" | "loading" | "done";
 
+// ── Analyst / streaming types ─────────────────────────────────────────────────
+type AnalystStatus = "waiting" | "working" | "done" | "error";
+type SynthesisStatus = "waiting" | "working" | "done" | "error";
+
+interface AnalystState {
+  id: string;
+  displayName: string;
+  emoji: string;
+  description: string;
+  status: AnalystStatus;
+  summary?: string;
+  usedFallback?: boolean;
+  duration?: number;
+}
+
+type ProviderDataMap = Record<string, Record<string, unknown>>;
+
+interface SourceMeta {
+  id: string;
+  displayName: string;
+  usedFallback: boolean;
+  dataPoints: number;
+}
+
+interface RedditPost {
+  title: string;
+  subreddit: string;
+  score: number;
+  numComments: number;
+  permalink: string;
+  snippet: string;
+}
+
 interface ResearchTabProps {
   onTabChange?: (tab: string) => void;
 }
@@ -288,7 +321,7 @@ const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
     icon: MessageSquare,
     description: "Reddit, Discord, Skool, Quora, Indie Hackers, Hacker News",
     sources: [
-      { id: "reddit",         name: "Reddit",         description: "Subreddits, threads, and upvotes",              status: "coming-soon", provider: "reddit-api" },
+      { id: "reddit",         name: "Reddit",         description: "Subreddits, threads, and upvotes",              status: "connected",   provider: "reddit-api" },
       { id: "discord",        name: "Discord",        description: "Public server conversations and trends",         status: "coming-soon" },
       { id: "skool",          name: "Skool",          description: "Community posts and discussions",                status: "coming-soon" },
       { id: "facebook-groups",name: "Facebook Groups",description: "Niche community discussions",                   status: "coming-soon" },
@@ -1586,6 +1619,12 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Analyst streaming state
+  const [analysts, setAnalysts]         = useState<AnalystState[]>([]);
+  const [synthesisStatus, setSynthesisStatus] = useState<SynthesisStatus>("waiting");
+  const [providerData, setProviderData] = useState<ProviderDataMap>({});
+  const [sourceMeta, setSourceMeta]     = useState<SourceMeta[]>([]);
+
   // Read note → research prefill on mount
   useEffect(() => {
     try {
@@ -1637,7 +1676,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     return advancedMode;
   };
 
-  // ── Trigger search ────────────────────────────────────────────────────────
+  // ── Trigger search (NDJSON streaming) ────────────────────────────────────
   const runSearch = useCallback(async (q: string, type: string) => {
     setQuery(q);
     setActiveReportType(type);
@@ -1648,44 +1687,98 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     setChatInput("");
     setAdvancedMode(false);
     setOpenSections(new Set(["summary", "insights", "content", "product", "plan"]));
+    setAnalysts([]);
+    setSynthesisStatus("waiting");
+    setProviderData({});
+    setSourceMeta([]);
     setState("loading");
 
     try {
       const res = await fetch("/api/research/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, researchType: type }),
+        body: JSON.stringify({ query: q, researchType: type, mode: "stream" }),
       });
-      const data = await res.json() as { report?: ResearchReport; generatedAt?: string; error?: string };
-      if (!res.ok || data.error) throw new Error(data.error ?? "Unknown error");
-      const r = data.report ?? null;
-      setReport(r);
-      setGeneratedAt(data.generatedAt ?? null);
-      setState("done");
-      // Auto-save to library
-      if (r) lib.saveReport(q, type, r);
-      // Async: compare against Founder OS KB (non-blocking, admin-only)
-      void kb.search(q);
-      // Auto-save to personal user memory (all users, fire-and-forget)
-      if (r) {
-        const summaryContent = [
-          r.summary ?? "",
-          ...(r.insights ?? []).slice(0, 3),
-          r.recommendedOpportunity?.name ? `Opportunity: ${r.recommendedOpportunity.name}` : "",
-        ].filter(Boolean).join("\n\n").slice(0, 4000);
-        void fetch("/api/user-memory/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category: "research",
-            type: "report",
-            title: `Research: ${q.slice(0, 100)}`,
-            content: summaryContent,
-            source: "research",
-            tags: [q.slice(0, 50), type].filter(Boolean),
-            metadata: { query: q, researchType: type },
-          }),
-        }).catch(() => {});
+      if (!res.ok || !res.body) throw new Error("Research request failed");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const event = JSON.parse(trimmed) as Record<string, unknown>;
+            const evType = event.type as string;
+
+            if (evType === "init") {
+              const rawAnalysts = (event.analysts as Array<{id: string; displayName: string; emoji: string; description: string}> ?? []);
+              setAnalysts(rawAnalysts.map(a => ({
+                ...a,
+                status: "waiting" as AnalystStatus,
+              })));
+            } else if (evType === "analyst-update") {
+              const id = event.id as string;
+              const status = event.status as AnalystStatus;
+              setAnalysts(prev => prev.map(a =>
+                a.id === id
+                  ? { ...a, status, summary: (event.summary as string) ?? a.summary, usedFallback: (event.usedFallback as boolean) ?? a.usedFallback, duration: (event.duration as number) ?? a.duration }
+                  : a,
+              ));
+              if (status === "done" && event.data) {
+                setProviderData(prev => ({ ...prev, [id]: event.data as Record<string, unknown> }));
+              }
+            } else if (evType === "synthesis-start") {
+              setSynthesisStatus("working");
+            } else if (evType === "synthesis-done") {
+              const r = event.report as ResearchReport | undefined;
+              if (r) {
+                setReport(r);
+                setGeneratedAt((event.generatedAt as string) ?? new Date().toISOString());
+                setSourceMeta(Array.isArray(event.sourceMeta) ? (event.sourceMeta as SourceMeta[]) : []);
+                setSynthesisStatus("done");
+                setState("done");
+                // Auto-save to library
+                lib.saveReport(q, type, r);
+                // KB compare (non-blocking)
+                void kb.search(q);
+                // Auto-save to user memory
+                const summaryContent = [
+                  r.summary ?? "",
+                  ...(r.insights ?? []).slice(0, 3),
+                  r.recommendedOpportunity?.name ? `Opportunity: ${r.recommendedOpportunity.name}` : "",
+                ].filter(Boolean).join("\n\n").slice(0, 4000);
+                void fetch("/api/user-memory/save", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    category: "research",
+                    type: "report",
+                    title: `Research: ${q.slice(0, 100)}`,
+                    content: summaryContent,
+                    source: "research",
+                    tags: [q.slice(0, 50), type].filter(Boolean),
+                    metadata: { query: q, researchType: type },
+                  }),
+                }).catch(() => {});
+              }
+            } else if (evType === "error") {
+              throw new Error(String(event.message ?? "Research error"));
+            }
+          } catch (parseErr) {
+            // Skip malformed NDJSON lines (only throw real errors)
+            if (parseErr instanceof Error && parseErr.message !== "Research error") continue;
+            if (parseErr instanceof Error) throw parseErr;
+          }
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Research failed");
@@ -2027,16 +2120,21 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // LOADING STATE
+  // LOADING STATE — Analyst progress panel
   // ════════════════════════════════════════════════════════════════════════════
   if (state === "loading") {
+    const doneCount = analysts.filter(a => a.status === "done" || a.status === "error").length;
+    const totalCount = analysts.length;
+    const allAnalystsDone = totalCount > 0 && doneCount === totalCount;
+
     return (
-      <div className="max-w-3xl mx-auto py-16 space-y-10">
-        <div className="text-center space-y-3">
+      <div className="max-w-3xl mx-auto py-10 space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-2">
           <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto">
             <Sparkles className="w-6 h-6 text-orange-500 animate-pulse" />
           </div>
-          <h3 className="text-xl font-bold text-foreground">Researching your topic…</h3>
+          <h3 className="text-xl font-bold text-foreground">Your research team is working…</h3>
           <p className="text-sm text-muted-foreground italic">&ldquo;{query}&rdquo;</p>
           {activeTypeInfo.id !== "custom" && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-500 text-[12px] font-medium">
@@ -2044,25 +2142,133 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             </span>
           )}
         </div>
-        <div className="space-y-3 max-w-sm mx-auto">
-          {LOADING_STEPS.map((step, i) => (
-            <div
-              key={i}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-500",
-                i < loadingStep  ? "bg-green-500/5 border-green-500/20 text-green-600 dark:text-green-400"
-                : i === loadingStep ? "bg-orange-500/10 border-orange-500/30 text-orange-500"
-                : "bg-muted/20 border-border text-muted-foreground/40"
-              )}
-            >
-              {i < loadingStep ? <Check className="w-4 h-4 shrink-0" />
-                : i === loadingStep ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
-                : <div className="w-4 h-4 shrink-0 rounded-full border border-current opacity-30" />}
-              <span className="text-[13px] font-medium">{step.label}</span>
-            </div>
-          ))}
-        </div>
-        <p className="text-center text-[12px] text-muted-foreground/40">This usually takes 15–25 seconds for a full report</p>
+
+        {/* Analyst cards */}
+        {analysts.length > 0 ? (
+          <div className="space-y-2.5">
+            {analysts.map(analyst => (
+              <div
+                key={analyst.id}
+                className={cn(
+                  "flex items-start gap-3.5 px-4 py-3.5 rounded-xl border transition-all duration-500",
+                  analyst.status === "done"    ? "bg-green-500/5  border-green-500/20"
+                  : analyst.status === "error" ? "bg-red-500/5    border-red-500/20"
+                  : analyst.status === "working" ? "bg-orange-500/8 border-orange-500/25"
+                  : "bg-muted/20 border-border opacity-50"
+                )}
+              >
+                <div className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base transition-all",
+                  analyst.status === "working" ? "animate-pulse" : "",
+                )}>
+                  {analyst.emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className={cn(
+                      "text-[13px] font-semibold",
+                      analyst.status === "done"    ? "text-green-700 dark:text-green-300"
+                      : analyst.status === "error" ? "text-red-600 dark:text-red-400"
+                      : analyst.status === "working" ? "text-orange-600 dark:text-orange-400"
+                      : "text-muted-foreground"
+                    )}>
+                      {analyst.displayName}
+                    </p>
+                    {analyst.usedFallback === false && analyst.status === "done" && (
+                      <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-500 dark:text-blue-400 text-[9px] font-bold uppercase tracking-wider">Live Data</span>
+                    )}
+                    {analyst.duration && analyst.status === "done" && (
+                      <span className="text-[10px] text-muted-foreground/50">{analyst.duration}s</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                    {analyst.status === "working" ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        Gathering intelligence…
+                      </span>
+                    ) : analyst.status === "done" && analyst.summary ? (
+                      analyst.summary
+                    ) : analyst.status === "error" ? (
+                      "Could not gather data — using AI knowledge"
+                    ) : (
+                      analyst.description
+                    )}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {analyst.status === "done"    ? <Check    className="w-4 h-4 text-green-500" />
+                   : analyst.status === "error" ? <AlertCircle className="w-4 h-4 text-red-500/60" />
+                   : analyst.status === "working" ? <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                   : <div className="w-4 h-4 rounded-full border border-border opacity-30" />}
+                </div>
+              </div>
+            ))}
+
+            {/* Synthesis step */}
+            {(allAnalystsDone || synthesisStatus !== "waiting") && (
+              <div className={cn(
+                "flex items-center gap-3.5 px-4 py-3.5 rounded-xl border transition-all duration-500",
+                synthesisStatus === "done"    ? "bg-green-500/5  border-green-500/20"
+                : synthesisStatus === "working" ? "bg-purple-500/8 border-purple-500/25"
+                : "bg-muted/20 border-border"
+              )}>
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0 text-base">🧠</div>
+                <div className="flex-1">
+                  <p className={cn(
+                    "text-[13px] font-semibold",
+                    synthesisStatus === "done"    ? "text-green-700 dark:text-green-300"
+                    : synthesisStatus === "working" ? "text-purple-600 dark:text-purple-400"
+                    : "text-muted-foreground"
+                  )}>
+                    Senior Analyst — Synthesis
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                    {synthesisStatus === "working" ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        Combining all intelligence into your report…
+                      </span>
+                    ) : synthesisStatus === "done" ? (
+                      "Report complete!"
+                    ) : (
+                      "Waiting for analysts to finish…"
+                    )}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {synthesisStatus === "done"    ? <Check  className="w-4 h-4 text-green-500" />
+                   : synthesisStatus === "working" ? <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                   : <div className="w-4 h-4 rounded-full border border-border opacity-30" />}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Fallback while init event arrives */
+          <div className="space-y-2.5 max-w-sm mx-auto">
+            {LOADING_STEPS.map((step, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-500",
+                  i < loadingStep  ? "bg-green-500/5 border-green-500/20 text-green-600 dark:text-green-400"
+                  : i === loadingStep ? "bg-orange-500/10 border-orange-500/30 text-orange-500"
+                  : "bg-muted/20 border-border text-muted-foreground/40"
+                )}
+              >
+                {i < loadingStep ? <Check className="w-4 h-4 shrink-0" />
+                  : i === loadingStep ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                  : <div className="w-4 h-4 shrink-0 rounded-full border border-current opacity-30" />}
+                <span className="text-[13px] font-medium">{step.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-center text-[12px] text-muted-foreground/40">
+          {totalCount > 0 ? `${doneCount} of ${totalCount} analysts finished` : "Assembling your research team…"}
+        </p>
       </div>
     );
   }
@@ -2212,6 +2418,144 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
 
       {/* ── Build Path ────────────────────────────────────────────────────── */}
       {report.buildPath && <BuildPathSection buildPath={report.buildPath} router={router} onCreateProduct={handleCreateProduct} />}
+
+      {/* ── Community Intelligence (Reddit) ──────────────────────────────── */}
+      {(() => {
+        const communityData = providerData.community;
+        const posts = Array.isArray(communityData?.posts) ? (communityData.posts as RedditPost[]) : [];
+        const themes = Array.isArray(communityData?.keyThemes) ? (communityData.keyThemes as string[]) : [];
+        const painPoints = Array.isArray(communityData?.painPoints) ? (communityData.painPoints as string[]) : [];
+        const communityInsights = typeof communityData?.communityInsights === "string" ? communityData.communityInsights : null;
+        if (posts.length === 0 && themes.length === 0) return null;
+        return (
+          <Section id="community" title="Community Intelligence" icon={<MessageSquare className="w-4 h-4" />} badge={posts.length > 0 ? posts.length : undefined} open={openSections.has("community")} onToggle={toggleSection}>
+            {communityInsights && (
+              <p className="text-[13px] text-foreground/80 leading-relaxed mb-3">{communityInsights}</p>
+            )}
+            {posts.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Live Reddit Posts</p>
+                {posts.map((post, i) => (
+                  <a
+                    key={i}
+                    href={post.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-3 p-3 rounded-xl border border-border bg-background hover:border-orange-500/20 hover:bg-accent/20 transition-all no-underline group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-foreground leading-snug group-hover:text-orange-500 transition-colors">{post.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-medium text-blue-500 dark:text-blue-400">r/{post.subreddit}</span>
+                        <span className="text-[10px] text-muted-foreground/50">▲ {post.score} · 💬 {post.numComments}</span>
+                      </div>
+                      {post.snippet && <p className="text-[11px] text-muted-foreground/60 mt-1 leading-relaxed line-clamp-2">{post.snippet}</p>}
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0 mt-1 group-hover:text-orange-500 transition-colors" />
+                  </a>
+                ))}
+              </div>
+            )}
+            {themes.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Key Discussion Themes</p>
+                <div className="flex flex-wrap gap-2">
+                  {themes.map((theme, i) => (
+                    <span key={i} className="px-2.5 py-1 rounded-lg bg-blue-500/8 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] font-medium">{theme}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {painPoints.length > 0 && (
+              <div className="space-y-1.5 mt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Community Pain Points</p>
+                {painPoints.map((pain, i) => (
+                  <div key={i} className="flex items-start gap-2 text-[12px] text-foreground/80">
+                    <span className="text-red-500 shrink-0 mt-0.5">•</span>
+                    {pain}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+        );
+      })()}
+
+      {/* ── Marketplace Intelligence ──────────────────────────────────────── */}
+      {(() => {
+        const mpData = providerData.marketplace;
+        const topProducts = Array.isArray(mpData?.topProducts) ? (mpData.topProducts as Array<{name: string; price: string; platform: string; description: string; estimatedSales: string}>) : [];
+        const gapOpportunities = Array.isArray(mpData?.gapOpportunities) ? (mpData.gapOpportunities as string[]) : [];
+        const priceRanges = mpData?.priceRanges as Record<string, string> | undefined;
+        const mpInsights = typeof mpData?.marketplaceInsights === "string" ? mpData.marketplaceInsights : null;
+        if (topProducts.length === 0 && gapOpportunities.length === 0) return null;
+        return (
+          <Section id="marketplace" title="Marketplace Intelligence" icon={<ShoppingBag className="w-4 h-4" />} badge={topProducts.length > 0 ? topProducts.length : undefined} open={openSections.has("marketplace")} onToggle={toggleSection}>
+            {mpInsights && <p className="text-[13px] text-foreground/80 leading-relaxed mb-3">{mpInsights}</p>}
+            {priceRanges && (
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {Object.entries(priceRanges).map(([tier, price]) => (
+                  <div key={tier} className="text-center p-3 rounded-xl border border-border bg-background">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 capitalize">{tier}</p>
+                    <p className="text-[16px] font-bold text-green-600 dark:text-green-400 mt-0.5">{price}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {topProducts.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Top Products Identified</p>
+                {topProducts.map((product, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-background">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-foreground">{product.name}</p>
+                      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{product.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-500 dark:text-purple-400 text-[10px] font-bold">{product.platform}</span>
+                      <span className="text-[13px] font-bold text-green-600 dark:text-green-400">{product.price}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {gapOpportunities.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Market Gaps Identified</p>
+                {gapOpportunities.map((gap, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-green-500/5 border border-green-500/10">
+                    <Lightbulb className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-foreground/80">{gap}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+        );
+      })()}
+
+      {/* ── Sources Used ─────────────────────────────────────────────────── */}
+      {sourceMeta.length > 0 && (
+        <div className="flex flex-wrap gap-2 py-2 border-t border-border/50">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40 self-center mr-1">Sources</span>
+          {sourceMeta.map(src => (
+            <span
+              key={src.id}
+              title={src.usedFallback ? "AI analysis (no live API)" : `${src.dataPoints} data points from live API`}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border",
+                src.usedFallback
+                  ? "bg-muted/30 border-border text-muted-foreground/60"
+                  : "bg-blue-500/8 border-blue-500/20 text-blue-600 dark:text-blue-400"
+              )}
+            >
+              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", src.usedFallback ? "bg-muted-foreground/30" : "bg-blue-400")} />
+              {src.displayName}
+              {!src.usedFallback && <span className="opacity-60">· Live</span>}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* ── Launch Roadmap ────────────────────────────────────────────────── */}
       <LaunchRoadmap router={router} />
