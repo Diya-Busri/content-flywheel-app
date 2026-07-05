@@ -73,7 +73,14 @@ export async function GET(request: NextRequest) {
   const allUserIds = Array.from(new Set(rows.map((r) => r.userId)));
   const sellerProfileRows = allUserIds.length > 0
     ? await db
-        .select({ userId: profilesTable.userId, membership: profilesTable.membership, status: profilesTable.status, email: profilesTable.email })
+        .select({
+          userId: profilesTable.userId,
+          membership: profilesTable.membership,
+          status: profilesTable.status,
+          email: profilesTable.email,
+          hiddenFromMarketplace: profilesTable.hiddenFromMarketplace,
+          deletedAt: profilesTable.deletedAt,
+        })
         .from(profilesTable)
         .where(inArray(profilesTable.userId, allUserIds))
     : [];
@@ -84,6 +91,8 @@ export async function GET(request: NextRequest) {
   const activeSellerIds = new Set(
     sellerProfileRows
       .filter((p) => {
+        // Never show products from hidden or deleted creators
+        if (p.hiddenFromMarketplace || p.deletedAt) return false;
         const isAdminUser = adminEmail.length > 0 && (p.email ?? "").trim().toLowerCase() === adminEmail;
         return isAdminUser || isSellerActive(p);
       })

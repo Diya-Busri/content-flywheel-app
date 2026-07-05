@@ -14,6 +14,8 @@ type ModerationAction =
   | "restore"       // restore hidden/suspended/removed/archived product
   | "archive"       // archive (unpublish without deleting)
   | "remove"        // admin soft-delete (disappears from marketplace; only admin can see/restore)
+  | "unpublish"     // admin un-publishes from native store (creator can re-publish)
+  | "duplicate"     // clone product into creator's library (admin convenience)
   | "feature"       // feature on homepage (pinnedHomepage = true)
   | "unfeature"     // remove from featured homepage
   | "staff-pick"    // mark as Staff Pick
@@ -236,6 +238,46 @@ export async function PATCH(
         updatedAt: now,
       }).where(eq(productsTable.id, id));
       return NextResponse.json({ ok: true, action });
+    }
+
+    case "unpublish": {
+      // Admin un-publishes from native store; creator can re-publish from their library
+      const updatedMa: MarketingAssets = { ...ma, isNativePublished: false };
+      await db.update(productsTable).set({
+        marketingAssets: updatedMa,
+        updatedAt: now,
+      }).where(eq(productsTable.id, id));
+      return NextResponse.json({ ok: true, action, isNativePublished: false });
+    }
+
+    case "duplicate": {
+      // Clone the product into the same creator's library
+      const [original] = await db
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.id, id))
+        .limit(1);
+      if (!original) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+
+      const clonedMa: MarketingAssets = { ...(original.marketingAssets as MarketingAssets), isNativePublished: false };
+      const newId = crypto.randomUUID();
+      await db.insert(productsTable).values({
+        id:              newId,
+        title:           `Copy of ${original.title}`,
+        niche:           original.niche,
+        format:          original.format,
+        userId:          original.userId,
+        marketingAssets: clonedMa,
+        status:          original.status,
+        // Admin fields reset to clean slate
+        moderationStatus: null,
+        removedAt:        null,
+        archivedAt:       null,
+        staffPick:        false,
+        pinnedHomepage:   false,
+        adminNotes:       null,
+      });
+      return NextResponse.json({ ok: true, action, newProductId: newId });
     }
 
     default: {

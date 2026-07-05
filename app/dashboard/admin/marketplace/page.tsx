@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Search, Filter, MoreVertical, Eye, EyeOff, Archive, Trash2,
   RefreshCw, Star, Pin, PinOff, Edit3, AlertTriangle, Shield,
-  ShieldOff, TrendingUp, Package, ChevronLeft, ChevronRight,
-  X, Check, Loader2, StickyNote, ExternalLink, BarChart3,
-  Users, Crown,
+  ShieldOff, Package, ChevronLeft, ChevronRight,
+  X, Check, Loader2, StickyNote, ExternalLink,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,15 +46,43 @@ type ModerationAction =
   | "feature" | "unfeature" | "staff-pick" | "unstaff-pick"
   | "pin" | "unpin" | "edit-metadata" | "add-note";
 
-type StatusTab = "all" | "published" | "hidden" | "archived" | "removed" | "suspended";
+type StatusTab = "all" | "published" | "hidden" | "archived" | "removed" | "suspended" | "featured";
 
 const STATUS_TABS: { id: StatusTab; label: string; color: string }[] = [
   { id: "all",       label: "All",       color: "text-foreground" },
   { id: "published", label: "Published", color: "text-emerald-600 dark:text-emerald-400" },
+  { id: "featured",  label: "Featured",  color: "text-amber-500 dark:text-amber-400" },
   { id: "hidden",    label: "Hidden",    color: "text-amber-600 dark:text-amber-400" },
   { id: "suspended", label: "Suspended", color: "text-orange-600 dark:text-orange-400" },
   { id: "archived",  label: "Archived",  color: "text-muted-foreground" },
   { id: "removed",   label: "Removed",   color: "text-red-600 dark:text-red-400" },
+];
+
+// ─── Creator types (for Creators tab) ────────────────────────────────────────
+
+interface AdminCreator {
+  userId: string;
+  email: string | null;
+  membership: string;
+  status: string | null;
+  hiddenFromMarketplace: boolean;
+  deletedAt: string | null;
+  productCount: number;
+  publishedCount: number;
+  isDeleted: boolean;
+  isSuspended: boolean;
+  createdAt: string;
+  lastActiveAt: string | null;
+}
+
+type CreatorStatusTab = "all" | "active" | "suspended" | "hidden" | "deleted";
+
+const CREATOR_STATUS_TABS: { id: CreatorStatusTab; label: string; color: string }[] = [
+  { id: "all",       label: "All",       color: "text-foreground" },
+  { id: "active",    label: "Active",    color: "text-emerald-600 dark:text-emerald-400" },
+  { id: "suspended", label: "Suspended", color: "text-orange-600 dark:text-orange-400" },
+  { id: "hidden",    label: "Hidden",    color: "text-amber-600 dark:text-amber-400" },
+  { id: "deleted",   label: "Deleted",   color: "text-red-600 dark:text-red-400" },
 ];
 
 const FORMAT_EMOJI: Record<string, string> = {
@@ -413,18 +441,34 @@ export default function AdminMarketplacePage() {
 
   const [toast, setToast]           = useState<{ msg: string; ok: boolean } | null>(null);
 
+  // ── Section toggle (Products / Creators) ─────────────────────────────
+  const [section, setSection]         = useState<"products" | "creators">("products");
+
+  // ── Creators tab state ────────────────────────────────────────────────
+  const [creators, setCreators]               = useState<AdminCreator[]>([]);
+  const [creatorsTotal, setCreatorsTotal]     = useState(0);
+  const [creatorsTotalPages, setCreatorsTotalPages] = useState(1);
+  const [creatorsLoading, setCreatorsLoading] = useState(false);
+  const [creatorsPage, setCreatorsPage]       = useState(1);
+  const [creatorsStatusTab, setCreatorsStatusTab] = useState<CreatorStatusTab>("all");
+  const [creatorsQ, setCreatorsQ]             = useState("");
+  const [creatorsQInput, setCreatorsQInput]   = useState("");
+  const [creatorActionBusy, setCreatorActionBusy] = useState(false);
+
   // ── Fetch products ────────────────────────────────────────────────────
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const isFeaturedTab = statusTab === "featured";
       const params = new URLSearchParams({
-        status: statusTab,
+        status: isFeaturedTab ? "all" : statusTab,
         sort,
         page: String(page),
         pageSize: "40",
         ...(q     && { q }),
         ...(niche && { niche }),
+        ...(isFeaturedTab && { featured: "1" }),
       });
       const res  = await fetch(`/api/admin/marketplace?${params.toString()}`);
       const json = await res.json() as {
@@ -448,6 +492,60 @@ export default function AdminMarketplacePage() {
   }, [statusTab, q, niche, sort, page]);
 
   useEffect(() => { void fetchProducts(); }, [fetchProducts]);
+
+  // ── Fetch creators ────────────────────────────────────────────────────
+  const fetchCreators = useCallback(async () => {
+    setCreatorsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        status: creatorsStatusTab,
+        page: String(creatorsPage),
+        pageSize: "40",
+        ...(creatorsQ && { q: creatorsQ }),
+      });
+      const res  = await fetch(`/api/admin/creators?${params.toString()}`);
+      const json = await res.json() as {
+        creators?: AdminCreator[];
+        total?: number;
+        totalPages?: number;
+        error?: string;
+      };
+      setCreators(json.creators ?? []);
+      setCreatorsTotal(json.total ?? 0);
+      setCreatorsTotalPages(json.totalPages ?? 1);
+    } catch {
+      // ignore — handled by empty state
+    } finally {
+      setCreatorsLoading(false);
+    }
+  }, [creatorsStatusTab, creatorsPage, creatorsQ]);
+
+  useEffect(() => {
+    if (section === "creators") void fetchCreators();
+  }, [fetchCreators, section]);
+
+  // ── Creator moderation action ─────────────────────────────────────────
+  const performCreatorAction = useCallback(async (
+    userId: string,
+    action: "suspend" | "activate" | "hide" | "unhide" | "delete" | "restore"
+  ) => {
+    setCreatorActionBusy(true);
+    try {
+      const res  = await fetch(`/api/admin/creators/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Action failed");
+      showToast(`Creator: ${action} done.`);
+      void fetchCreators();
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : "Action failed", false);
+    } finally {
+      setCreatorActionBusy(false);
+    }
+  }, [fetchCreators]);
 
   // ── Search submit ─────────────────────────────────────────────────────
   const submitSearch = () => { setQ(qInput); setPage(1); };
@@ -644,22 +742,230 @@ export default function AdminMarketplacePage() {
                 <Shield className="w-5 h-5 text-orange-500" />
                 Marketplace Moderation
               </h1>
-              <p className="text-sm text-muted-foreground mt-0.5">{total.toLocaleString()} products</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {section === "products" ? `${total.toLocaleString()} products` : `${creatorsTotal.toLocaleString()} creators`}
+              </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void fetchProducts()}
-              className="gap-1.5"
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* Section toggle */}
+              <div className="flex items-center bg-muted/40 rounded-lg p-0.5 border border-border">
+                <button
+                  onClick={() => setSection("products")}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-all", section === "products" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+                >
+                  <Package className="w-3.5 h-3.5" /> Products
+                </button>
+                <button
+                  onClick={() => setSection("creators")}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-all", section === "creators" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+                >
+                  <Users className="w-3.5 h-3.5" /> Creators
+                </button>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => section === "products" ? void fetchProducts() : void fetchCreators()}
+                className="gap-1.5"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", (loading || creatorsLoading) && "animate-spin")} />
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-[1400px] mx-auto px-6 py-6 space-y-5">
+
+        {/* ── Creators Section ──────────────────────────────────────────────── */}
+        {section === "creators" && (
+          <>
+            {/* Creator status tabs */}
+            <div className="flex items-center gap-1 bg-muted/40 rounded-xl p-1 w-fit border border-border">
+              {CREATOR_STATUS_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => { setCreatorsStatusTab(tab.id); setCreatorsPage(1); }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all",
+                    creatorsStatusTab === tab.id
+                      ? "bg-background shadow-sm " + tab.color
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Creator search */}
+            <div className="flex items-center gap-2 max-w-md">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  value={creatorsQInput}
+                  onChange={(e) => setCreatorsQInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { setCreatorsQ(creatorsQInput); setCreatorsPage(1); } }}
+                  placeholder="Search by email or user ID…"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+              </div>
+              <Button size="sm" onClick={() => { setCreatorsQ(creatorsQInput); setCreatorsPage(1); }} className="bg-orange-500 hover:bg-orange-600 text-white shrink-0">Search</Button>
+            </div>
+
+            {/* Creator table */}
+            <div className="rounded-2xl border border-border bg-background overflow-hidden">
+              {creatorsLoading ? (
+                <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Loading creators…</span>
+                </div>
+              ) : creators.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                  <Users className="w-10 h-10 opacity-30" />
+                  <p className="text-sm">No creators found.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Creator</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Products</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Marketplace</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Joined</th>
+                        <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {creators.map((creator) => {
+                        const isDeleted   = !!creator.deletedAt;
+                        const isSuspended = creator.isSuspended;
+                        const isHidden    = creator.hiddenFromMarketplace && !isDeleted;
+                        const statusLabel = isDeleted ? "Deleted" : isSuspended ? "Suspended" : "Active";
+                        const statusColor = isDeleted
+                          ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                          : isSuspended
+                            ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+
+                        return (
+                          <tr key={creator.userId} className={cn("border-b border-border/40 hover:bg-accent/20 transition-colors", isDeleted && "opacity-60")}>
+                            <td className="px-4 py-3">
+                              <p className="text-[13px] font-semibold text-foreground truncate max-w-[220px]">{creator.email ?? creator.userId}</p>
+                              <p className="text-[10px] text-muted-foreground capitalize">{creator.membership} · {creator.userId.slice(0, 12)}…</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold", statusColor)}>
+                                {statusLabel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-[13px] text-foreground">{creator.publishedCount} published</p>
+                              <p className="text-[10px] text-muted-foreground">{creator.productCount} total</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              {isHidden ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                  <EyeOff className="w-3 h-3" /> Hidden
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                  <Eye className="w-3 h-3" /> Visible
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-[11px] text-muted-foreground">
+                              {new Date(creator.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <a href={`/c/${creator.userId}`} target="_blank" rel="noreferrer"
+                                  className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors inline-flex items-center"
+                                  title="Open store">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                                {!isDeleted && !isSuspended && (
+                                  <button
+                                    disabled={creatorActionBusy}
+                                    onClick={() => void performCreatorAction(creator.userId, "suspend")}
+                                    className="p-1.5 rounded-lg hover:bg-accent text-orange-500 hover:text-orange-600 transition-colors"
+                                    title="Suspend creator">
+                                    <ShieldOff className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {isSuspended && (
+                                  <button
+                                    disabled={creatorActionBusy}
+                                    onClick={() => void performCreatorAction(creator.userId, "activate")}
+                                    className="p-1.5 rounded-lg hover:bg-accent text-emerald-500 hover:text-emerald-600 transition-colors"
+                                    title="Activate creator">
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {!isDeleted && !isHidden && (
+                                  <button
+                                    disabled={creatorActionBusy}
+                                    onClick={() => void performCreatorAction(creator.userId, "hide")}
+                                    className="p-1.5 rounded-lg hover:bg-accent text-amber-500 hover:text-amber-600 transition-colors"
+                                    title="Hide from marketplace">
+                                    <EyeOff className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {isHidden && (
+                                  <button
+                                    disabled={creatorActionBusy}
+                                    onClick={() => void performCreatorAction(creator.userId, "unhide")}
+                                    className="p-1.5 rounded-lg hover:bg-accent text-emerald-500 hover:text-emerald-600 transition-colors"
+                                    title="Show in marketplace">
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {isDeleted ? (
+                                  <button
+                                    disabled={creatorActionBusy}
+                                    onClick={() => void performCreatorAction(creator.userId, "restore")}
+                                    className="p-1.5 rounded-lg hover:bg-accent text-emerald-500 hover:text-emerald-600 transition-colors"
+                                    title="Restore deleted creator">
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    disabled={creatorActionBusy}
+                                    onClick={() => void performCreatorAction(creator.userId, "delete")}
+                                    className="p-1.5 rounded-lg hover:bg-accent text-red-500 hover:text-red-600 transition-colors"
+                                    title="Delete creator">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Creator pagination */}
+            {!creatorsLoading && creatorsTotalPages > 1 && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Page {creatorsPage} of {creatorsTotalPages} ({creatorsTotal} creators)</span>
+                <div className="flex items-center gap-2">
+                  <button disabled={creatorsPage <= 1} onClick={() => setCreatorsPage((p) => p - 1)} className="p-1.5 rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+                  <button disabled={creatorsPage >= creatorsTotalPages} onClick={() => setCreatorsPage((p) => p + 1)} className="p-1.5 rounded-lg border border-border hover:bg-accent disabled:opacity-40 transition-colors"><ChevronRight className="w-4 h-4" /></button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Products Section ──────────────────────────────────────────────── */}
+        {section === "products" && (<>
 
         {/* Status Tabs */}
         <div className="flex items-center gap-1 bg-muted/40 rounded-xl p-1 w-fit border border-border">
@@ -786,6 +1092,8 @@ export default function AdminMarketplacePage() {
             </div>
           </div>
         )}
+
+        </>)} {/* end products section */}
       </div>
     </div>
   );

@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   const page     = Math.max(1, parseInt(sp.get("page") ?? "1") || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(sp.get("pageSize") ?? "30") || 30));
   const offset   = (page - 1) * pageSize;
+  const featuredOnly = sp.get("featured") === "1";
 
   // ── Build WHERE conditions ────────────────────────────────────────────────
   const conditions: ReturnType<typeof eq>[] = [];
@@ -67,6 +68,16 @@ export async function GET(request: NextRequest) {
   // Niche filter
   if (niche) {
     conditions.push(ilike(productsTable.niche, `%${niche}%`) as ReturnType<typeof eq>);
+  }
+
+  // Featured filter — staff picks OR homepage-pinned
+  if (featuredOnly) {
+    conditions.push(
+      or(
+        eq(productsTable.staffPick, true),
+        eq(productsTable.pinnedHomepage, true),
+      ) as ReturnType<typeof eq>
+    );
   }
 
   // ── Fetch products ─────────────────────────────────────────────────────────

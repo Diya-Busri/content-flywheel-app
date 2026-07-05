@@ -94,7 +94,9 @@ function StarRow({ rating, count, size = 13 }: { rating: number; count: number; 
 
 // ─── Admin: confirm modal ─────────────────────────────────────────────────────
 
-type AdminAction = "feature" | "unfeature" | "staff-pick" | "unstaff-pick" | "pin" | "unpin" | "hide" | "archive" | "restore" | "remove";
+type AdminAction = "feature" | "unfeature" | "staff-pick" | "unstaff-pick" | "pin" | "unpin" | "hide" | "archive" | "restore" | "remove" | "unpublish" | "duplicate";
+
+type CreatorAdminAction = "suspend" | "activate" | "hide" | "unhide" | "delete";
 
 interface AdminConfirmModalProps {
   action: AdminAction;
@@ -113,7 +115,9 @@ const ADMIN_ACTION_META: Record<AdminAction, { label: string; description: strin
   "unstaff-pick": { label: "Remove Staff Pick", description: "The Staff Pick badge will be removed from this product.", danger: false, icon: <StarIcon style={{ width: "18px", height: "18px" }} /> },
   pin:          { label: "Pin to homepage", description: "This product will appear pinned at the top of the marketplace homepage.", danger: false, icon: <Pin style={{ width: "18px", height: "18px" }} /> },
   unpin:        { label: "Unpin from homepage", description: "This product will no longer be pinned to the homepage.", danger: false, icon: <PinOff style={{ width: "18px", height: "18px" }} /> },
-  restore:      { label: "Restore product", description: "This product will be restored and made visible in the marketplace.", danger: false, icon: <RotateCcw style={{ width: "18px", height: "18px" }} /> },
+  restore:      { label: "Restore product",   description: "This product will be restored and made visible in the marketplace.", danger: false, icon: <RotateCcw style={{ width: "18px", height: "18px" }} /> },
+  unpublish:    { label: "Unpublish product",  description: "This product will be unpublished from the native store but remain in the creator's library.", danger: false, icon: <EyeOff style={{ width: "18px", height: "18px" }} /> },
+  duplicate:    { label: "Duplicate product",  description: "A copy of this product will be created in the creator's library.", danger: false, icon: <Eye style={{ width: "18px", height: "18px" }} /> },
 };
 
 function AdminConfirmModal({ action, productTitle, onConfirm, onCancel }: AdminConfirmModalProps) {
@@ -200,12 +204,14 @@ function AdminActionsMenu({ item, onAction }: AdminActionsMenuProps) {
     onAction(item.id, action);
   };
 
-  const actions: Array<{ action: AdminAction; label: string; icon: React.ReactNode; color: string; sep?: boolean }> = [
-    { action: "feature",      label: item.featured ? "Unfeature" : "Feature Product", icon: <Pin style={{ width: "13px", height: "13px" }} />, color: "#7c3aed" },
-    { action: "staff-pick",   label: "Toggle Staff Pick", icon: <StarIcon style={{ width: "13px", height: "13px" }} />, color: "#f59e0b" },
-    { action: "hide",         label: "Hide Product",    icon: <EyeOff style={{ width: "13px", height: "13px" }} />, color: "#ef4444", sep: true },
-    { action: "archive",      label: "Archive Product", icon: <Archive style={{ width: "13px", height: "13px" }} />, color: "#f97316" },
-    { action: "remove",       label: "Delete Product",  icon: <Trash2 style={{ width: "13px", height: "13px" }} />, color: "#dc2626" },
+  const actions: Array<{ action: AdminAction; label: string; icon: React.ReactNode; color: string; sep?: boolean; href?: string }> = [
+    { action: "unpublish",    label: "Unpublish",        icon: <EyeOff style={{ width: "13px", height: "13px" }} />, color: "#6b7280" },
+    { action: "feature",      label: item.featured ? "Unfeature" : "Feature",        icon: <Pin style={{ width: "13px", height: "13px" }} />, color: "#7c3aed" },
+    { action: "staff-pick",   label: "Toggle Staff Pick",icon: <StarIcon style={{ width: "13px", height: "13px" }} />, color: "#f59e0b" },
+    { action: "duplicate",    label: "Duplicate Product",icon: <RotateCcw style={{ width: "13px", height: "13px" }} />, color: "#374151" },
+    { action: "hide",         label: "Hide from Marketplace", icon: <EyeOff style={{ width: "13px", height: "13px" }} />, color: "#ef4444", sep: true },
+    { action: "archive",      label: "Archive",          icon: <Archive style={{ width: "13px", height: "13px" }} />, color: "#f97316" },
+    { action: "remove",       label: "Delete Product",   icon: <Trash2 style={{ width: "13px", height: "13px" }} />, color: "#dc2626" },
   ];
 
   return (
@@ -249,30 +255,25 @@ function AdminActionsMenu({ item, onAction }: AdminActionsMenuProps) {
 
           {/* Quick nav links */}
           <div style={{ padding: "4px 0", borderBottom: "1px solid #f3f4f6" }}>
-            <a
-              href={`/product/${item.id}`}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: "#374151", textDecoration: "none", fontWeight: 500 }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#f9fafb"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
-            >
-              <Eye style={{ width: "13px", height: "13px", color: "#9ca3af" }} /> View Product
-              <ExternalLink style={{ width: "11px", height: "11px", color: "#d1d5db", marginLeft: "auto" }} />
-            </a>
-            <a
-              href={`/dashboard/admin/marketplace`}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: "#374151", textDecoration: "none", fontWeight: 500 }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#f9fafb"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
-            >
-              <Edit3 style={{ width: "13px", height: "13px", color: "#9ca3af" }} /> Admin Dashboard
-              <ExternalLink style={{ width: "11px", height: "11px", color: "#d1d5db", marginLeft: "auto" }} />
-            </a>
+            {[
+              { href: `/product/${item.id}`, icon: <Eye style={{ width: "13px", height: "13px", color: "#9ca3af" }} />, label: "View Product" },
+              { href: `/dashboard/digital-products/${item.id}/edit`, icon: <Edit3 style={{ width: "13px", height: "13px", color: "#9ca3af" }} />, label: "Edit Product" },
+              { href: `/dashboard/admin/marketplace`, icon: <Shield style={{ width: "13px", height: "13px", color: "#9ca3af" }} />, label: "Admin Dashboard" },
+            ].map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: "#374151", textDecoration: "none", fontWeight: 500 }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#f9fafb"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
+              >
+                {link.icon} {link.label}
+                <ExternalLink style={{ width: "11px", height: "11px", color: "#d1d5db", marginLeft: "auto" }} />
+              </a>
+            ))}
           </div>
 
           {/* Action buttons */}
@@ -301,6 +302,176 @@ function AdminActionsMenu({ item, onAction }: AdminActionsMenuProps) {
           <div style={{ background: done ? "#16a34a" : "#1f1f2e", color: "#fff", borderRadius: "12px", padding: "10px 20px", fontSize: "13px", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.25)", opacity: 1, animation: "fadeInScale 0.15s ease" }}>
             {done ? <Check style={{ width: "14px", height: "14px" }} /> : <Loader2 style={{ width: "14px", height: "14px", animation: "spin 0.8s linear infinite" }} />}
             {done ? "Done" : "Updating…"}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+// ─── Creator admin confirm modal ──────────────────────────────────────────────
+
+interface CreatorAdminConfirmProps {
+  action: CreatorAdminAction;
+  creatorEmail: string;
+  deleteProducts: boolean;
+  setDeleteProducts: (v: boolean) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+const CREATOR_ACTION_META: Record<CreatorAdminAction, { label: string; description: string; danger: boolean }> = {
+  suspend:  { label: "Suspend creator",               description: "Their account will be suspended and products removed from the marketplace.",        danger: true  },
+  activate: { label: "Activate creator",              description: "Their account will be restored to active status.",                                  danger: false },
+  hide:     { label: "Hide from marketplace",         description: "All their products will be hidden from the marketplace. The account stays intact.", danger: true  },
+  unhide:   { label: "Show in marketplace",           description: "Their products will become visible in the marketplace again.",                       danger: false },
+  delete:   { label: "Delete creator",                description: "The account will be soft-deleted and removed from the marketplace.",                danger: true  },
+};
+
+function CreatorAdminConfirmModal({ action, creatorEmail, deleteProducts, setDeleteProducts, onConfirm, onCancel }: CreatorAdminConfirmProps) {
+  const meta = CREATOR_ACTION_META[action];
+  return createPortal(
+    <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(3px)", padding: "20px" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: "18px", padding: "28px 28px 24px", maxWidth: "440px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: meta.danger ? "#fef2f2" : "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", color: meta.danger ? "#dc2626" : "#16a34a", marginBottom: "16px" }}>
+          <Shield style={{ width: "22px", height: "22px" }} />
+        </div>
+        <h3 style={{ margin: "0 0 6px", fontSize: "17px", fontWeight: 700, color: "#111827" }}>{meta.label}</h3>
+        <p style={{ margin: "0 0 10px", fontSize: "13px", color: "#6b7280" }}>{meta.description}</p>
+        <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#374151", fontWeight: 600, background: "#f9fafb", padding: "8px 12px", borderRadius: "8px", border: "1px solid #f3f4f6" }}>
+          {creatorEmail}
+        </p>
+        {action === "delete" && (
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#374151", marginBottom: "20px", cursor: "pointer" }}>
+            <input type="checkbox" checked={deleteProducts} onChange={(e) => setDeleteProducts(e.target.checked)} style={{ width: "16px", height: "16px", cursor: "pointer" }} />
+            Also delete all their products
+          </label>
+        )}
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "none", background: meta.danger ? "#dc2626" : "#16a34a", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+            {meta.label}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ─── Creator admin actions menu ───────────────────────────────────────────────
+
+interface CreatorAdminMenuProps {
+  creator: RecommendedCreator;
+  onAction: (creatorId: string, creatorEmail: string, action: CreatorAdminAction) => void;
+}
+
+function CreatorAdminMenu({ creator, onAction }: CreatorAdminMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos]   = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top = spaceBelow > 220 ? rect.bottom + 4 : rect.top - 220 - 4;
+      setPos({ top, left: Math.min(rect.left, window.innerWidth - 200) });
+    }
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (btnRef.current && btnRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const trigger = (action: CreatorAdminAction) => {
+    setOpen(false);
+    onAction(creator.userId, creator.displayName, action);
+  };
+
+  const menuItems: Array<{ action: CreatorAdminAction; label: string; color: string; sep?: boolean }> = [
+    { action: "suspend",  label: "Suspend Creator",          color: "#ef4444", sep: true },
+    { action: "activate", label: "Activate Creator",         color: "#16a34a" },
+    { action: "hide",     label: "Hide from Marketplace",    color: "#f97316" },
+    { action: "unhide",   label: "Show in Marketplace",      color: "#6b7280" },
+    { action: "delete",   label: "Delete Creator",           color: "#dc2626", sep: true },
+  ];
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={openMenu}
+        title="Admin: creator actions"
+        style={{
+          position: "absolute", top: "8px", left: "8px", zIndex: 20,
+          background: "rgba(15,15,25,0.85)", backdropFilter: "blur(6px)",
+          border: "1px solid rgba(255,255,255,0.15)", borderRadius: "7px",
+          color: "#fff", width: "26px", height: "26px", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 0, transition: "background 0.15s",
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.9)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(15,15,25,0.85)"; }}
+      >
+        <Shield style={{ width: "12px", height: "12px" }} />
+      </button>
+
+      {open && createPortal(
+        <div style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 99998, background: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", width: "200px", overflow: "hidden", animation: "fadeInScale 0.12s cubic-bezier(.4,0,.2,1)" }}>
+          {/* Header */}
+          <div style={{ padding: "8px 12px 6px", borderBottom: "1px solid #f3f4f6" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "1px" }}>
+              <Shield style={{ width: "11px", height: "11px", color: "#f97316" }} />
+              <span style={{ fontSize: "10px", fontWeight: 800, color: "#f97316", textTransform: "uppercase", letterSpacing: "0.06em" }}>Creator Actions</span>
+            </div>
+            <p style={{ margin: 0, fontSize: "10px", color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{creator.displayName}</p>
+          </div>
+
+          {/* Nav links */}
+          <div style={{ padding: "4px 0", borderBottom: "1px solid #f3f4f6" }}>
+            {[
+              { href: `/marketplace/creator/${creator.userId}`, label: "View Profile" },
+              { href: `/c/${creator.userId}`, label: "Open Store" },
+              { href: `/dashboard/admin/marketplace`, label: "Admin Panel" },
+            ].map((link) => (
+              <a key={link.href} href={link.href} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: "#374151", textDecoration: "none", fontWeight: 500 }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#f9fafb"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
+              >
+                {link.label}
+                <ExternalLink style={{ width: "11px", height: "11px", color: "#d1d5db", marginLeft: "auto" }} />
+              </a>
+            ))}
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ padding: "4px 0" }}>
+            {menuItems.map((item) => (
+              <div key={item.action}>
+                {item.sep && <div style={{ height: "1px", background: "#f3f4f6", margin: "3px 0" }} />}
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); trigger(item.action); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: item.color, fontWeight: 600, background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#f9fafb"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                >
+                  {item.label}
+                </button>
+              </div>
+            ))}
           </div>
         </div>,
         document.body
@@ -338,6 +509,8 @@ function ProductCard({
   onNicheClick,
   isAdmin,
   onAdminAction,
+  isSelected,
+  onSelect,
 }: {
   item: MarketplaceItem;
   inWishlist: boolean;
@@ -346,6 +519,8 @@ function ProductCard({
   onNicheClick: (niche: string) => void;
   isAdmin?: boolean;
   onAdminAction?: (productId: string, action: AdminAction) => void;
+  isSelected?: boolean;
+  onSelect?: (productId: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const isFree = item.nativePrice === 0;
@@ -444,6 +619,24 @@ function ProductCard({
           {/* Admin ⋮ button — portal-rendered dropdown, not clipped by overflow:hidden */}
           {isAdmin && onAdminAction && (
             <AdminActionsMenu item={item} onAction={onAdminAction} />
+          )}
+
+          {/* Admin bulk-select checkbox */}
+          {isAdmin && onSelect && (
+            <div
+              role="checkbox"
+              aria-checked={!!isSelected}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelect(item.id); }}
+              style={{
+                position: "absolute", top: "8px", left: "8px", width: "22px", height: "22px",
+                background: isSelected ? "#f97316" : "rgba(0,0,0,0.45)",
+                border: `2px solid ${isSelected ? "#f97316" : "rgba(255,255,255,0.75)"}`,
+                borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", zIndex: 15, transition: "all 0.15s",
+              }}
+            >
+              {isSelected && <Check style={{ width: "12px", height: "12px", color: "#fff", pointerEvents: "none" }} />}
+            </div>
           )}
         </div>
 
@@ -584,19 +777,27 @@ function CreatorCard({
   creator,
   isFollowing,
   onFollow,
+  isAdmin,
+  onCreatorAdminAction,
 }: {
   creator: RecommendedCreator;
   isFollowing: boolean;
   onFollow: (creatorId: string) => void;
+  isAdmin?: boolean;
+  onCreatorAdminAction?: (creatorId: string, creatorEmail: string, action: CreatorAdminAction) => void;
 }) {
   const bg = creator.accentColor ?? "#f97316";
   return (
-    <div style={{ flexShrink: 0, width: "200px", borderRadius: "16px", background: "#fff", border: "1px solid #f0f0f0", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", transition: "box-shadow 0.15s" }}
+    <div style={{ flexShrink: 0, width: "200px", borderRadius: "16px", background: "#fff", border: "1px solid #f0f0f0", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", transition: "box-shadow 0.15s", position: "relative" }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.10)"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)"; }}
     >
       {/* Banner stripe */}
-      <div style={{ height: "52px", background: bg, opacity: 0.85 }} />
+      <div style={{ height: "52px", background: bg, opacity: 0.85, position: "relative" }}>
+        {isAdmin && onCreatorAdminAction && (
+          <CreatorAdminMenu creator={creator} onAction={onCreatorAdminAction} />
+        )}
+      </div>
       <div style={{ padding: "0 14px 14px", marginTop: "-20px" }}>
         {/* Avatar */}
         {creator.profileImageUrl ? (
@@ -661,6 +862,14 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
   const [adminConfirm, setAdminConfirm] = useState<{ productId: string; productTitle: string; action: AdminAction } | null>(null);
   const [adminBusy, setAdminBusy] = useState(false);
   const [adminToast, setAdminToast] = useState<{ message: string; ok: boolean } | null>(null);
+
+  // ── Creator admin state ─────────────────────────────────────────────────────
+  const [creatorConfirm, setCreatorConfirm] = useState<{ creatorId: string; creatorEmail: string; action: CreatorAdminAction } | null>(null);
+  const [creatorDeleteProducts, setCreatorDeleteProducts] = useState(false);
+
+  // ── Bulk selection state ───────────────────────────────────────────────────
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // Load wishlist from DB (falls back to localStorage for unauthenticated users)
   useEffect(() => {
@@ -739,7 +948,7 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
       const json = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Unknown error");
       // Optimistically remove the product from the local list if it becomes non-public
-      if (action === "hide" || action === "archive" || action === "remove") {
+      if (action === "hide" || action === "archive" || action === "remove" || action === "unpublish") {
         setData((prev) => prev ? { ...prev, items: prev.items.filter((i) => i.id !== productId), total: prev.total - 1 } : prev);
         setRecentlyViewed((prev) => prev.filter((i) => i.id !== productId));
         setNewItems((prev) => prev.filter((i) => i.id !== productId));
@@ -754,6 +963,89 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
       setTimeout(() => setAdminToast(null), 3000);
     }
   }, []);
+
+  // ── Creator admin handler ──────────────────────────────────────────────────
+  const handleCreatorAdminAction = useCallback((creatorId: string, creatorEmail: string, action: CreatorAdminAction) => {
+    setCreatorDeleteProducts(false);
+    setCreatorConfirm({ creatorId, creatorEmail, action });
+  }, []);
+
+  const execCreatorAdminAction = useCallback(async () => {
+    if (!creatorConfirm) return;
+    const { creatorId, action } = creatorConfirm;
+    setCreatorConfirm(null);
+    setAdminBusy(true);
+    try {
+      const res = await fetch(`/api/admin/creators/${creatorId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, deleteProducts: creatorDeleteProducts }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Unknown error");
+      // Remove creator's products from marketplace view if hiding/deleting
+      if (action === "hide" || action === "delete" || action === "suspend") {
+        setRecommendedCreators((prev) => prev.filter((c) => c.userId !== creatorId));
+        setFollowingFeed((prev) => prev.filter((i) => i.creatorUserId !== creatorId));
+        setData((prev) => prev ? { ...prev, items: prev.items.filter((i) => i.creatorUserId !== creatorId) } : prev);
+      }
+      setAdminToast({ message: `Creator: ${action} done`, ok: true });
+    } catch {
+      setAdminToast({ message: "Creator action failed", ok: false });
+    } finally {
+      setAdminBusy(false);
+      setTimeout(() => setAdminToast(null), 3000);
+    }
+  }, [creatorConfirm, creatorDeleteProducts]);
+
+  // ── Bulk action handler ────────────────────────────────────────────────────
+  const execBulkAction = useCallback(async (action: AdminAction) => {
+    if (selectedProducts.size === 0) return;
+    setBulkBusy(true);
+    const ids = Array.from(selectedProducts);
+    try {
+      await Promise.all(ids.map((id) =>
+        fetch(`/api/admin/marketplace/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        })
+      ));
+      // Optimistically remove from view if hiding/removing
+      if (action === "hide" || action === "archive" || action === "remove") {
+        const removed = new Set(ids);
+        setData((prev) => prev ? { ...prev, items: prev.items.filter((i) => !removed.has(i.id)), total: prev.total - ids.length } : prev);
+        setRecentlyViewed((prev) => prev.filter((i) => !removed.has(i.id)));
+        setNewItems((prev) => prev.filter((i) => !removed.has(i.id)));
+        setFollowingFeed((prev) => prev.filter((i) => !removed.has(i.id)));
+      }
+      if (action === "feature") {
+        setData((prev) => prev ? { ...prev, items: prev.items.map((i) => ids.includes(i.id) ? { ...i, featured: true } : i) } : prev);
+      }
+      setSelectedProducts(new Set());
+      setAdminToast({ message: `Bulk ${action}: ${ids.length} products`, ok: true });
+    } catch {
+      setAdminToast({ message: "Bulk action failed", ok: false });
+    } finally {
+      setBulkBusy(false);
+      setTimeout(() => setAdminToast(null), 3000);
+    }
+  }, [selectedProducts]);
+
+  const toggleProductSelection = useCallback((productId: string) => {
+    setSelectedProducts((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId); else next.add(productId);
+      return next;
+    });
+  }, []);
+
+  const selectAllProducts = useCallback(() => {
+    if (!data) return;
+    setSelectedProducts(new Set(data.items.map((i) => i.id)));
+  }, [data]);
+
+  const clearSelection = useCallback(() => setSelectedProducts(new Set()), []);
 
   const toggleWishlist = useCallback((itemId: string, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
@@ -1068,6 +1360,8 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
                   creator={creator}
                   isFollowing={followedCreators.has(creator.userId)}
                   onFollow={toggleFollowCreator}
+                  isAdmin={isAdmin}
+                  onCreatorAdminAction={handleCreatorAdminAction}
                 />
               ))}
             </div>
@@ -1166,6 +1460,8 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
                   onNicheClick={(n) => { setNiche(n); setPage(1); }}
                   isAdmin={isAdmin}
                   onAdminAction={handleAdminAction}
+                  isSelected={selectedProducts.has(item.id)}
+                  onSelect={isAdmin ? toggleProductSelection : undefined}
                 />
               ))}
             </div>
@@ -1309,13 +1605,57 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
 
-      {/* ── Admin confirm modal ────────────────────────────────────────────── */}
+      {/* ── Bulk action toolbar (admin, floats at bottom when items are selected) ── */}
+      {isAdmin && selectedProducts.size > 0 && typeof document !== "undefined" && createPortal(
+        <div style={{ position: "fixed", bottom: "28px", left: "50%", transform: "translateX(-50%)", zIndex: 9999, display: "flex", alignItems: "center", gap: "8px", background: "#1f1f2e", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "14px", padding: "10px 16px", boxShadow: "0 12px 40px rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", animation: "slideInUp 0.18s cubic-bezier(.4,0,.2,1)", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "#e5e7eb" }}>
+            {selectedProducts.size} selected
+          </span>
+          <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.15)" }} />
+          <button onClick={selectAllProducts} style={{ fontSize: "12px", fontWeight: 700, color: "#9ca3af", background: "transparent", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "6px" }}
+            onMouseEnter={(e) => { (e.currentTarget).style.color = "#fff"; }} onMouseLeave={(e) => { (e.currentTarget).style.color = "#9ca3af"; }}>
+            Select all
+          </button>
+          <button onClick={clearSelection} style={{ fontSize: "12px", fontWeight: 700, color: "#9ca3af", background: "transparent", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "6px" }}
+            onMouseEnter={(e) => { (e.currentTarget).style.color = "#fff"; }} onMouseLeave={(e) => { (e.currentTarget).style.color = "#9ca3af"; }}>
+            Clear
+          </button>
+          <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.15)" }} />
+          <button disabled={bulkBusy} onClick={() => execBulkAction("feature")} style={{ fontSize: "12px", fontWeight: 700, color: "#a78bfa", background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
+            ⭐ Feature
+          </button>
+          <button disabled={bulkBusy} onClick={() => execBulkAction("hide")} style={{ fontSize: "12px", fontWeight: 700, color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
+            Hide
+          </button>
+          <button disabled={bulkBusy} onClick={() => execBulkAction("archive")} style={{ fontSize: "12px", fontWeight: 700, color: "#fb923c", background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
+            Archive
+          </button>
+          <button disabled={bulkBusy} onClick={() => execBulkAction("remove")} style={{ fontSize: "12px", fontWeight: 700, color: "#f87171", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
+            Delete
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Admin confirm modal (products) ─────────────────────────────────── */}
       {adminConfirm && (
         <AdminConfirmModal
           action={adminConfirm.action}
           productTitle={adminConfirm.productTitle}
           onConfirm={() => execAdminAction(adminConfirm.productId, adminConfirm.action)}
           onCancel={() => setAdminConfirm(null)}
+        />
+      )}
+
+      {/* ── Creator admin confirm modal ────────────────────────────────────── */}
+      {creatorConfirm && (
+        <CreatorAdminConfirmModal
+          action={creatorConfirm.action}
+          creatorEmail={creatorConfirm.creatorEmail}
+          deleteProducts={creatorDeleteProducts}
+          setDeleteProducts={setCreatorDeleteProducts}
+          onConfirm={execCreatorAdminAction}
+          onCancel={() => setCreatorConfirm(null)}
         />
       )}
 
