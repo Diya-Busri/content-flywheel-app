@@ -22,6 +22,13 @@ export interface ResearchPrefill {
   estimatedPrice: string;
   query: string;
   reportSummary: string;
+  // Rich research data (populated by handleCreateProduct in ResearchTab)
+  insights?: string[];
+  productOpportunities?: Array<{ title: string; description: string; type: string; priceRange: string }>;
+  keywords?: Array<{ term: string; intent: string; opportunity: string; note: string }>;
+  actionPlan?: Array<{ step: number; action: string; detail: string; cta?: string }>;
+  competitorInsights?: Array<{ name: string; strength: string; gap: string }>;
+  researchType?: string;
 }
 
 interface ExistingDraft {
@@ -178,24 +185,64 @@ export default function CreateFromResearch() {
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch("/api/products/create-blank", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title:       title.trim() || "Untitled Product",
-          niche:       prefill?.niche ?? prefill?.query ?? "",
-          format,
-          description: description.trim(),
-        }),
-      });
-      const json = await res.json() as { productId?: string; error?: string };
+      // Determine whether to use the AI generation route (research context present)
+      // or fall back to blank creation (no research data available).
+      const hasResearchContext = !!(
+        prefill?.reportSummary ||
+        (prefill?.insights && prefill.insights.length > 0) ||
+        (prefill?.productOpportunities && prefill.productOpportunities.length > 0)
+      );
+
+      let res: Response;
+      if (hasResearchContext) {
+        // Full AI generation route — uses all research data to populate every section
+        res = await fetch("/api/products/create-from-research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title:                title.trim() || "Untitled Product",
+            niche:                prefill?.niche ?? prefill?.query ?? "",
+            format,
+            description:          description.trim(),
+            audience:             audience.trim(),
+            reportSummary:        prefill?.reportSummary ?? "",
+            insights:             prefill?.insights ?? [],
+            productOpportunities: prefill?.productOpportunities ?? [],
+            keywords:             prefill?.keywords ?? [],
+            actionPlan:           prefill?.actionPlan ?? [],
+            competitorInsights:   prefill?.competitorInsights ?? [],
+            researchType:         prefill?.researchType ?? "market",
+          }),
+        });
+      } else {
+        // No research context — create a blank product
+        res = await fetch("/api/products/create-blank", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title:       title.trim() || "Untitled Product",
+            niche:       prefill?.niche ?? prefill?.query ?? "",
+            format,
+            description: description.trim(),
+          }),
+        });
+      }
+
+      const json = await res.json() as { productId?: string; error?: string; audience?: string };
       if (json.productId) {
-        // Store context so editor can pre-fill marketing assets
+        // Store full context so the editor can pre-fill marketing assets
         try {
           sessionStorage.setItem("cf-product-context", JSON.stringify({
-            title, description, audience, price, format,
-            query: prefill?.query ?? "",
+            title, description,
+            audience:     json.audience ?? audience,  // use server-derived audience if available
+            price, format,
+            query:        prefill?.query ?? "",
             reportSummary: prefill?.reportSummary ?? "",
+            insights:     prefill?.insights ?? [],
+            productOpportunities: prefill?.productOpportunities ?? [],
+            keywords:     prefill?.keywords ?? [],
+            actionPlan:   prefill?.actionPlan ?? [],
+            competitorInsights: prefill?.competitorInsights ?? [],
           }));
         } catch { /* ignore */ }
         router.push(`/dashboard/digital-products/${json.productId}/edit`);
@@ -443,7 +490,7 @@ export default function CreateFromResearch() {
                     className="w-full bg-orange-500 hover:bg-orange-600 text-white text-[15px] font-bold py-6 rounded-xl gap-2 shadow-lg shadow-orange-500/20"
                   >
                     {creating ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating content… (~30s)</>
                     ) : (
                       <><Sparkles className="w-4 h-4" /> Start Fresh</>
                     )}
@@ -468,7 +515,7 @@ export default function CreateFromResearch() {
 
                   <div className="rounded-xl bg-muted/30 border border-border/40 px-4 py-3 flex items-center gap-2 text-[12px] text-muted-foreground">
                     <Clock className="w-3.5 h-3.5 shrink-0 text-orange-400" />
-                    Your research context will be loaded into the editor to pre-fill content and marketing assets.
+                    AI will generate all chapters and content from your research. Takes ~30 seconds.
                   </div>
 
                   {error && (
@@ -484,7 +531,7 @@ export default function CreateFromResearch() {
                     className="w-full bg-orange-500 hover:bg-orange-600 text-white text-[15px] font-bold py-6 rounded-xl gap-2 shadow-lg shadow-orange-500/20"
                   >
                     {creating ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Creating product…</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating content… (~30s)</>
                     ) : (
                       <><Sparkles className="w-4 h-4" /> Create This Product</>
                     )}

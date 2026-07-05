@@ -1850,17 +1850,32 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   };
 
   const handleCreateProduct = () => {
-    // Build prefill object from current research report
-    const bna  = report?.bestNextAction;
-    const rec  = report?.recommendedOpportunity;
+    if (!report) return;
+    const bna = report.bestNextAction;
+    const rec = report.recommendedOpportunity;
+
+    // Derive audience from the top product opportunity if available
+    const derivedAudience =
+      report.productOpportunities?.[0]?.description ??
+      rec?.why?.slice(0, 200) ??
+      "";
+
     const prefill = {
+      // Core fields
       title:          bna?.action ?? rec?.name ?? query,
-      description:    rec?.why ?? report?.summary?.slice(0, 300) ?? "",
+      description:    rec?.why ?? report.summary?.slice(0, 300) ?? "",
       niche:          query,
-      audience:       "",
+      audience:       derivedAudience,
       estimatedPrice: bna?.estimatedPrice ?? rec?.estimatedRevenue ?? "",
       query,
-      reportSummary:  report?.summary?.slice(0, 500) ?? "",
+      reportSummary:  report.summary?.slice(0, 800) ?? "",
+      // Rich research data — passed through to /api/products/create-from-research
+      insights:             report.insights ?? [],
+      productOpportunities: report.productOpportunities ?? [],
+      keywords:             report.keywords ?? [],
+      actionPlan:           report.actionPlan ?? [],
+      competitorInsights:   report.competitorInsights ?? [],
+      researchType:         activeReportType ?? "market",
     };
     try {
       sessionStorage.setItem("cf-research-prefill", JSON.stringify(prefill));
