@@ -433,12 +433,17 @@ export async function recordTimelineEvent(
 // ─── Dashboard Data ───────────────────────────────────────────────────────────
 
 export interface IntelligenceDashboard {
-  knowledgeScore: number;       // 0–100 — average combined_score × 100
+  knowledgeScore: number;           // 0–100
   totalMemories: number;
   memoriesThisWeek: number;
+  memoriesCreatedToday: number;     // new
   patternsDetected: number;
   recommendationsAvailable: number;
   averageConfidence: number;
+  categoryCounts: Record<string, number>; // new — breakdown by category
+  mostReferenced: {                       // new — highest usageCount
+    id: string; title: string; category: string; usageCount: number;
+  }[];
   patterns: {
     id: string; patternType: string; title: string; description: string;
     confidence: number; evidence: string[];
@@ -455,104 +460,146 @@ export interface IntelligenceDashboard {
   }[];
 }
 
+const EMPTY_DASHBOARD: IntelligenceDashboard = {
+  knowledgeScore: 0, totalMemories: 0, memoriesThisWeek: 0, memoriesCreatedToday: 0,
+  patternsDetected: 0, recommendationsAvailable: 0, averageConfidence: 0,
+  categoryCounts: {}, mostReferenced: [],
+  patterns: [], recommendations: [], timeline: [], topMemories: [],
+};
+
 export async function getDashboardData(userId: string): Promise<IntelligenceDashboard> {
   const oneWeekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
 
-  const [
-    allMemories,
-    recentCount,
-    patterns,
-    recommendations,
-    timeline,
-  ] = await Promise.all([
-    db.select({
-      id: userMemoryTable.id,
-      category: userMemoryTable.category,
-      title: userMemoryTable.title,
-      aiSummary: userMemoryTable.aiSummary,
-      combinedScore: userMemoryTable.combinedScore,
-      confidenceScore: userMemoryTable.confidenceScore,
-      usageCount: userMemoryTable.usageCount,
-    })
-      .from(userMemoryTable)
-      .where(and(eq(userMemoryTable.userId, userId), sql`memory_type != 'archived'`))
-      .orderBy(desc(userMemoryTable.combinedScore))
-      .limit(200),
+  try {
+    // ── 1. Memory aggregate stats — single SQL query, no embedding, no 200-row fetch
+    const statsRows = await client.unsafe<{ total: string; avg_score: string; avg_confidence: string }[]>(
+      `SELECT COUNT(*)::text AS total,
+              COALESCE(AVG(combined_score), 0)::text AS avg_score,
+              COALESCE(AVG(confidence_score), 0)::text AS avg_confidence
+       FROM user_memory WHERE user_id = $1 AND memory_type != 'archived'`,
+      [userId]
+    ).catch(() => []);
+    const stats = statsRows[0] ?? { total: "0", avg_score: "0", avg_confidence: "0" };
 
-    db.select({ count: count() })
-      .from(userMemoryTable)
-      .where(and(eq(userMemoryTable.userId, userId), gt(userMemoryTable.createdAt, oneWeekAgo))),
+    // ── 2. Category breakdown — one query
+    const catRows = await client.unsafe<{ category: string; cnt: string }[]>(
+      `SELECT category, COUNT(*)::text AS cnt
+       FROM user_memory WHERE user_id = $1 AND memory_type != 'archived'
+       GROUP BY category`,
+      [userId]
+    ).catch(() => []);
+    const categoryCounts: Record<string, number> = {};
+    for (const r of catRows) categoryCounts[r.category] = parseInt(r.cnt, 10);
 
-    db.select()
-      .from(userPatternsTable)
-      .where(and(eq(userPatternsTable.userId, userId), eq(userPatternsTable.isActive, true)))
-      .orderBy(desc(userPatternsTable.confidence))
-      .limit(10),
+    // ── 3. All remaining queries run in parallel
+    const [
+      recentCount,
+      todayCount,
+      topMemories,
+      mostReferenced,
+      patterns,
+      recommendations,
+      timeline,
+    ] = await Promise.all([
+      db.select({ cnt: count() })
+        .from(userMemoryTable)
+        .where(and(eq(userMemoryTable.userId, userId), gt(userMemoryTable.createdAt, oneWeekAgo)))
+        .then(r => Number(r[0]?.cnt ?? 0))
+        .catch(() => 0),
 
-    db.select()
-      .from(userRecommendationsTable)
-      .where(and(eq(userRecommendationsTable.userId, userId), eq(userRecommendationsTable.isDismissed, false)))
-      .orderBy(desc(userRecommendationsTable.priority))
-      .limit(5),
+      db.select({ cnt: count() })
+        .from(userMemoryTable)
+        .where(and(eq(userMemoryTable.userId, userId), gt(userMemoryTable.createdAt, todayStart)))
+        .then(r => Number(r[0]?.cnt ?? 0))
+        .catch(() => 0),
 
-    db.select()
-      .from(userIntelligenceTimelineTable)
-      .where(and(
-        eq(userIntelligenceTimelineTable.userId, userId),
-        sql`event_type NOT IN ('pattern_detection_run', 'recommendations_run', 'score_update')`
-      ))
-      .orderBy(desc(userIntelligenceTimelineTable.createdAt))
-      .limit(15),
-  ]);
+      db.select({
+        id: userMemoryTable.id,
+        category: userMemoryTable.category,
+        title: userMemoryTable.title,
+        aiSummary: userMemoryTable.aiSummary,
+        combinedScore: userMemoryTable.combinedScore,
+        usageCount: userMemoryTable.usageCount,
+      })
+        .from(userMemoryTable)
+        .where(and(eq(userMemoryTable.userId, userId), sql`memory_type != 'archived'`))
+        .orderBy(desc(userMemoryTable.combinedScore))
+        .limit(5)
+        .catch(() => []),
 
-  const avgScore = allMemories.length > 0
-    ? allMemories.reduce((sum, m) => sum + (m.combinedScore ?? 0.5), 0) / allMemories.length
-    : 0;
+      db.select({
+        id: userMemoryTable.id,
+        title: userMemoryTable.title,
+        category: userMemoryTable.category,
+        usageCount: userMemoryTable.usageCount,
+      })
+        .from(userMemoryTable)
+        .where(and(eq(userMemoryTable.userId, userId), sql`memory_type != 'archived'`))
+        .orderBy(desc(userMemoryTable.usageCount))
+        .limit(5)
+        .catch(() => []),
 
-  const avgConfidence = allMemories.length > 0
-    ? allMemories.reduce((sum, m) => sum + (m.confidenceScore ?? 0.7), 0) / allMemories.length
-    : 0;
+      db.select()
+        .from(userPatternsTable)
+        .where(and(eq(userPatternsTable.userId, userId), eq(userPatternsTable.isActive, true)))
+        .orderBy(desc(userPatternsTable.confidence))
+        .limit(10)
+        .catch(() => []),
 
-  return {
-    knowledgeScore: Math.round(avgScore * 100),
-    totalMemories: allMemories.length,
-    memoriesThisWeek: Number(recentCount[0]?.count ?? 0),
-    patternsDetected: patterns.length,
-    recommendationsAvailable: recommendations.length,
-    averageConfidence: Math.round(avgConfidence * 100) / 100,
-    patterns: patterns.map(p => ({
-      id: p.id,
-      patternType: p.patternType,
-      title: p.title,
-      description: p.description,
-      confidence: p.confidence,
-      evidence: (p.metadata as { evidence?: string[] } | null)?.evidence ?? [],
-    })),
-    recommendations: recommendations.map(r => ({
-      id: r.id,
-      recType: r.recType,
-      title: r.title,
-      description: r.description,
-      priority: r.priority,
-      confidence: r.confidence,
-      actionType: r.actionType ?? null,
-    })),
-    timeline: timeline.map(t => ({
-      id: t.id,
-      eventType: t.eventType,
-      title: t.title,
-      description: t.description ?? null,
-      createdAt: t.createdAt.toISOString(),
-    })),
-    topMemories: allMemories.slice(0, 5).map(m => ({
-      id: m.id,
-      category: m.category,
-      title: m.title,
-      aiSummary: m.aiSummary ?? null,
-      combinedScore: m.combinedScore ?? 0.5,
-      usageCount: m.usageCount,
-    })),
-  };
+      db.select()
+        .from(userRecommendationsTable)
+        .where(and(eq(userRecommendationsTable.userId, userId), eq(userRecommendationsTable.isDismissed, false)))
+        .orderBy(desc(userRecommendationsTable.priority))
+        .limit(5)
+        .catch(() => []),
+
+      db.select()
+        .from(userIntelligenceTimelineTable)
+        .where(and(
+          eq(userIntelligenceTimelineTable.userId, userId),
+          sql`event_type NOT IN ('pattern_detection_run', 'recommendations_run', 'score_update')`
+        ))
+        .orderBy(desc(userIntelligenceTimelineTable.createdAt))
+        .limit(15)
+        .catch(() => []),
+    ]);
+
+    return {
+      knowledgeScore: Math.round(parseFloat(stats.avg_score) * 100),
+      totalMemories: parseInt(stats.total, 10),
+      memoriesThisWeek: recentCount,
+      memoriesCreatedToday: todayCount,
+      patternsDetected: patterns.length,
+      recommendationsAvailable: recommendations.length,
+      averageConfidence: Math.round(parseFloat(stats.avg_confidence) * 100) / 100,
+      categoryCounts,
+      mostReferenced: mostReferenced.map(m => ({
+        id: m.id, title: m.title, category: m.category, usageCount: m.usageCount,
+      })),
+      patterns: patterns.map(p => ({
+        id: p.id, patternType: p.patternType, title: p.title, description: p.description,
+        confidence: p.confidence,
+        evidence: (p.metadata as { evidence?: string[] } | null)?.evidence ?? [],
+      })),
+      recommendations: recommendations.map(r => ({
+        id: r.id, recType: r.recType, title: r.title, description: r.description,
+        priority: r.priority, confidence: r.confidence, actionType: r.actionType ?? null,
+      })),
+      timeline: timeline.map(t => ({
+        id: t.id, eventType: t.eventType, title: t.title,
+        description: t.description ?? null,
+        createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
+      })),
+      topMemories: topMemories.map(m => ({
+        id: m.id, category: m.category, title: m.title, aiSummary: m.aiSummary ?? null,
+        combinedScore: m.combinedScore ?? 0.5, usageCount: m.usageCount,
+      })),
+    };
+  } catch (err) {
+    console.warn("[getDashboardData] error:", err);
+    return EMPTY_DASHBOARD;
+  }
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────

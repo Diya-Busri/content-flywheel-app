@@ -232,7 +232,12 @@ function DiscoveryCard({
 // ─── Daily Brief Panel ────────────────────────────────────────────────────────
 
 function DailyBriefPanel({ brief, onClose }: { brief: DailyBrief; onClose: () => void }) {
-  const healthColor = brief.businessHealth >= 70 ? "text-green-500" : brief.businessHealth >= 40 ? "text-amber-500" : "text-red-500";
+  // Null-safe: any array field could be missing if API returned partial data
+  const opportunities = brief.opportunities ?? [];
+  const warnings      = brief.warnings ?? [];
+  const tasks         = brief.tasks ?? [];
+  const health        = brief.businessHealth ?? 0;
+  const healthColor   = health >= 70 ? "text-green-500" : health >= 40 ? "text-amber-500" : "text-red-500";
 
   return (
     <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-violet-500/5 p-5 space-y-4">
@@ -247,23 +252,25 @@ function DailyBriefPanel({ brief, onClose }: { brief: DailyBrief; onClose: () =>
         <div className="flex items-center gap-2">
           <div className="text-right">
             <p className="text-[10px] text-muted-foreground">Business Health</p>
-            <p className={`text-xl font-black ${healthColor}`}>{brief.businessHealth}<span className="text-xs font-medium">/100</span></p>
+            <p className={`text-xl font-black ${healthColor}`}>{health}<span className="text-xs font-medium">/100</span></p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
         </div>
       </div>
 
       <div>
-        <p className="text-base font-bold text-foreground">{brief.headline}</p>
-        <div className="text-xs text-muted-foreground mt-1 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: brief.prioritiesHtml }} />
+        <p className="text-base font-bold text-foreground">{brief.headline ?? "Your daily brief is ready."}</p>
+        {brief.prioritiesHtml && (
+          <div className="text-xs text-muted-foreground mt-1 leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: brief.prioritiesHtml }} />
+        )}
       </div>
 
-      {brief.opportunities.length > 0 && (
+      {opportunities.length > 0 && (
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-green-600 dark:text-green-400 mb-1.5">Opportunities</p>
           <ul className="space-y-1">
-            {brief.opportunities.map((o, i) => (
+            {opportunities.map((o, i) => (
               <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
                 <TrendingUp className="w-3 h-3 text-green-500 shrink-0 mt-0.5" />{o}
               </li>
@@ -272,11 +279,11 @@ function DailyBriefPanel({ brief, onClose }: { brief: DailyBrief; onClose: () =>
         </div>
       )}
 
-      {brief.warnings.length > 0 && (
+      {warnings.length > 0 && (
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-1.5">Watch Out</p>
           <ul className="space-y-1">
-            {brief.warnings.map((w, i) => (
+            {warnings.map((w, i) => (
               <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
                 <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />{w}
               </li>
@@ -285,16 +292,22 @@ function DailyBriefPanel({ brief, onClose }: { brief: DailyBrief; onClose: () =>
         </div>
       )}
 
-      {brief.tasks.length > 0 && (
+      {tasks.length > 0 && (
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Today&apos;s Priorities</p>
           <ul className="space-y-1">
-            {brief.tasks.map((t, i) => (
+            {tasks.map((t, i) => (
               <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
                 <span className="w-4 h-4 rounded-full border border-purple-500/40 flex items-center justify-center text-[9px] font-bold text-purple-500 shrink-0 mt-0.5">{i + 1}</span>{t}
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {opportunities.length === 0 && warnings.length === 0 && tasks.length === 0 && (
+        <div className="text-center py-4">
+          <p className="text-xs text-muted-foreground">No discoveries yet — run your agents to populate the brief.</p>
         </div>
       )}
     </div>
@@ -394,11 +407,25 @@ export default function AgentCentreTab() {
     setGeneratingBrief(true);
     try {
       const res = await fetch("/api/agents/daily-review", { method: "POST" });
+      if (!res.ok) {
+        console.error("Daily brief API error", res.status);
+        return;
+      }
       const data = await res.json() as DailyBrief;
-      setBrief(data);
+      // Ensure every array field has a safe default before storing
+      setBrief({
+        ...data,
+        opportunities: data.opportunities ?? [],
+        warnings:      data.warnings      ?? [],
+        tasks:         data.tasks         ?? [],
+        discoveries:   data.discoveries   ?? [],
+      });
       await load();
-    } catch { /* ignore */ }
-    setGeneratingBrief(false);
+    } catch (err) {
+      console.error("Failed to generate brief", err);
+    } finally {
+      setGeneratingBrief(false);
+    }
   }, [load]);
 
   const visibleDiscoveries = discoveries.filter(d =>

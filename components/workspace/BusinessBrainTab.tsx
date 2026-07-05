@@ -60,9 +60,12 @@ interface DashboardData {
   knowledgeScore: number;
   totalMemories: number;
   memoriesThisWeek: number;
+  memoriesCreatedToday: number;
   patternsDetected: number;
   recommendationsAvailable: number;
   averageConfidence: number;
+  categoryCounts: Record<string, number>;
+  mostReferenced: { id: string; title: string; category: string; usageCount: number }[];
   patterns: Pattern[];
   recommendations: Recommendation[];
   timeline: TimelineEvent[];
@@ -169,12 +172,24 @@ function IntelligenceDashboard({
   };
 
   if (!data) {
+    // API failed or returned no data — show empty state, NOT skeleton
     return (
-      <div className="rounded-2xl border border-border bg-card p-6 animate-pulse">
-        <div className="h-4 bg-muted/60 rounded w-1/3 mb-4" />
-        <div className="grid grid-cols-4 gap-3">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-muted/40 rounded-xl" />)}
+      <div className="rounded-2xl border border-border bg-card p-8 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">
+          <Brain className="w-7 h-7 text-purple-500/60" />
         </div>
+        <p className="text-sm font-semibold text-foreground">Intelligence unavailable</p>
+        <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+          Use the AI Coach, run research, or create products — the brain learns from everything automatically.
+        </p>
+        <button
+          onClick={onRunPipeline}
+          disabled={running}
+          className="mt-4 inline-flex items-center gap-1.5 text-xs bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors"
+        >
+          {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
+          {running ? "Analysing…" : "Analyse Now"}
+        </button>
       </div>
     );
   }
@@ -201,7 +216,7 @@ function IntelligenceDashboard({
         </div>
 
         {[
-          { label: "Memories",       value: data.totalMemories,            sub: `+${data.memoriesThisWeek} this week`, color: "text-foreground" },
+          { label: "Memories",       value: data.totalMemories,            sub: data.memoriesCreatedToday > 0 ? `+${data.memoriesCreatedToday} today` : `+${data.memoriesThisWeek} this week`, color: "text-foreground" },
           { label: "Patterns",       value: data.patternsDetected,         sub: "detected",                            color: "text-violet-500" },
           { label: "Suggestions",    value: data.recommendationsAvailable, sub: "waiting",                             color: "text-blue-500" },
           { label: "AI Confidence",  value: `${Math.round(data.averageConfidence * 100)}%`, sub: "average",            color: "text-green-500" },
@@ -227,6 +242,26 @@ function IntelligenceDashboard({
           </p>
         </button>
       </div>
+
+      {/* Most Referenced */}
+      {data.mostReferenced.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Most Referenced</p>
+          <div className="flex flex-wrap gap-2">
+            {data.mostReferenced.map(m => {
+              const catMeta = CATEGORIES[m.category];
+              const Icon = catMeta?.Icon ?? BookOpen;
+              return (
+                <div key={m.id} className="flex items-center gap-1.5 text-[10px] bg-muted/50 border border-border px-2.5 py-1.5 rounded-xl">
+                  <Icon className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <span className="text-foreground/80 font-medium truncate max-w-[140px]">{m.title}</span>
+                  <span className="text-purple-500 font-bold shrink-0">{m.usageCount}×</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Patterns */}
       {data.patterns.length > 0 && (

@@ -177,45 +177,55 @@ export async function runAllAgents(
 
 // ─── Daily Brief ──────────────────────────────────────────────────────────────
 
-export async function generateDailyBrief(userId: string, isAdmin = false): Promise<DailyBrief> {
-  // Force-run all agents for daily brief (bypass rate limits)
-  const orchestratorResult = await runAllAgents(userId, { isAdmin, forceRun: true });
+export async function generateDailyBrief(userId: string, _isAdmin = false): Promise<DailyBrief> {
+  // Use existing discoveries from the last 7 days — no need to re-run all agents
+  // (running 6 agents synchronously causes timeouts and crashes)
+  const last7d = new Date(Date.now() - 7 * 24 * 3_600_000);
 
-  // Collect all discoveries from the run + any undismissed from last 24h
-  const last24h = new Date(Date.now() - 24 * 3_600_000);
-  const allDiscoveries = await db
-    .select()
-    .from(agentDiscoveriesTable)
-    .where(and(
-      eq(agentDiscoveriesTable.userId, userId),
-      eq(agentDiscoveriesTable.isDismissed, false),
-      gte(agentDiscoveriesTable.createdAt, last24h),
-    ))
-    .orderBy(desc(agentDiscoveriesTable.priority))
-    .limit(20);
+  const [allDiscoveries, allTasks, recentRuns] = await Promise.all([
+    db
+      .select()
+      .from(agentDiscoveriesTable)
+      .where(and(
+        eq(agentDiscoveriesTable.userId, userId),
+        eq(agentDiscoveriesTable.isDismissed, false),
+        gte(agentDiscoveriesTable.createdAt, last7d),
+      ))
+      .orderBy(desc(agentDiscoveriesTable.priority))
+      .limit(30)
+      .catch(() => []),
 
-  const allTasks = await db
-    .select()
-    .from(agentTasksTable)
-    .where(and(eq(agentTasksTable.userId, userId), eq(agentTasksTable.status, "pending")))
-    .orderBy(desc(agentTasksTable.priority))
-    .limit(10);
+    db
+      .select()
+      .from(agentTasksTable)
+      .where(and(eq(agentTasksTable.userId, userId), eq(agentTasksTable.status, "pending")))
+      .orderBy(desc(agentTasksTable.priority))
+      .limit(10)
+      .catch(() => []),
 
-  const opportunities = allDiscoveries.filter(d => d.discoveryType === "opportunity").map(d => d.title);
-  const warnings = allDiscoveries.filter(d => d.discoveryType === "warning").map(d => d.title);
-  const insights = allDiscoveries.filter(d => d.discoveryType === "insight" || d.discoveryType === "recommendation").map(d => d.title);
-  const topTasks = allTasks.slice(0, 5).map(t => t.title);
+    db
+      .select({ agentType: agentRunsTable.agentType })
+      .from(agentRunsTable)
+      .where(and(
+        eq(agentRunsTable.userId, userId),
+        eq(agentRunsTable.status, "completed"),
+        gte(agentRunsTable.startedAt, last7d),
+      ))
+      .limit(20)
+      .catch(() => []),
+  ]);
 
-  // Business health score: based on spread of activity, discovery count, agent confidence
-  const activeAgents = orchestratorResult.agentsRun.length;
-  const totalAgents = 6;
-  const avgConfidence = orchestratorResult.results
-    .filter(r => !r.skipped && r.confidenceScore > 0)
-    .reduce((s, r, _, a) => s + r.confidenceScore / a.length, 0);
+  const opportunities = (allDiscoveries ?? []).filter(d => d.discoveryType === "opportunity").map(d => d.title);
+  const warnings      = (allDiscoveries ?? []).filter(d => d.discoveryType === "warning").map(d => d.title);
+  const insights      = (allDiscoveries ?? []).filter(d => d.discoveryType === "insight" || d.discoveryType === "recommendation").map(d => d.title);
+  const topTasks      = (allTasks ?? []).slice(0, 5).map(t => t.title);
+
+  // Business health — based on existing data, not live agent runs
+  const uniqueActiveAgents = new Set((recentRuns ?? []).map(r => r.agentType)).size;
   const businessHealth = Math.min(100, Math.round(
-    (activeAgents / totalAgents) * 40 +
-    Math.min(allDiscoveries.length, 10) * 3 +
-    avgConfidence * 30,
+    (uniqueActiveAgents / 6) * 40 +
+    Math.min((allDiscoveries ?? []).length, 10) * 3 +
+    20, // base health
   ));
 
   // Generate brief with GPT-4o-mini
