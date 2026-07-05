@@ -349,12 +349,12 @@ export async function getUserMemoryContext(
   });
 
   return [
-    "━━━ YOUR PERSONAL MEMORY ━━━",
-    "The following is relevant context from your previous activity on Content Flywheel.",
+    "━━━ YOUR BUSINESS BRAIN ━━━",
+    "The following is relevant context from your Business Brain — everything Content Flywheel has learned about your business.",
     "Use this to personalise your response — reference past work, avoid repeating advice, build on prior context.",
     "",
     ...lines,
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━",
   ].join("\n");
 }
 

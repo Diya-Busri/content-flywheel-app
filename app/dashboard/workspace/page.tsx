@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useWorkspaceAdmin } from "@/components/workspace-admin-context";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import { ResearchTab } from "@/components/workspace/ResearchTab";
-import UserMemoryTab from "@/components/workspace/UserMemoryTab";
+import BusinessBrainTab from "@/components/workspace/BusinessBrainTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -233,7 +233,7 @@ const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
   { id: "calendar", label: "Calendar",          icon: <Calendar className="w-4 h-4" /> },
   { id: "goals",    label: "Goals",             icon: <Target className="w-4 h-4" /> },
   { id: "research", label: "Research",          icon: <BookOpen className="w-4 h-4" /> },
-  { id: "memory",   label: "AI Memory",         icon: <Sparkles className="w-4 h-4" /> },
+  { id: "memory",   label: "Business Brain",     icon: <Brain className="w-4 h-4" /> },
 ];
 
 const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
@@ -4140,7 +4140,7 @@ export default function WorkspacePage() {
     calendar:             "Plan and schedule your content drops",
     goals:                "Track revenue, growth, and product targets",
     "research":           "AI Business Analyst — discover opportunities, understand markets, take action",
-    "memory":             "Your personal AI memory — everything the platform has learned about your business",
+    "memory":             "Business Brain — an AI that continuously learns your business, getting smarter every day",
     "founder-os":         "Your internal OS — the memory and intelligence layer for Content Flywheel",
     "marketing-psychology": "Psychological triggers and buyer behavior principles",
     "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
@@ -4250,7 +4250,7 @@ export default function WorkspacePage() {
       {tab === "goals"    && <GoalsTab />}
 
       {tab === "research" && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
-      {tab === "memory"   && <UserMemoryTab />}
+      {tab === "memory"   && <BusinessBrainTab />}
 
       {/* Admin-only tab content */}
       {isAdmin && tab === "founder-os"             && <FounderOSOverview onTabChange={setTab} />}
