@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Search, ShoppingBag, Sparkles, X, TrendingUp, Star } from "lucide-react";
+import { Search, ShoppingBag, Sparkles, X, TrendingUp, Star, MoreVertical, Eye, EyeOff, Archive, Trash2, Star as StarIcon, Pin, PinOff, Edit3, ExternalLink, RotateCcw, Shield, AlertTriangle, Loader2, Check } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,223 @@ function StarRow({ rating, count, size = 13 }: { rating: number; count: number; 
   );
 }
 
+// ─── Admin: confirm modal ─────────────────────────────────────────────────────
+
+type AdminAction = "feature" | "unfeature" | "staff-pick" | "unstaff-pick" | "pin" | "unpin" | "hide" | "archive" | "restore" | "remove";
+
+interface AdminConfirmModalProps {
+  action: AdminAction;
+  productTitle: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+const ADMIN_ACTION_META: Record<AdminAction, { label: string; description: string; danger: boolean; icon: React.ReactNode }> = {
+  hide:         { label: "Hide product",    description: "This product will be removed from the marketplace immediately. The creator's draft is preserved.", danger: true,  icon: <EyeOff style={{ width: "18px", height: "18px" }} /> },
+  archive:      { label: "Archive product", description: "This product will be archived and removed from the marketplace. The creator can still see it in their library.", danger: true,  icon: <Archive style={{ width: "18px", height: "18px" }} /> },
+  remove:       { label: "Delete product",  description: "This product will be soft-deleted and removed from all views. Only admins can restore it.", danger: true,  icon: <Trash2 style={{ width: "18px", height: "18px" }} /> },
+  feature:      { label: "Feature product", description: "This product will be pinned to the homepage as a featured item.", danger: false, icon: <Pin style={{ width: "18px", height: "18px" }} /> },
+  unfeature:    { label: "Unfeature product", description: "This product will be removed from the featured homepage section.", danger: false, icon: <PinOff style={{ width: "18px", height: "18px" }} /> },
+  "staff-pick": { label: "Mark as Staff Pick", description: "This product will receive the Staff Pick badge across the marketplace.", danger: false, icon: <StarIcon style={{ width: "18px", height: "18px" }} /> },
+  "unstaff-pick": { label: "Remove Staff Pick", description: "The Staff Pick badge will be removed from this product.", danger: false, icon: <StarIcon style={{ width: "18px", height: "18px" }} /> },
+  pin:          { label: "Pin to homepage", description: "This product will appear pinned at the top of the marketplace homepage.", danger: false, icon: <Pin style={{ width: "18px", height: "18px" }} /> },
+  unpin:        { label: "Unpin from homepage", description: "This product will no longer be pinned to the homepage.", danger: false, icon: <PinOff style={{ width: "18px", height: "18px" }} /> },
+  restore:      { label: "Restore product", description: "This product will be restored and made visible in the marketplace.", danger: false, icon: <RotateCcw style={{ width: "18px", height: "18px" }} /> },
+};
+
+function AdminConfirmModal({ action, productTitle, onConfirm, onCancel }: AdminConfirmModalProps) {
+  const meta = ADMIN_ACTION_META[action];
+  return createPortal(
+    <div
+      onClick={onCancel}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(3px)", padding: "20px" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: "18px", padding: "28px 28px 24px", maxWidth: "440px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", animation: "slideInUp 0.2s cubic-bezier(.4,0,.2,1)" }}
+      >
+        {/* Icon */}
+        <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: meta.danger ? "#fef2f2" : "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", color: meta.danger ? "#dc2626" : "#16a34a", marginBottom: "16px" }}>
+          {meta.icon}
+        </div>
+        <h3 style={{ margin: "0 0 6px", fontSize: "17px", fontWeight: 700, color: "#111827" }}>{meta.label}</h3>
+        <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#6b7280" }}>{meta.description}</p>
+        <p style={{ margin: "0 0 24px", fontSize: "13px", color: "#374151", fontWeight: 600, background: "#f9fafb", padding: "8px 12px", borderRadius: "8px", border: "1px solid #f3f4f6" }}>
+          &ldquo;{productTitle}&rdquo;
+        </p>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={onCancel}
+            style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "1px solid #e5e7eb", background: "#fff", color: "#374151", fontSize: "14px", fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "none", background: meta.danger ? "#dc2626" : "#16a34a", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", transition: "opacity 0.15s" }}
+          >
+            {meta.label}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ─── Admin: actions menu ──────────────────────────────────────────────────────
+
+interface AdminActionsMenuProps {
+  item: MarketplaceItem;
+  onAction: (productId: string, action: AdminAction) => void;
+}
+
+function AdminActionsMenu({ item, onAction }: AdminActionsMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) {
+      // Try to open below first, flip above if near viewport bottom
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const menuH = 280;
+      const top = spaceBelow > menuH ? rect.bottom + 4 : rect.top - menuH - 4;
+      const left = Math.min(rect.left, window.innerWidth - 192);
+      setPos({ top, left });
+    }
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (btnRef.current && btnRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const trigger = (action: AdminAction) => {
+    setOpen(false);
+    onAction(item.id, action);
+  };
+
+  const actions: Array<{ action: AdminAction; label: string; icon: React.ReactNode; color: string; sep?: boolean }> = [
+    { action: "feature",      label: item.featured ? "Unfeature" : "Feature Product", icon: <Pin style={{ width: "13px", height: "13px" }} />, color: "#7c3aed" },
+    { action: "staff-pick",   label: "Toggle Staff Pick", icon: <StarIcon style={{ width: "13px", height: "13px" }} />, color: "#f59e0b" },
+    { action: "hide",         label: "Hide Product",    icon: <EyeOff style={{ width: "13px", height: "13px" }} />, color: "#ef4444", sep: true },
+    { action: "archive",      label: "Archive Product", icon: <Archive style={{ width: "13px", height: "13px" }} />, color: "#f97316" },
+    { action: "remove",       label: "Delete Product",  icon: <Trash2 style={{ width: "13px", height: "13px" }} />, color: "#dc2626" },
+  ];
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={openMenu}
+        title="Admin actions"
+        style={{
+          position: "absolute", bottom: "8px", right: "8px",
+          background: "rgba(15,15,25,0.85)", backdropFilter: "blur(6px)",
+          border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px",
+          color: "#fff", width: "28px", height: "28px", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 20, transition: "background 0.15s",
+          padding: 0,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.9)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(15,15,25,0.85)"; }}
+      >
+        <MoreVertical style={{ width: "14px", height: "14px" }} />
+      </button>
+
+      {open && createPortal(
+        <div
+          style={{
+            position: "fixed", top: pos.top, left: pos.left, zIndex: 99998,
+            background: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)", width: "192px", overflow: "hidden",
+            animation: "fadeInScale 0.12s cubic-bezier(.4,0,.2,1)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ padding: "8px 12px 6px", borderBottom: "1px solid #f3f4f6" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "1px" }}>
+              <Shield style={{ width: "11px", height: "11px", color: "#f97316" }} />
+              <span style={{ fontSize: "10px", fontWeight: 800, color: "#f97316", textTransform: "uppercase", letterSpacing: "0.06em" }}>Admin Actions</span>
+            </div>
+            <p style={{ margin: 0, fontSize: "10px", color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</p>
+          </div>
+
+          {/* Quick nav links */}
+          <div style={{ padding: "4px 0", borderBottom: "1px solid #f3f4f6" }}>
+            <a
+              href={`/product/${item.id}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: "#374151", textDecoration: "none", fontWeight: 500 }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#f9fafb"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
+            >
+              <Eye style={{ width: "13px", height: "13px", color: "#9ca3af" }} /> View Product
+              <ExternalLink style={{ width: "11px", height: "11px", color: "#d1d5db", marginLeft: "auto" }} />
+            </a>
+            <a
+              href={`/dashboard/admin/marketplace`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: "#374151", textDecoration: "none", fontWeight: 500 }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#f9fafb"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
+            >
+              <Edit3 style={{ width: "13px", height: "13px", color: "#9ca3af" }} /> Admin Dashboard
+              <ExternalLink style={{ width: "11px", height: "11px", color: "#d1d5db", marginLeft: "auto" }} />
+            </a>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ padding: "4px 0" }}>
+            {actions.map((a) => (
+              <div key={a.action}>
+                {a.sep && <div style={{ height: "1px", background: "#f3f4f6", margin: "3px 0" }} />}
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); trigger(a.action); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", fontSize: "13px", color: a.color, fontWeight: 600, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", transition: "background 0.1s" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#f9fafb"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                >
+                  {a.icon} {a.label}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Busy / done feedback overlay (portal) */}
+      {(busy || done) && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 99997, pointerEvents: "none", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: "32px" }}>
+          <div style={{ background: done ? "#16a34a" : "#1f1f2e", color: "#fff", borderRadius: "12px", padding: "10px 20px", fontSize: "13px", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.25)", opacity: 1, animation: "fadeInScale 0.15s ease" }}>
+            {done ? <Check style={{ width: "14px", height: "14px" }} /> : <Loader2 style={{ width: "14px", height: "14px", animation: "spin 0.8s linear infinite" }} />}
+            {done ? "Done" : "Updating…"}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 // ─── Skeleton Card ────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
@@ -118,12 +336,16 @@ function ProductCard({
   onWishlist,
   onQuickView,
   onNicheClick,
+  isAdmin,
+  onAdminAction,
 }: {
   item: MarketplaceItem;
   inWishlist: boolean;
   onWishlist: (id: string, e: React.MouseEvent) => void;
   onQuickView: (item: MarketplaceItem) => void;
   onNicheClick: (niche: string) => void;
+  isAdmin?: boolean;
+  onAdminAction?: (productId: string, action: AdminAction) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const isFree = item.nativePrice === 0;
@@ -218,6 +440,11 @@ function ProductCard({
           >
             Quick View
           </button>
+
+          {/* Admin ⋮ button — portal-rendered dropdown, not clipped by overflow:hidden */}
+          {isAdmin && onAdminAction && (
+            <AdminActionsMenu item={item} onAction={onAdminAction} />
+          )}
         </div>
 
         {/* Card body */}
@@ -293,6 +520,8 @@ function ProductStrip({
   onNicheClick,
   onRemoveItem,
   onClearAll,
+  isAdmin,
+  onAdminAction,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -303,6 +532,8 @@ function ProductStrip({
   onNicheClick: (niche: string) => void;
   onRemoveItem?: (id: string) => void;
   onClearAll?: () => void;
+  isAdmin?: boolean;
+  onAdminAction?: (productId: string, action: AdminAction) => void;
 }) {
   if (!items.length) return null;
   return (
@@ -325,7 +556,7 @@ function ProductStrip({
         <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
           {items.map((item) => (
             <div key={item.id} style={{ flexShrink: 0, width: "220px", position: "relative" }}>
-              <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={onWishlist} onQuickView={onQuickView} onNicheClick={onNicheClick} />
+              <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={onWishlist} onQuickView={onQuickView} onNicheClick={onNicheClick} isAdmin={isAdmin} onAdminAction={onAdminAction} />
               {onRemoveItem && (
                 <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemoveItem(item.id); }}
@@ -404,7 +635,7 @@ function CreatorCard({
   );
 }
 
-export default function MarketplaceClient() {
+export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const [data, setData]           = useState<ApiResponse | null>(null);
   const [loading, setLoading]     = useState(true);
   const [q, setQ]                 = useState("");
@@ -425,6 +656,11 @@ export default function MarketplaceClient() {
   const [recentlyViewed, setRecentlyViewed] = useState<MarketplaceItem[]>([]);
   const [recommended, setRecommended]       = useState<MarketplaceItem[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // ── Admin state ────────────────────────────────────────────────────────────
+  const [adminConfirm, setAdminConfirm] = useState<{ productId: string; productTitle: string; action: AdminAction } | null>(null);
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminToast, setAdminToast] = useState<{ message: string; ok: boolean } | null>(null);
 
   // Load wishlist from DB (falls back to localStorage for unauthenticated users)
   useEffect(() => {
@@ -477,6 +713,48 @@ export default function MarketplaceClient() {
     try { localStorage.removeItem("cf_recently_viewed"); } catch { /* ignore */ }
   }, []);
 
+  // ── Admin: request action (show confirm modal for destructive ones) ─────────
+  const NEEDS_CONFIRM: AdminAction[] = ["hide", "archive", "remove"];
+
+  const handleAdminAction = useCallback((productId: string, action: AdminAction) => {
+    const item = data?.items.find((i) => i.id === productId);
+    const productTitle = item?.title ?? "this product";
+    if (NEEDS_CONFIRM.includes(action)) {
+      setAdminConfirm({ productId, productTitle, action });
+    } else {
+      execAdminAction(productId, action);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const execAdminAction = useCallback(async (productId: string, action: AdminAction) => {
+    setAdminConfirm(null);
+    setAdminBusy(true);
+    try {
+      const res = await fetch(`/api/admin/marketplace/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Unknown error");
+      // Optimistically remove the product from the local list if it becomes non-public
+      if (action === "hide" || action === "archive" || action === "remove") {
+        setData((prev) => prev ? { ...prev, items: prev.items.filter((i) => i.id !== productId), total: prev.total - 1 } : prev);
+        setRecentlyViewed((prev) => prev.filter((i) => i.id !== productId));
+        setNewItems((prev) => prev.filter((i) => i.id !== productId));
+        setFollowingFeed((prev) => prev.filter((i) => i.id !== productId));
+        setRecommended((prev) => prev.filter((i) => i.id !== productId));
+      }
+      setAdminToast({ message: `Done: ${action}`, ok: true });
+    } catch {
+      setAdminToast({ message: "Action failed — check console", ok: false });
+    } finally {
+      setAdminBusy(false);
+      setTimeout(() => setAdminToast(null), 3000);
+    }
+  }, []);
+
   const toggleWishlist = useCallback((itemId: string, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setWishlist((prev) => {
@@ -484,7 +762,7 @@ export default function MarketplaceClient() {
       const adding = !next.has(itemId);
       if (adding) next.add(itemId); else next.delete(itemId);
       // Sync to localStorage (immediate)
-      try { localStorage.setItem("cf_wishlist", JSON.stringify([...next])); } catch { /* ignore */ }
+      try { localStorage.setItem("cf_wishlist", JSON.stringify(Array.from(next))); } catch { /* ignore */ }
       // Sync to DB in background (best-effort)
       if (adding) {
         fetch("/api/marketplace/wishlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId: itemId }) }).catch(() => {});
@@ -526,7 +804,7 @@ export default function MarketplaceClient() {
       // that the API confirmed are still valid and published
       try {
         const rv = JSON.parse(localStorage.getItem("cf_recently_viewed") ?? "[]") as MarketplaceItem[];
-        const topNiches = [...new Set(rv.map((i) => i.niche.toLowerCase()))].slice(0, 3);
+        const topNiches = Array.from(new Set(rv.map((i) => i.niche.toLowerCase()))).slice(0, 3);
         if (topNiches.length > 0) {
           const recs = liveItems
             .filter((i) => topNiches.includes(i.niche.toLowerCase()) && !rv.some((r) => r.id === i.id))
@@ -746,7 +1024,7 @@ export default function MarketplaceClient() {
             <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
               {recommended.map((item) => (
                 <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
-                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); }} />
+                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); }} isAdmin={isAdmin} onAdminAction={handleAdminAction} />
                 </div>
               ))}
             </div>
@@ -766,7 +1044,7 @@ export default function MarketplaceClient() {
             <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
               {followingFeed.map((item) => (
                 <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
-                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); }} />
+                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); }} isAdmin={isAdmin} onAdminAction={handleAdminAction} />
                 </div>
               ))}
             </div>
@@ -807,6 +1085,8 @@ export default function MarketplaceClient() {
           onWishlist={toggleWishlist}
           onQuickView={setQuickView}
           onNicheClick={(n) => { setNiche(n); setPage(1); }}
+          isAdmin={isAdmin}
+          onAdminAction={handleAdminAction}
         />
       )}
 
@@ -822,6 +1102,8 @@ export default function MarketplaceClient() {
           onNicheClick={(n) => { setNiche(n); setPage(1); }}
           onRemoveItem={removeRecentlyViewed}
           onClearAll={clearRecentlyViewed}
+          isAdmin={isAdmin}
+          onAdminAction={handleAdminAction}
         />
       )}
 
@@ -882,6 +1164,8 @@ export default function MarketplaceClient() {
                   onWishlist={toggleWishlist}
                   onQuickView={setQuickView}
                   onNicheClick={(n) => { setNiche(n); setPage(1); }}
+                  isAdmin={isAdmin}
+                  onAdminAction={handleAdminAction}
                 />
               ))}
             </div>
@@ -1020,7 +1304,35 @@ export default function MarketplaceClient() {
         .mp-card-link:hover .mp-quick-view { opacity: 1 !important; }
         .mp-creator-link:hover span { color: #f97316 !important; }
         ::-webkit-scrollbar { display: none; }
+        @keyframes fadeInScale { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
+
+      {/* ── Admin confirm modal ────────────────────────────────────────────── */}
+      {adminConfirm && (
+        <AdminConfirmModal
+          action={adminConfirm.action}
+          productTitle={adminConfirm.productTitle}
+          onConfirm={() => execAdminAction(adminConfirm.productId, adminConfirm.action)}
+          onCancel={() => setAdminConfirm(null)}
+        />
+      )}
+
+      {/* ── Admin toast ────────────────────────────────────────────────────── */}
+      {(adminBusy || adminToast) && typeof document !== "undefined" && createPortal(
+        <div style={{ position: "fixed", bottom: "28px", left: "50%", transform: "translateX(-50%)", zIndex: 99997, pointerEvents: "none" }}>
+          <div style={{ background: adminToast?.ok === false ? "#dc2626" : adminToast?.ok ? "#16a34a" : "#1f1f2e", color: "#fff", borderRadius: "12px", padding: "10px 20px", fontSize: "13px", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.25)", animation: "fadeInScale 0.15s ease", whiteSpace: "nowrap" }}>
+            {adminBusy
+              ? <><Loader2 style={{ width: "14px", height: "14px", animation: "spin 0.8s linear infinite" }} /> Updating…</>
+              : adminToast?.ok
+                ? <><Check style={{ width: "14px", height: "14px" }} /> {adminToast.message}</>
+                : <><AlertTriangle style={{ width: "14px", height: "14px" }} /> {adminToast?.message}</>
+            }
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
