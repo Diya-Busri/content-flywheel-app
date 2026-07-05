@@ -21,7 +21,7 @@ import { ResearchTab } from "@/components/workspace/ResearchTab";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type WorkspaceTab = "dashboard" | "todos" | "notes" | "calendar" | "goals"
-  | "research" | "marketing-psychology" | "copywriting" | "content-ideas"
+  | "research" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
   | "analytics" | "distribution" | "experiments";
 type Priority = "high" | "medium" | "low";
 type TodoFilter = "all" | "active" | "completed";
@@ -235,6 +235,7 @@ const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
+  { id: "founder-os",            label: "Founder OS",           icon: <Brain className="w-4 h-4" /> },
   { id: "marketing-psychology",  label: "Mktg Psychology",      icon: <Brain className="w-4 h-4" /> },
   { id: "copywriting",           label: "Copywriting",          icon: <FileText className="w-4 h-4" /> },
   { id: "content-ideas",         label: "Content Ideas",        icon: <Lightbulb className="w-4 h-4" /> },
@@ -2534,6 +2535,7 @@ function FounderWorkspaceSection({
   const [error, setError] = useState<string | null>(null);
   const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("all");
+  const [searchQ, setSearchQ] = useState("");
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -2650,20 +2652,36 @@ function FounderWorkspaceSection({
     if (!ap && bp) return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-  const filtered = typeFilter === "all" ? sorted : sorted.filter(e => e.type === typeFilter);
+  const filtered = sorted
+    .filter(e => typeFilter === "all" || e.type === typeFilter)
+    .filter(e => !searchQ || e.title.toLowerCase().includes(searchQ.toLowerCase()) || e.content.toLowerCase().includes(searchQ.toLowerCase()));
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-base font-bold text-foreground">{heading}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         </div>
-        {!showForm && !editingEntry && (
-          <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white shrink-0" onClick={() => setShowForm(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" />Add
-          </Button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Inline search */}
+          {entries.length > 2 && !showForm && !editingEntry && (
+            <div className="relative">
+              <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                value={searchQ}
+                onChange={e => setSearchQ(e.target.value)}
+                placeholder="Search…"
+                className="pl-7 pr-2 h-8 text-xs rounded-xl border border-border bg-background focus:outline-none focus:border-orange-400 transition-colors w-36"
+              />
+            </div>
+          )}
+          {!showForm && !editingEntry && (
+            <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white" onClick={() => setShowForm(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" />Add
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Type filter chips */}
@@ -2752,7 +2770,698 @@ function FounderWorkspaceSection({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FOUNDER OS — 7 ADMIN TAB COMPONENTS
+// FOUNDER OS — OVERVIEW HUB + REDESIGNED TABS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Founder OS Overview ─────────────────────────────────────────────────────
+
+function FounderOSOverview({ onTabChange }: { onTabChange: (tab: WorkspaceTab) => void }) {
+  const [allEntries, setAllEntries] = useState<FounderEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/founder-workspace")
+      .then(r => r.ok ? r.json() : [])
+      .then((data: FounderEntry[]) => setAllEntries(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const CATS = Object.entries(CATEGORY_LABELS) as [string, { label: string; icon: React.ComponentType<{ className?: string }> }][];
+  const countByCategory = CATS.reduce<Record<string, number>>((acc, [id]) => {
+    acc[id] = allEntries.filter(e => e.category === id).length;
+    return acc;
+  }, {});
+  const totalEntries = allEntries.length;
+  const recentEntries = [...allEntries]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 6);
+  const runningExperiments = allEntries.filter(
+    e => e.category === "experiments" && (e.metadata?.status as string) === "running"
+  );
+  const inFlightIdeas = allEntries.filter(
+    e => e.category === "content-ideas" &&
+      !["posted", "performed-well"].includes((e.metadata?.status as string) ?? "idea")
+  );
+
+  return (
+    <div className="space-y-8 max-w-6xl">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+            <Brain className="w-5 h-5 text-orange-500" />
+            Founder OS
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            The brain of Content Flywheel — knowledge, experiments, and systems in one place
+          </p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted/60 border border-border text-sm">
+          <span className="font-black text-foreground tabular-nums">{loading ? "…" : totalEntries}</span>
+          <span className="text-muted-foreground text-xs">knowledge items</span>
+        </div>
+      </div>
+
+      {/* Knowledge Base stats — one tile per section */}
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Knowledge Base</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {CATS.map(([id, meta]) => {
+            const CatIcon = meta.icon;
+            const count = countByCategory[id] ?? 0;
+            return (
+              <button key={id} onClick={() => onTabChange(id as WorkspaceTab)}
+                className="flex flex-col gap-3 p-4 rounded-2xl border border-border bg-card hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
+                <div className="flex items-start justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-muted/60 flex items-center justify-center group-hover:bg-orange-500/10 transition-colors">
+                    <CatIcon className="w-4 h-4 text-muted-foreground group-hover:text-orange-500 transition-colors" />
+                  </div>
+                  <span className="text-xl font-black text-foreground tabular-nums">{loading ? "…" : count}</span>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-foreground/80 group-hover:text-foreground transition-colors leading-tight">{meta.label}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{count === 0 ? "Empty — add first" : `${count} item${count !== 1 ? "s" : ""}`}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Status snapshot — 3 panels */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        {/* Running Experiments */}
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            {runningExperiments.length > 0 && <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />}
+            <FlaskConical className="w-4 h-4 text-blue-500" />
+            <p className="text-sm font-bold text-foreground">Running Experiments</p>
+            <span className="ml-auto text-sm font-black text-blue-500 tabular-nums">{loading ? "…" : runningExperiments.length}</span>
+          </div>
+          {loading ? (
+            <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
+          ) : runningExperiments.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-xs text-muted-foreground">No experiments running.</p>
+              <button onClick={() => onTabChange("experiments")} className="mt-2 text-xs text-orange-500 font-semibold">Start an experiment →</button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {runningExperiments.slice(0, 5).map(e => (
+                <button key={e.id} onClick={() => onTabChange("experiments")}
+                  className="w-full text-left text-xs text-foreground/80 py-1.5 px-2 rounded-lg hover:bg-accent transition-colors truncate block">
+                  {e.title}
+                </button>
+              ))}
+              {runningExperiments.length > 5 && (
+                <button onClick={() => onTabChange("experiments")} className="text-xs text-orange-500 font-semibold pt-1 block">
+                  +{runningExperiments.length - 5} more →
+                </button>
+              )}
+            </div>
+          )}
+          <button onClick={() => onTabChange("experiments")} className="mt-4 text-xs text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+            Open lab <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Ideas in Pipeline */}
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Lightbulb className="w-4 h-4 text-amber-500" />
+            <p className="text-sm font-bold text-foreground">Ideas in Pipeline</p>
+            <span className="ml-auto text-sm font-black text-amber-500 tabular-nums">{loading ? "…" : inFlightIdeas.length}</span>
+          </div>
+          {loading ? (
+            <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
+          ) : inFlightIdeas.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-xs text-muted-foreground">No ideas in progress.</p>
+              <button onClick={() => onTabChange("content-ideas")} className="mt-2 text-xs text-orange-500 font-semibold">Open idea board →</button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {inFlightIdeas.slice(0, 5).map(e => (
+                <button key={e.id} onClick={() => onTabChange("content-ideas")}
+                  className="w-full flex items-center gap-2 text-left py-1.5 px-2 rounded-lg hover:bg-accent transition-colors">
+                  <span className="text-xs text-foreground/80 flex-1 truncate">{e.title}</span>
+                  {!!e.metadata?.status && (
+                    <span className="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full capitalize shrink-0">
+                      {String(e.metadata.status).replace("-", " ")}
+                    </span>
+                  )}
+                </button>
+              ))}
+              {inFlightIdeas.length > 5 && (
+                <button onClick={() => onTabChange("content-ideas")} className="text-xs text-orange-500 font-semibold pt-1 block">
+                  +{inFlightIdeas.length - 5} more →
+                </button>
+              )}
+            </div>
+          )}
+          <button onClick={() => onTabChange("content-ideas")} className="mt-4 text-xs text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+            Open board <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Recently Added */}
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <p className="text-sm font-bold text-foreground">Recently Added</p>
+          </div>
+          {loading ? (
+            <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
+          ) : recentEntries.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-xs text-muted-foreground">Start capturing knowledge to Founder OS</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {recentEntries.map(e => {
+                const catMeta = CATEGORY_LABELS[e.category];
+                const CatIcon = catMeta?.icon ?? BookOpen;
+                return (
+                  <button key={e.id} onClick={() => onTabChange(e.category as WorkspaceTab)}
+                    className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-accent transition-colors text-left group">
+                    <CatIcon className="w-3 h-3 text-muted-foreground/50 group-hover:text-orange-500 shrink-0 transition-colors" />
+                    <span className="text-xs text-foreground/80 flex-1 truncate group-hover:text-foreground transition-colors">{e.title}</span>
+                    <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums">{fmtRelative(e.createdAt)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Content Ideas Kanban ─────────────────────────────────────────────────────
+
+const CONTENT_IDEA_STAGES = [
+  { status: "idea",           label: "💡 Idea",           color: "text-slate-500",                        bg: "bg-slate-500/10",  dot: "bg-slate-400" },
+  { status: "researching",    label: "🔬 Researching",    color: "text-purple-600 dark:text-purple-400",  bg: "bg-purple-500/10", dot: "bg-purple-400" },
+  { status: "writing",        label: "✍️ Writing",         color: "text-blue-600 dark:text-blue-400",      bg: "bg-blue-500/10",   dot: "bg-blue-400" },
+  { status: "recording",      label: "🎬 Recording",      color: "text-orange-600 dark:text-orange-400",  bg: "bg-orange-500/10", dot: "bg-orange-400" },
+  { status: "posted",         label: "📤 Posted",         color: "text-green-600 dark:text-green-400",    bg: "bg-green-500/10",  dot: "bg-green-400" },
+  { status: "performed-well", label: "🏆 Performed Well", color: "text-amber-600 dark:text-amber-400",    bg: "bg-amber-500/10",  dot: "bg-amber-400" },
+] as const;
+
+const CONTENT_IDEA_TYPES = [
+  { value: "hook",         label: "Hook" },
+  { value: "angle",        label: "Angle" },
+  { value: "script",       label: "Script" },
+  { value: "viral-format", label: "Viral Format" },
+  { value: "series",       label: "Series Idea" },
+];
+
+function ContentIdeasKanbanTab() {
+  const [entries, setEntries] = useState<FounderEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<FounderEntry | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [activeStage, setActiveStage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/founder-workspace?category=content-ideas")
+      .then(r => r.ok ? r.json() : [])
+      .then((data: FounderEntry[]) => setEntries(data))
+      .catch(() => setError("Could not load ideas"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const moveStage = async (entry: FounderEntry, newStatus: string) => {
+    const newMeta = { ...(entry.metadata ?? {}), status: newStatus };
+    try {
+      const res = await fetch("/api/founder-workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: entry.id, metadata: newMeta }),
+      });
+      const updated = await res.json() as FounderEntry;
+      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+    } catch { setError("Failed to update status"); }
+  };
+
+  const handleSave = async (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => {
+    try {
+      if (editingEntry) {
+        const res = await fetch("/api/founder-workspace", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingEntry.id, ...data }),
+        });
+        const updated = await res.json() as FounderEntry;
+        setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+        setEditingEntry(null);
+      } else {
+        const res = await fetch("/api/founder-workspace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: "content-ideas", ...data }),
+        });
+        const created = await res.json() as FounderEntry;
+        setEntries(prev => [created, ...prev]);
+        setShowForm(false);
+      }
+    } catch { setError("Failed to save idea"); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this idea?")) return;
+    try {
+      await fetch(`/api/founder-workspace?id=${id}`, { method: "DELETE" });
+      setEntries(prev => prev.filter(e => e.id !== id));
+    } catch { setError("Failed to delete"); }
+  };
+
+  const filtered = entries.filter(e =>
+    !searchQ || e.title.toLowerCase().includes(searchQ.toLowerCase()) || e.content.toLowerCase().includes(searchQ.toLowerCase())
+  );
+  const stagesToShow = activeStage ? CONTENT_IDEA_STAGES.filter(s => s.status === activeStage) : CONTENT_IDEA_STAGES;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Lightbulb className="w-4 h-4 text-amber-500" />
+            Content Ideas Board
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Move ideas from concept to published — click arrows to advance stage</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search ideas…"
+              className="pl-7 pr-3 h-8 text-xs rounded-xl border border-border bg-background focus:outline-none focus:border-orange-400 w-40" />
+          </div>
+          <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white shrink-0" onClick={() => setShowForm(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1" />New Idea
+          </Button>
+        </div>
+      </div>
+
+      {/* Stage filter chips */}
+      <div className="flex gap-1.5 flex-wrap">
+        <button onClick={() => setActiveStage(null)}
+          className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+            !activeStage ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:text-foreground hover:border-foreground")}>
+          All · {filtered.length}
+        </button>
+        {CONTENT_IDEA_STAGES.map(stage => {
+          const count = filtered.filter(e => (e.metadata?.status ?? "idea") === stage.status).length;
+          return (
+            <button key={stage.status} onClick={() => setActiveStage(activeStage === stage.status ? null : stage.status)}
+              className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+                activeStage === stage.status
+                  ? `${stage.bg} ${stage.color} border-current`
+                  : "border-border text-muted-foreground hover:text-foreground")}>
+              <span className={cn("w-1.5 h-1.5 rounded-full", stage.dot)} />
+              {stage.label.split(" ").slice(1).join(" ")} · {count}
+            </button>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 flex items-center gap-2">
+          <AlertCircle className="w-3.5 h-3.5" />{error}
+          <button className="ml-auto underline" onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+
+      {showForm && (
+        <FounderWorkspaceEntryForm
+          types={CONTENT_IDEA_TYPES}
+          onSave={handleSave}
+          onCancel={() => setShowForm(false)}
+          titlePlaceholder="e.g. 'The reason your meal prep fails has nothing to do with motivation'"
+          contentPlaceholder="Full idea, script outline, or angle description…"
+          extraFields={(_type, meta, setMeta) => (
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Platform (optional)</label>
+              <Input
+                value={typeof meta.platform === "string" ? meta.platform : ""}
+                onChange={e => setMeta({ ...meta, platform: e.target.value })}
+                placeholder="e.g. TikTok, Instagram, Pinterest"
+                className="h-8 text-xs"
+              />
+            </div>
+          )}
+        />
+      )}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="w-4 h-4 animate-spin" />Loading ideas…
+        </div>
+      ) : (
+        <div className={cn("grid gap-3", activeStage ? "grid-cols-1 max-w-sm" : "grid-cols-2 lg:grid-cols-3 xl:grid-cols-6")}>
+          {stagesToShow.map(stage => {
+            const stageEntries = filtered.filter(e => (e.metadata?.status ?? "idea") === stage.status);
+            const stageIdx = CONTENT_IDEA_STAGES.findIndex(s => s.status === stage.status);
+            return (
+              <div key={stage.status} className="rounded-2xl border border-border bg-muted/20 p-3 min-h-[140px]">
+                <div className="flex items-center justify-between mb-3">
+                  <p className={cn("text-[10px] font-black uppercase tracking-widest", stage.color)}>{stage.label}</p>
+                  {stageEntries.length > 0 && (
+                    <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full tabular-nums", stage.bg, stage.color)}>
+                      {stageEntries.length}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {stageEntries.map(entry => (
+                    editingEntry?.id === entry.id ? (
+                      <FounderWorkspaceEntryForm
+                        key={entry.id}
+                        types={CONTENT_IDEA_TYPES}
+                        onSave={handleSave}
+                        onCancel={() => setEditingEntry(null)}
+                        initial={entry}
+                        titlePlaceholder="Idea title…"
+                        contentPlaceholder="Details…"
+                      />
+                    ) : (
+                      <div key={entry.id}
+                        className="bg-background border border-border/60 rounded-xl p-3 group hover:border-orange-500/30 hover:shadow-sm transition-all">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-[9px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                            {CONTENT_IDEA_TYPES.find(t => t.value === entry.type)?.label ?? entry.type}
+                          </span>
+                          {(entry.metadata?.pinned as boolean) && <Pin className="w-2.5 h-2.5 text-orange-500 fill-current ml-auto" />}
+                        </div>
+                        <p className="text-xs font-semibold text-foreground leading-snug line-clamp-3">{entry.title}</p>
+                        {!!entry.metadata?.platform && (
+                          <span className="mt-1.5 inline-block text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                            {String(entry.metadata.platform)}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-0.5 mt-2 pt-2 border-t border-border/40">
+                          {stageIdx > 0 && (
+                            <button onClick={() => moveStage(entry, CONTENT_IDEA_STAGES[stageIdx - 1].status)}
+                              title={`Move to ${CONTENT_IDEA_STAGES[stageIdx - 1].label}`}
+                              className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                          )}
+                          <div className="flex-1" />
+                          <button onClick={() => setEditingEntry(entry)}
+                            className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => handleDelete(entry.id)}
+                            className="p-1 rounded-md hover:bg-red-500/10 transition-colors text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                          {stageIdx < CONTENT_IDEA_STAGES.length - 1 && (
+                            <button onClick={() => moveStage(entry, CONTENT_IDEA_STAGES[stageIdx + 1].status)}
+                              title={`Move to ${CONTENT_IDEA_STAGES[stageIdx + 1].label}`}
+                              className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-orange-500">
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  ))}
+                </div>
+                {stageEntries.length === 0 && (
+                  <div className="py-4 text-center">
+                    <p className="text-[10px] text-muted-foreground/30">Empty</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Experiments Business Lab ─────────────────────────────────────────────────
+
+const EXPERIMENT_LAB_STAGES = [
+  { status: "running",  label: "🔬 Running",    color: "text-blue-600 dark:text-blue-400",   bg: "bg-blue-500/10",  border: "border-blue-500/30" },
+  { status: "won",      label: "🏆 Won",         color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10", border: "border-green-500/30" },
+  { status: "failed",   label: "❌ Failed",      color: "text-red-500",                        bg: "bg-red-500/10",   border: "border-red-500/30" },
+  { status: "archived", label: "📦 Archived",    color: "text-muted-foreground",               bg: "bg-muted",        border: "border-border" },
+] as const;
+
+function ExperimentsLabTab() {
+  const [entries, setEntries] = useState<FounderEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<FounderEntry | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  useEffect(() => {
+    fetch("/api/founder-workspace?category=experiments")
+      .then(r => r.ok ? r.json() : [])
+      .then((data: FounderEntry[]) => setEntries(data))
+      .catch(() => setError("Could not load experiments"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const EXP_TYPES = [{ value: "experiment", label: "Experiment" }];
+
+  const handleSave = async (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => {
+    try {
+      if (editingEntry) {
+        const res = await fetch("/api/founder-workspace", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingEntry.id, ...data }),
+        });
+        const updated = await res.json() as FounderEntry;
+        setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+        setEditingEntry(null);
+      } else {
+        const res = await fetch("/api/founder-workspace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: "experiments", ...data }),
+        });
+        const created = await res.json() as FounderEntry;
+        setEntries(prev => [created, ...prev]);
+        setShowForm(false);
+      }
+    } catch { setError("Failed to save"); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this experiment?")) return;
+    try {
+      await fetch(`/api/founder-workspace?id=${id}`, { method: "DELETE" });
+      setEntries(prev => prev.filter(e => e.id !== id));
+    } catch { setError("Failed to delete"); }
+  };
+
+  const filtered = entries.filter(e => {
+    const q = searchQ.toLowerCase();
+    const matchQ = !q || e.title.toLowerCase().includes(q) || e.content.toLowerCase().includes(q);
+    const matchS = statusFilter === "all" || (e.metadata?.status ?? "running") === statusFilter;
+    return matchQ && matchS;
+  });
+
+  const counts = EXPERIMENT_LAB_STAGES.reduce<Record<string, number>>((acc, s) => {
+    acc[s.status] = entries.filter(e => (e.metadata?.status ?? "running") === s.status).length;
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-5 max-w-4xl">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <FlaskConical className="w-4 h-4 text-blue-500" />
+            Business Lab
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Treat the business like a lab — every hypothesis is a chance to learn</p>
+        </div>
+        <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white shrink-0" onClick={() => setShowForm(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1" />New Experiment
+        </Button>
+      </div>
+
+      {/* Status stat tiles */}
+      <div className="grid grid-cols-4 gap-3">
+        {EXPERIMENT_LAB_STAGES.map(stage => (
+          <button key={stage.status}
+            onClick={() => setStatusFilter(statusFilter === stage.status ? "all" : stage.status)}
+            className={cn("flex flex-col gap-1 p-3.5 rounded-2xl border transition-all text-left",
+              statusFilter === stage.status
+                ? `${stage.bg} ${stage.border} ${stage.color}`
+                : "border-border bg-card hover:border-orange-500/20 hover:bg-orange-500/5")}>
+            <span className={cn("text-2xl font-black tabular-nums", statusFilter === stage.status ? stage.color : "text-foreground")}>
+              {counts[stage.status] ?? 0}
+            </span>
+            <span className={cn("text-[10px] font-semibold", statusFilter === stage.status ? stage.color : "text-muted-foreground")}>
+              {stage.label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-xs">
+        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search experiments…"
+          className="pl-8 pr-3 h-8 w-full text-xs rounded-xl border border-border bg-background focus:outline-none focus:border-orange-400 transition-colors" />
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 flex items-center gap-2">
+          <AlertCircle className="w-3.5 h-3.5" />{error}
+          <button className="ml-auto underline" onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+
+      {showForm && (
+        <FounderWorkspaceEntryForm
+          types={EXP_TYPES}
+          onSave={handleSave}
+          onCancel={() => setShowForm(false)}
+          titlePlaceholder="Hypothesis: e.g. Adding urgency to the CTA will lift conversions by 20%"
+          contentPlaceholder="What you're testing, how you're measuring it, what you expect…"
+          extraFields={(_type, meta, setMeta) => (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Goal / Success metric</label>
+                  <Input
+                    value={typeof meta.goal === "string" ? meta.goal : ""}
+                    onChange={e => setMeta({ ...meta, goal: e.target.value })}
+                    placeholder="e.g. +20% CTR on bio link"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+                  <div className="flex gap-1">
+                    {EXPERIMENT_LAB_STAGES.slice(0, 3).map(s => (
+                      <button key={s.status} onClick={() => setMeta({ ...meta, status: s.status })}
+                        className={cn("flex-1 py-1 rounded-lg text-[10px] font-bold border capitalize transition-all",
+                          meta.status === s.status
+                            ? `${s.bg} ${s.border} ${s.color}`
+                            : "border-border text-muted-foreground hover:border-orange-400")}>
+                        {s.status}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Result (fill in when done)</label>
+                <Input
+                  value={typeof meta.result === "string" ? meta.result : ""}
+                  onChange={e => setMeta({ ...meta, result: e.target.value })}
+                  placeholder="e.g. CTR went from 1.2% to 3.8% — rolling out"
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+          )}
+        />
+      )}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="w-4 h-4 animate-spin" />Loading experiments…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-12 text-center">
+          <FlaskConical className="w-8 h-8 text-muted-foreground/20 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground mb-3">
+            {searchQ || statusFilter !== "all"
+              ? "No experiments match your filter"
+              : "No experiments yet — start treating the business like a lab"}
+          </p>
+          {!showForm && (
+            <Button size="sm" onClick={() => setShowForm(true)} className="bg-orange-500 hover:bg-orange-600 text-white">
+              + Run First Experiment
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {EXPERIMENT_LAB_STAGES
+            .filter(s => filtered.some(e => (e.metadata?.status ?? "running") === s.status))
+            .map(stage => {
+              const stageEntries = filtered.filter(e => (e.metadata?.status ?? "running") === stage.status);
+              return (
+                <div key={stage.status}>
+                  <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl mb-2", stage.bg)}>
+                    <span className={cn("text-xs font-black", stage.color)}>{stage.label}</span>
+                    <span className={cn("text-xs font-black ml-auto tabular-nums", stage.color)}>{stageEntries.length}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {stageEntries.map(entry => (
+                      editingEntry?.id === entry.id ? (
+                        <FounderWorkspaceEntryForm
+                          key={entry.id}
+                          types={EXP_TYPES}
+                          onSave={handleSave}
+                          onCancel={() => setEditingEntry(null)}
+                          initial={entry}
+                          titlePlaceholder="Hypothesis…"
+                          contentPlaceholder="Details…"
+                        />
+                      ) : (
+                        <div key={entry.id}
+                          className={cn("rounded-2xl border p-4 group hover:shadow-sm transition-all bg-card", stage.border)}>
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-semibold text-foreground leading-snug flex-1">{entry.title}</p>
+                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => setEditingEntry(entry)}
+                                className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleDelete(entry.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-muted-foreground hover:text-red-500">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          {entry.content && (
+                            <p className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-2">{entry.content}</p>
+                          )}
+                          <div className="flex items-center gap-3 mt-3 flex-wrap">
+                            {!!entry.metadata?.goal && (
+                              <span className="text-[11px] text-muted-foreground">🎯 {String(entry.metadata.goal)}</span>
+                            )}
+                            {!!entry.metadata?.result && (
+                              <span className={cn("text-[11px] font-semibold", stage.color)}>
+                                📊 {String(entry.metadata.result)}
+                              </span>
+                            )}
+                            <span className="ml-auto text-[10px] text-muted-foreground/40 tabular-nums">{fmtRelative(entry.createdAt)}</span>
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FOUNDER OS — REMAINING ADMIN TAB COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ResearchTab is now imported from @/components/workspace/ResearchTab
@@ -2813,42 +3522,7 @@ function CopywritingTab() {
   );
 }
 
-function ContentIdeasTab() {
-  return (
-    <div className="max-w-2xl space-y-8">
-      <FounderWorkspaceSection
-        category="content-ideas"
-        types={[
-          { value: "hook", label: "Hook" },
-          { value: "angle", label: "Angle" },
-          { value: "script", label: "Script" },
-          { value: "viral-format", label: "Viral Format" },
-          { value: "series", label: "Series Idea" },
-        ]}
-        heading="Content Ideas"
-        description="Hooks, angles, scripts, viral formats, and series concepts to batch-create."
-        titlePlaceholder="e.g. 'The reason your meal prep fails has nothing to do with motivation'"
-        contentPlaceholder="Full idea, script outline, or angle description…"
-        extraFields={(_type, meta, setMeta) => (
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Platform (optional)</label>
-            <Input
-              value={typeof meta.platform === "string" ? meta.platform : ""}
-              onChange={e => setMeta({ ...meta, platform: e.target.value })}
-              placeholder="e.g. TikTok, Instagram, Pinterest"
-              className="h-8 text-xs"
-            />
-          </div>
-        )}
-        renderMeta={meta => meta?.platform ? (
-          <span className="mt-1 inline-block px-2 py-0.5 rounded-full bg-muted text-[10px] text-muted-foreground font-medium">
-            {String(meta.platform)}
-          </span>
-        ) : null}
-      />
-    </div>
-  );
-}
+// ContentIdeasTab is replaced by ContentIdeasKanbanTab above
 
 function AnalyticsTab() {
   return (
@@ -2944,64 +3618,7 @@ function DistributionTab() {
   );
 }
 
-const EXPERIMENT_STATUS_COLORS: Record<string, string> = {
-  running: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-  complete: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-  failed: "bg-red-500/10 text-red-500 border-red-500/20",
-};
-
-function ExperimentsTab() {
-  return (
-    <div className="max-w-2xl space-y-8">
-      <FounderWorkspaceSection
-        category="experiments"
-        types={[{ value: "experiment", label: "Experiment" }]}
-        heading="Experiments"
-        description="Hypotheses, tests, and results. Treat the business like a lab."
-        titlePlaceholder="Hypothesis: e.g. Adding a freebie to the bio link will lift product page visits"
-        contentPlaceholder="What you're testing, how you're measuring it, what you learned…"
-        extraFields={(_type, meta, setMeta) => (
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Status</label>
-              <div className="flex gap-1.5">
-                {(["running", "complete", "failed"] as const).map(s => (
-                  <button key={s} onClick={() => setMeta({ ...meta, status: s })}
-                    className={cn("px-2.5 py-1 rounded-full text-xs font-medium border capitalize transition-all",
-                      meta.status === s ? EXPERIMENT_STATUS_COLORS[s] : "border-border text-muted-foreground hover:border-orange-400")}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Result (fill in when complete)</label>
-              <Input
-                value={typeof meta.result === "string" ? meta.result : ""}
-                onChange={e => setMeta({ ...meta, result: e.target.value })}
-                placeholder="e.g. CTR went from 1.2% to 3.8% — confirmed, rolling out"
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
-        )}
-        renderMeta={meta => (
-          <div className="mt-1 flex items-center gap-2 flex-wrap">
-            {meta?.status ? (
-              <span className={cn("inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize",
-                EXPERIMENT_STATUS_COLORS[String(meta.status)] ?? "bg-muted text-muted-foreground border-border")}>
-                {String(meta.status)}
-              </span>
-            ) : null}
-            {meta?.result ? (
-              <span className="text-[11px] text-muted-foreground italic">{String(meta.result)}</span>
-            ) : null}
-          </div>
-        )}
-      />
-    </div>
-  );
-}
+// ExperimentsTab is replaced by ExperimentsLabTab above
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GLOBAL KNOWLEDGE BASE SEARCH
@@ -3409,6 +4026,7 @@ export default function WorkspacePage() {
     calendar:             "Plan and schedule your content drops",
     goals:                "Track revenue, growth, and product targets",
     "research":           "AI Business Analyst — discover opportunities, understand markets, take action",
+    "founder-os":         "Your internal OS — the memory and intelligence layer for Content Flywheel",
     "marketing-psychology": "Psychological triggers and buyer behavior principles",
     "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
     "content-ideas":      "Hooks, angles, scripts, and viral content formats",
@@ -3518,12 +4136,13 @@ export default function WorkspacePage() {
 
       {/* Admin-only tab content */}
       {tab === "research"                          && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
+      {isAdmin && tab === "founder-os"             && <FounderOSOverview onTabChange={setTab} />}
       {isAdmin && tab === "marketing-psychology"  && <MarketingPsychologyTab />}
       {isAdmin && tab === "copywriting"           && <CopywritingTab />}
-      {isAdmin && tab === "content-ideas"         && <ContentIdeasTab />}
+      {isAdmin && tab === "content-ideas"         && <ContentIdeasKanbanTab />}
       {isAdmin && tab === "analytics"             && <AnalyticsTab />}
       {isAdmin && tab === "distribution"          && <DistributionTab />}
-      {isAdmin && tab === "experiments"           && <ExperimentsTab />}
+      {isAdmin && tab === "experiments"           && <ExperimentsLabTab />}
     </div>
   );
 }
