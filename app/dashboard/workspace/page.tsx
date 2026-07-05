@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useWorkspaceAdmin } from "@/components/workspace-admin-context";
 import { NoteEditor } from "@/components/notes/NoteEditor";
+import { ResearchTab } from "@/components/workspace/ResearchTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1607,42 +1608,8 @@ function FounderWorkspaceSection({
 // FOUNDER OS — 7 ADMIN TAB COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ResearchTab() {
-  return (
-    <div className="max-w-2xl space-y-8">
-      <FounderWorkspaceSection
-        category="research"
-        types={[
-          { value: "insight", label: "Market Insight" },
-          { value: "competitor", label: "Competitor" },
-          { value: "icp", label: "ICP Note" },
-          { value: "trend", label: "Trend" },
-        ]}
-        heading="Market Research"
-        description="Insights, competitor notes, ICP observations, and trends you want to remember."
-        titlePlaceholder="e.g. TikTok nurse niche — high demand, low supply of PDF planners"
-        contentPlaceholder="Detailed notes, source, context…"
-        extraFields={(type, meta, setMeta) => (
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Source / URL (optional)</label>
-            <Input
-              value={typeof meta.source === "string" ? meta.source : ""}
-              onChange={e => setMeta({ ...meta, source: e.target.value })}
-              placeholder="https://…"
-              className="h-8 text-xs"
-            />
-          </div>
-        )}
-        renderMeta={meta => meta?.source ? (
-          <a href={String(meta.source)} target="_blank" rel="noopener noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-[11px] text-orange-500 hover:underline truncate max-w-full">
-            {String(meta.source)}
-          </a>
-        ) : null}
-      />
-    </div>
-  );
-}
+// ResearchTab is now imported from @/components/workspace/ResearchTab
+// — it renders the AI Research Assistant experience
 
 function MarketingPsychologyTab() {
   return (
@@ -1902,7 +1869,7 @@ export default function WorkspacePage() {
     notes:                "Capture ideas, scripts, and notes",
     calendar:             "Plan and schedule your content drops",
     goals:                "Track revenue, growth, and product targets",
-    "research":           "Market insights, competitor notes, and ICP observations",
+    "research":           "AI-powered research assistant — find opportunities, not just information",
     "marketing-psychology": "Psychological triggers and buyer behavior principles",
     "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
     "content-ideas":      "Hooks, angles, scripts, and viral content formats",
@@ -1956,7 +1923,7 @@ export default function WorkspacePage() {
       {tab === "goals"    && <GoalsTab />}
 
       {/* Admin-only tab content */}
-      {isAdmin && tab === "research"              && <ResearchTab />}
+      {isAdmin && tab === "research"              && <ResearchTab onTabChange={setTab} />}
       {isAdmin && tab === "marketing-psychology"  && <MarketingPsychologyTab />}
       {isAdmin && tab === "copywriting"           && <CopywritingTab />}
       {isAdmin && tab === "content-ideas"         && <ContentIdeasTab />}
