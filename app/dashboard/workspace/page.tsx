@@ -7,7 +7,7 @@ import {
   Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap, List,
   Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
   FileText, Lightbulb, ChevronUp, Loader2,
-  Pin, Minus
+  Pin, Minus, Copy, Clock,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -96,6 +96,74 @@ const STARTER_TASKS: { text: string; priority: Priority; category: string }[] = 
   { text: "Share your store link on social media",       priority: "medium", category: "growth" },
   { text: "Write your welcome email sequence",           priority: "medium", category: "content" },
 ];
+
+// ─── Knowledge Base helpers ───────────────────────────────────────────────────
+
+const KB_AI_SUGGESTIONS: Record<string, { label: string; href: string }[]> = {
+  "marketing-psychology": [
+    { label: "Generate Headlines", href: "/dashboard/design-studio" },
+    { label: "Inspire Landing Page Copy", href: "/dashboard/design-studio" },
+    { label: "Create Hook from This", href: "/dashboard/workspace?tab=content-ideas" },
+  ],
+  "copywriting": [
+    { label: "Turn into Product Description", href: "/dashboard/library?create=true" },
+    { label: "Open Design Studio", href: "/dashboard/design-studio" },
+    { label: "Ask AI Coach", href: "/dashboard/ai-coach" },
+  ],
+  "content-ideas": [
+    { label: "Expand into Script", href: "/dashboard/workspace?tab=notes" },
+    { label: "Build Video Guide", href: "/dashboard/design-studio?tab=video" },
+    { label: "Add to Calendar", href: "/dashboard/workspace?tab=calendar" },
+  ],
+  "analytics": [
+    { label: "Create Experiment", href: "/dashboard/workspace?tab=experiments" },
+    { label: "Ask AI Coach for Next Steps", href: "/dashboard/ai-coach" },
+  ],
+  "distribution": [
+    { label: "Build Promotion Strategy", href: "/dashboard/ai-coach" },
+    { label: "Open Design Studio", href: "/dashboard/design-studio" },
+  ],
+  "experiments": [
+    { label: "Get AI Analysis", href: "/dashboard/ai-coach" },
+    { label: "Roll Out to Distribution", href: "/dashboard/workspace?tab=distribution" },
+    { label: "Record in Analytics", href: "/dashboard/workspace?tab=analytics" },
+  ],
+};
+
+const CATEGORY_LABELS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+  "marketing-psychology": { label: "Mktg Psychology", icon: Brain },
+  "copywriting":          { label: "Copywriting",     icon: FileText },
+  "content-ideas":        { label: "Content Ideas",   icon: Lightbulb },
+  "analytics":            { label: "Analytics",       icon: BarChart2 },
+  "distribution":         { label: "Distribution",    icon: Megaphone },
+  "experiments":          { label: "Experiments",     icon: FlaskConical },
+  "research":             { label: "Research",        icon: BookOpen },
+};
+
+function tagColor(tag: string): string {
+  const palette = [
+    "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+    "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+    "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20",
+    "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
+  ];
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) % palette.length;
+  return palette[Math.abs(h) % palette.length];
+}
+
+function fmtRelative(dateStr: string): string {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function isOverdue(d?: string) { return !!d && new Date(d) < new Date(new Date().toDateString()); }
@@ -1407,17 +1475,70 @@ interface EntryCardProps {
   entry: FounderEntry;
   onDelete: (id: string) => void;
   onEdit: (entry: FounderEntry) => void;
+  onPin: (entry: FounderEntry, pinned: boolean) => void;
+  onTagsChange: (entry: FounderEntry, tags: string[]) => void;
+  onDuplicate: (entry: FounderEntry) => void;
   typeLabel?: string;
   renderMeta?: (meta: Record<string, unknown> | null) => React.ReactNode;
+  isRecentlySaved?: boolean;
+  category: string;
+  allEntries?: FounderEntry[];
 }
 
-function FounderWorkspaceEntryCard({ entry, onDelete, onEdit, typeLabel, renderMeta }: EntryCardProps) {
+function FounderWorkspaceEntryCard({
+  entry, onDelete, onEdit, onPin, onTagsChange, onDuplicate,
+  typeLabel, renderMeta, isRecentlySaved, category, allEntries = [],
+}: EntryCardProps) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  const [showAISuggestions, setShowAISuggestions] = useState(!!isRecentlySaved);
+  const [showRelated, setShowRelated] = useState(false);
+  const [addingTag, setAddingTag] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+  const tagInputRef = useRef<HTMLInputElement>(null);
+
+  const meta = entry.metadata ?? {};
+  const tags = (meta.tags as string[] | undefined) ?? [];
+  const pinned = (meta.pinned as boolean | undefined) ?? false;
+  const suggestions = KB_AI_SUGGESTIONS[category] ?? [];
+
+  // Related: other entries with ≥1 shared tag (cross-section, same loaded pool)
+  const relatedEntries = tags.length > 0
+    ? allEntries.filter(e => {
+        if (e.id === entry.id) return false;
+        const eTags = (e.metadata?.tags as string[] | undefined) ?? [];
+        return eTags.some(t => tags.includes(t));
+      }).slice(0, 3)
+    : [];
+
+  const addTag = () => {
+    const t = tagInput.trim().toLowerCase().replace(/\s+/g, "-");
+    if (t && !tags.includes(t)) onTagsChange(entry, [...tags, t]);
+    setTagInput("");
+    setAddingTag(false);
+  };
+  const removeTag = (tag: string) => onTagsChange(entry, tags.filter(t => t !== tag));
+
+  useEffect(() => { if (addingTag) tagInputRef.current?.focus(); }, [addingTag]);
+
+  const wasEdited = entry.updatedAt && entry.createdAt && entry.updatedAt !== entry.createdAt;
+
   return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-2 hover:border-orange-500/30 transition-colors">
+    <div className={cn(
+      "rounded-xl border bg-card p-4 space-y-3 transition-all",
+      pinned
+        ? "border-orange-500/40 bg-orange-500/[0.02]"
+        : "border-border hover:border-orange-500/30",
+    )}>
+      {/* ── Header ── */}
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            {pinned && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 uppercase tracking-wide">
+                <Pin className="w-2.5 h-2.5 fill-current" />Pinned
+              </span>
+            )}
             {typeLabel && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-wide">
                 {typeLabel}
@@ -1430,22 +1551,139 @@ function FounderWorkspaceEntryCard({ entry, onDelete, onEdit, typeLabel, renderM
               {entry.content}
             </p>
           )}
-          {entry.content && entry.content.length > 100 && (
+          {entry.content && entry.content.length > 120 && (
             <button onClick={() => setExpanded(v => !v)} className="mt-0.5 text-[11px] text-orange-500 hover:underline flex items-center gap-0.5">
               {expanded ? <><ChevronUp className="w-3 h-3" />Less</> : <><ChevronDown className="w-3 h-3" />More</>}
             </button>
           )}
           {renderMeta?.(entry.metadata)}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => onEdit(entry)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={() => onPin(entry, !pinned)}
+            title={pinned ? "Unpin" : "Pin to top"}
+            className={cn(
+              "p-1.5 rounded-lg transition-colors",
+              pinned ? "text-orange-500 hover:bg-orange-500/10" : "text-muted-foreground hover:bg-accent hover:text-orange-500",
+            )}
+          >
+            <Pin className={cn("w-3.5 h-3.5", pinned && "fill-current")} />
+          </button>
+          <button onClick={() => onDuplicate(entry)} title="Duplicate" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => onEdit(entry)} title="Edit" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => onDelete(entry.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors">
+          <button onClick={() => onDelete(entry.id)} title="Delete" className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
+
+      {/* ── Tags ── */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {tags.map(tag => (
+          <span key={tag} className={cn("flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border", tagColor(tag))}>
+            {tag}
+            <button onClick={() => removeTag(tag)} className="ml-0.5 hover:opacity-60 leading-none">
+              <X className="w-2.5 h-2.5" />
+            </button>
+          </span>
+        ))}
+        {addingTag ? (
+          <input
+            ref={tagInputRef}
+            value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") { e.preventDefault(); addTag(); }
+              if (e.key === "Escape") { setAddingTag(false); setTagInput(""); }
+            }}
+            onBlur={addTag}
+            placeholder="tag name…"
+            className="h-5 w-24 px-2 rounded-full border border-orange-500/40 bg-orange-500/5 text-[10px] font-medium focus:outline-none text-orange-600"
+          />
+        ) : (
+          <button
+            onClick={() => setAddingTag(true)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-dashed border-border text-muted-foreground hover:border-orange-500/40 hover:text-orange-500 transition-colors"
+          >
+            <Tag className="w-2.5 h-2.5" />tag
+          </button>
+        )}
+      </div>
+
+      {/* ── Footer: dates + toggles ── */}
+      <div className="flex items-center justify-between border-t border-border pt-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            Created {fmtRelative(entry.createdAt)}
+          </span>
+          {wasEdited && <span>Edited {fmtRelative(entry.updatedAt)}</span>}
+        </div>
+        <div className="flex items-center gap-3">
+          {relatedEntries.length > 0 && (
+            <button onClick={() => setShowRelated(v => !v)} className="flex items-center gap-1 hover:text-foreground transition-colors">
+              {relatedEntries.length} related
+              <ChevronDown className={cn("w-3 h-3 transition-transform", showRelated && "rotate-180")} />
+            </button>
+          )}
+          {suggestions.length > 0 && (
+            <button
+              onClick={() => setShowAISuggestions(v => !v)}
+              className={cn("flex items-center gap-1 transition-colors", showAISuggestions ? "text-orange-500" : "hover:text-foreground")}
+            >
+              <Zap className="w-3 h-3" />AI actions
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Related Entries ── */}
+      {showRelated && relatedEntries.length > 0 && (
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Related Entries</p>
+          {relatedEntries.map(rel => {
+            const relTags = (rel.metadata?.tags as string[] | undefined) ?? [];
+            const shared = relTags.filter(t => tags.includes(t));
+            return (
+              <div key={rel.id} className="flex items-center gap-2">
+                <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-muted text-muted-foreground uppercase">
+                  {(CATEGORY_LABELS[rel.category]?.label ?? rel.category).replace("-", " ")}
+                </span>
+                <span className="text-xs text-foreground flex-1 truncate">{rel.title}</span>
+                {shared.length > 0 && (
+                  <span className="shrink-0 text-[9px] text-muted-foreground">#{shared[0]}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── AI Suggestions ── */}
+      {showAISuggestions && suggestions.length > 0 && (
+        <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-3 space-y-2">
+          <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wide flex items-center gap-1">
+            <Zap className="w-3 h-3" />What to do with this
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {suggestions.map(s => (
+              <button
+                key={s.href + s.label}
+                onClick={() => router.push(s.href)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-medium text-foreground hover:border-orange-500/40 hover:bg-orange-500/5 transition-all"
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1469,6 +1707,8 @@ function FounderWorkspaceSection({
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FounderEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState("all");
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -1506,8 +1746,10 @@ function FounderWorkspaceSection({
         });
         if (!res.ok) throw new Error("Failed to create");
         const created = await res.json() as FounderEntry;
-        setEntries(prev => [...prev, created]);
+        setEntries(prev => [created, ...prev]);
         setShowForm(false);
+        setRecentlySavedId(created.id);
+        setTimeout(() => setRecentlySavedId(null), 30000);
       }
     } catch {
       setError("Failed to save entry");
@@ -1524,12 +1766,66 @@ function FounderWorkspaceSection({
     }
   };
 
-  const handleEdit = (entry: FounderEntry) => {
-    setEditingEntry(entry);
-    setShowForm(false);
+  const handleEdit = (entry: FounderEntry) => { setEditingEntry(entry); setShowForm(false); };
+
+  const handlePin = async (entry: FounderEntry, pinned: boolean) => {
+    const newMeta = { ...(entry.metadata ?? {}), pinned };
+    try {
+      const res = await fetch("/api/founder-workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: entry.id, metadata: newMeta }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json() as FounderEntry;
+      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+    } catch { setError("Failed to update pin"); }
+  };
+
+  const handleTagsChange = async (entry: FounderEntry, tags: string[]) => {
+    const newMeta = { ...(entry.metadata ?? {}), tags };
+    try {
+      const res = await fetch("/api/founder-workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: entry.id, metadata: newMeta }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json() as FounderEntry;
+      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+    } catch { setError("Failed to update tags"); }
+  };
+
+  const handleDuplicate = async (entry: FounderEntry) => {
+    try {
+      const res = await fetch("/api/founder-workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          type: entry.type,
+          title: `${entry.title} (copy)`,
+          content: entry.content,
+          metadata: { ...(entry.metadata ?? {}), pinned: false },
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const created = await res.json() as FounderEntry;
+      setEntries(prev => [created, ...prev]);
+    } catch { setError("Failed to duplicate"); }
   };
 
   const typeLabel = (type: string) => types.find(t => t.value === type)?.label;
+
+  // Sort: pinned first, then newest first
+  const sorted = [...entries].sort((a, b) => {
+    const ap = (a.metadata?.pinned as boolean) ?? false;
+    const bp = (b.metadata?.pinned as boolean) ?? false;
+    if (ap && !bp) return -1;
+    if (!ap && bp) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  const filtered = typeFilter === "all" ? sorted : sorted.filter(e => e.type === typeFilter);
 
   return (
     <div className="space-y-4">
@@ -1544,6 +1840,26 @@ function FounderWorkspaceSection({
           </Button>
         )}
       </div>
+
+      {/* Type filter chips */}
+      {types.length > 1 && entries.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap">
+          <button
+            onClick={() => setTypeFilter("all")}
+            className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+              typeFilter === "all" ? "bg-orange-500 text-white border-orange-500" : "border-border text-muted-foreground hover:border-orange-400 hover:text-foreground")}
+          >
+            All
+          </button>
+          {types.map(t => (
+            <button key={t.value} onClick={() => setTypeFilter(t.value)}
+              className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+                typeFilter === t.value ? "bg-orange-500 text-white border-orange-500" : "border-border text-muted-foreground hover:border-orange-400 hover:text-foreground")}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 flex items-center gap-2">
@@ -1567,7 +1883,7 @@ function FounderWorkspaceSection({
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
           <Loader2 className="w-4 h-4 animate-spin" />Loading…
         </div>
-      ) : entries.length === 0 && !showForm ? (
+      ) : filtered.length === 0 && !showForm ? (
         <button onClick={() => setShowForm(true)}
           className="w-full py-8 rounded-2xl border border-dashed border-border text-sm text-muted-foreground hover:text-orange-500 hover:border-orange-500/40 hover:bg-orange-500/5 transition-all flex flex-col items-center gap-2">
           <Plus className="w-5 h-5" />
@@ -1575,7 +1891,7 @@ function FounderWorkspaceSection({
         </button>
       ) : (
         <div className="space-y-2">
-          {entries.map(entry => (
+          {filtered.map(entry => (
             editingEntry?.id === entry.id ? (
               <FounderWorkspaceEntryForm
                 key={entry.id}
@@ -1593,8 +1909,14 @@ function FounderWorkspaceSection({
                 entry={entry}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
+                onPin={handlePin}
+                onTagsChange={handleTagsChange}
+                onDuplicate={handleDuplicate}
                 typeLabel={typeLabel(entry.type)}
                 renderMeta={renderMeta}
+                isRecentlySaved={entry.id === recentlySavedId}
+                category={category}
+                allEntries={entries}
               />
             )
           ))}
@@ -1857,12 +2179,165 @@ function ExperimentsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// GLOBAL KNOWLEDGE BASE SEARCH
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface GlobalKBSearchProps {
+  onClose: () => void;
+  onTabChange: (tab: WorkspaceTab) => void;
+}
+
+function GlobalKBSearch({ onClose, onTabChange }: GlobalKBSearchProps) {
+  const [query, setQuery] = useState("");
+  const [allEntries, setAllEntries] = useState<FounderEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    fetch("/api/founder-workspace")
+      .then(r => r.ok ? r.json() : [])
+      .then((data: FounderEntry[]) => setAllEntries(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Keyboard: Escape to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const q = query.trim().toLowerCase();
+  const results = q.length < 1
+    ? allEntries
+    : allEntries.filter(e => {
+        const tags = ((e.metadata?.tags as string[] | undefined) ?? []).join(" ");
+        return (
+          e.title.toLowerCase().includes(q) ||
+          e.content.toLowerCase().includes(q) ||
+          tags.includes(q)
+        );
+      });
+
+  // Group by category
+  const grouped = results.reduce<Record<string, FounderEntry[]>>((acc, e) => {
+    (acc[e.category] ??= []).push(e);
+    return acc;
+  }, {});
+  const cats = Object.keys(grouped);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl bg-background border border-border rounded-2xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Search bar */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search your knowledge base…"
+            className="flex-1 text-sm bg-transparent focus:outline-none text-foreground placeholder:text-muted-foreground"
+          />
+          <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground">Esc</kbd>
+        </div>
+
+        {/* Results */}
+        <div className="max-h-[62vh] overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />Loading knowledge base…
+            </div>
+          ) : cats.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              {q.length >= 1 ? `No entries matching "${query}"` : "Your knowledge base is empty — add entries in any tab"}
+            </div>
+          ) : (
+            <div className="p-2 space-y-1">
+              {cats.map(cat => {
+                const info = CATEGORY_LABELS[cat];
+                const CatIcon = info?.icon ?? BookOpen;
+                const catEntries = grouped[cat];
+                return (
+                  <div key={cat}>
+                    {/* Section header */}
+                    <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5">
+                      <CatIcon className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                        {info?.label ?? cat}
+                      </span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{catEntries.length}</span>
+                    </div>
+
+                    {/* Entries */}
+                    {catEntries.slice(0, 5).map(entry => {
+                      const entryTags = (entry.metadata?.tags as string[] | undefined) ?? [];
+                      const isPinned = (entry.metadata?.pinned as boolean) ?? false;
+                      return (
+                        <button
+                          key={entry.id}
+                          onClick={() => { onTabChange(cat as WorkspaceTab); onClose(); }}
+                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            {isPinned && <Pin className="w-2.5 h-2.5 text-orange-500 fill-current shrink-0" />}
+                            <span className="text-sm font-medium text-foreground truncate">{entry.title}</span>
+                            {entryTags.length > 0 && (
+                              <div className="flex items-center gap-1 ml-auto shrink-0">
+                                {entryTags.slice(0, 2).map(t => (
+                                  <span key={t} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-muted text-muted-foreground">{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {entry.content && (
+                            <p className="text-[11px] text-muted-foreground truncate mt-0.5">{entry.content}</p>
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    {catEntries.length > 5 && (
+                      <button
+                        onClick={() => { onTabChange(cat as WorkspaceTab); onClose(); }}
+                        className="w-full px-3 py-1 text-[11px] text-orange-500 hover:underline text-left"
+                      >
+                        +{catEntries.length - 5} more in {info?.label ?? cat} →
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border px-4 py-2 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">{results.length} {results.length === 1 ? "entry" : "entries"} across all sections</span>
+          <span className="text-[10px] text-muted-foreground">Click to jump to section</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function WorkspacePage() {
   const isAdmin = useWorkspaceAdmin();
   const [tab, setTab] = useState<WorkspaceTab>("todos");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const tabDesc: Record<WorkspaceTab, string> = {
     todos:                "Stay on top of your daily content tasks",
@@ -1878,14 +2353,44 @@ export default function WorkspacePage() {
     "experiments":        "Hypotheses, active tests, and documented results",
   };
 
+  // Cmd+K / Ctrl+K to open search
+  useEffect(() => {
+    if (!isAdmin) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(v => !v); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isAdmin]);
+
   return (
     <div className="p-6 max-w-none">
+      {/* Global KB Search modal */}
+      {searchOpen && isAdmin && (
+        <GlobalKBSearch
+          onClose={() => setSearchOpen(false)}
+          onTabChange={t => { setTab(t); setSearchOpen(false); }}
+        />
+      )}
+
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">
-          {isAdmin ? "Founder OS" : "Workspace"}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[tab]}</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {isAdmin ? "Founder OS" : "Workspace"}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[tab]}</p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-all bg-background shrink-0"
+          >
+            <Search className="w-3.5 h-3.5" />
+            Search knowledge base
+            <kbd className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-muted">⌘K</kbd>
+          </button>
+        )}
       </div>
 
       {/* Tab nav */}
@@ -1923,7 +2428,7 @@ export default function WorkspacePage() {
       {tab === "goals"    && <GoalsTab />}
 
       {/* Admin-only tab content */}
-      {tab === "research"                          && <ResearchTab onTabChange={setTab} />}
+      {tab === "research"                          && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
       {isAdmin && tab === "marketing-psychology"  && <MarketingPsychologyTab />}
       {isAdmin && tab === "copywriting"           && <CopywritingTab />}
       {isAdmin && tab === "content-ideas"         && <ContentIdeasTab />}
