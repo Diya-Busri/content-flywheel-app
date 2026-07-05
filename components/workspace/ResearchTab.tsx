@@ -282,7 +282,7 @@ const BIZ_OPP_COLORS: Record<string, string> = {
 };
 
 const FLYWHEEL_STEP_ROUTES: Record<string, string> = {
-  "Generate Product":        "/dashboard/library",
+  "Generate Product":        "/dashboard/digital-products/create-from-research",
   "Edit in Design Studio":   "/dashboard/design-studio",
   "Generate Carousel":       "/dashboard/design-studio",
   "Generate Video Guide":    "/dashboard/video-guide/new",
@@ -291,7 +291,7 @@ const FLYWHEEL_STEP_ROUTES: Record<string, string> = {
 
 const LAUNCH_ROADMAP = [
   { label: "Research Done",           emoji: "🔍", route: null },
-  { label: "Generate Product",        emoji: "📦", route: "/dashboard/library" },
+  { label: "Generate Product",        emoji: "📦", route: "/dashboard/digital-products/create-from-research" },
   { label: "Edit in Design Studio",   emoji: "🎨", route: "/dashboard/design-studio" },
   { label: "Generate Carousel",       emoji: "📱", route: "/dashboard/design-studio" },
   { label: "Generate Video Guide",    emoji: "🎬", route: "/dashboard/video-guide/new" },
@@ -514,7 +514,7 @@ function CtaButton({ cta, router, onTabChange }: {
     "Generate Carousel":  { label: "Generate Carousel", icon: <Layers className="w-3 h-3" />,       action: () => router.push("/dashboard/design-studio") },
     "Generate Video":     { label: "Generate Video",    icon: <Zap className="w-3 h-3" />,          action: () => router.push("/dashboard/video-guide/new") },
     "Generate Script":    { label: "Generate Script",   icon: <Mic className="w-3 h-3" />,          action: () => router.push("/dashboard/video-guide/new") },
-    "Create Product":     { label: "Create Product",    icon: <Package className="w-3 h-3" />,      action: () => router.push("/dashboard/library") },
+    "Create Product":     { label: "Create This Product", icon: <Package className="w-3 h-3" />,     action: () => router.push("/dashboard/digital-products/create-from-research") },
     "Open Design Studio": { label: "Design Studio",     icon: <Wand2 className="w-3 h-3" />,        action: () => router.push("/dashboard/design-studio") },
   };
   const cfg = configs[cta];
@@ -577,7 +577,7 @@ function RecommendedOpportunityCard({ opp }: { opp: RecommendedOpp }) {
 
 // ─── Build Path ───────────────────────────────────────────────────────────────
 
-function BuildPathSection({ buildPath, router }: { buildPath: BuildPath; router: ReturnType<typeof useRouter> }) {
+function BuildPathSection({ buildPath, router, onCreateProduct }: { buildPath: BuildPath; router: ReturnType<typeof useRouter>; onCreateProduct: () => void }) {
   const { withFlywheel, manually } = buildPath;
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -622,10 +622,10 @@ function BuildPathSection({ buildPath, router }: { buildPath: BuildPath; router:
             })}
           </div>
           <button
-            onClick={() => router.push("/dashboard/library")}
+            onClick={onCreateProduct}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-semibold transition-all"
           >
-            <Zap className="w-3.5 h-3.5" />Start Building
+            <Zap className="w-3.5 h-3.5" />Create This Product
           </button>
         </div>
         <div className="p-5 space-y-4 bg-muted/10">
@@ -706,7 +706,7 @@ function AiRecommendationCard({ rec, router }: {
   rec: AiRecommendation; router: ReturnType<typeof useRouter>;
 }) {
   const ctaMap: Record<string, { label: string; action: () => void }> = {
-    "Build Now":            { label: "Generate Product →",  action: () => router.push("/dashboard/library") },
+    "Build Now":            { label: "Create This Product →", action: () => router.push("/dashboard/digital-products/create-from-research") },
     "Validate First":       { label: "Generate Carousel →", action: () => router.push("/dashboard/design-studio") },
     "Create Content First": { label: "Generate Script →",   action: () => router.push("/dashboard/video-guide/new") },
     "Research More":        { label: "Refine Research",     action: () => {} },
@@ -878,10 +878,10 @@ function BusinessScorecard({ scorecard, report }: { scorecard: Scorecard; report
 // ─── Best Next Action Card ─────────────────────────────────────────────────────
 
 function BestNextActionCard({
-  bestNextAction, router,
+  bestNextAction, onCreateProduct,
 }: {
   bestNextAction: BestNextActionData;
-  router: ReturnType<typeof useRouter>;
+  onCreateProduct: () => void;
 }) {
   return (
     <div className="rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-orange-500/8 via-background to-amber-500/5 overflow-hidden">
@@ -912,11 +912,11 @@ function BestNextActionCard({
           )}
         </div>
         <button
-          onClick={() => router.push("/dashboard/library")}
+          onClick={onCreateProduct}
           className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-bold transition-all shadow-sm"
         >
           <Package className="w-4 h-4" />
-          Build This Product
+          Create This Product
           <ArrowRight className="w-4 h-4 ml-1" />
         </button>
       </div>
@@ -1245,6 +1245,25 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     if (!report) return;
     const content = `${query}\n\n${report.summary}\n\nKey Insights:\n${report.insights.map(i => `• ${i}`).join("\n")}`;
     save("full-report", `Research: ${query}`, content);
+  };
+
+  const handleCreateProduct = () => {
+    // Build prefill object from current research report
+    const bna  = report?.bestNextAction;
+    const rec  = report?.recommendedOpportunity;
+    const prefill = {
+      title:          bna?.action ?? rec?.name ?? query,
+      description:    rec?.why ?? report?.summary?.slice(0, 300) ?? "",
+      niche:          query,
+      audience:       "",
+      estimatedPrice: bna?.estimatedPrice ?? rec?.estimatedRevenue ?? "",
+      query,
+      reportSummary:  report?.summary?.slice(0, 500) ?? "",
+    };
+    try {
+      sessionStorage.setItem("cf-research-prefill", JSON.stringify(prefill));
+    } catch { /* ignore */ }
+    router.push("/dashboard/digital-products/create-from-research");
   };
 
   const handleExportReport = useCallback(() => {
@@ -1587,7 +1606,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
 
       {/* ── Best Next Action ──────────────────────────────────────────────── */}
       {report.bestNextAction && (
-        <BestNextActionCard bestNextAction={report.bestNextAction} router={router} />
+        <BestNextActionCard bestNextAction={report.bestNextAction} onCreateProduct={handleCreateProduct} />
       )}
 
       {/* ── Recommended Opportunity ────────────────────────────────────────── */}
@@ -1596,7 +1615,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
       )}
 
       {/* ── Build Path ────────────────────────────────────────────────────── */}
-      {report.buildPath && <BuildPathSection buildPath={report.buildPath} router={router} />}
+      {report.buildPath && <BuildPathSection buildPath={report.buildPath} router={router} onCreateProduct={handleCreateProduct} />}
 
       {/* ── Launch Roadmap ────────────────────────────────────────────────── */}
       <LaunchRoadmap router={router} />
@@ -1744,8 +1763,8 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                     <span className="text-[13px] font-bold text-green-600 dark:text-green-400 whitespace-nowrap">{opp.priceRange}</span>
                   </td>
                   <td className="py-3 px-3">
-                    <button onClick={() => router.push("/dashboard/library")} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all whitespace-nowrap">
-                      <Package className="w-3 h-3" />Build →
+                    <button onClick={handleCreateProduct} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all whitespace-nowrap">
+                      <Package className="w-3 h-3" />Create →
                     </button>
                   </td>
                 </tr>
@@ -1754,7 +1773,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           </table>
         </div>
         <QuickActions actions={[
-          { label: "Create Digital Product", icon: <Package className="w-3 h-3" />,      onClick: () => router.push("/dashboard/library"), primary: true },
+          { label: "Create This Product",    icon: <Package className="w-3 h-3" />,      onClick: handleCreateProduct, primary: true },
           { label: "Generate Carousel",      icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio") },
           { label: "Save All Ideas",         icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("product-opps", `Product Opps: ${query}`, report.productOpportunities.map(o => `${o.title}\n${o.description}\nType: ${o.type} · ${o.priceRange}`).join("\n\n")) },
         ]} />
