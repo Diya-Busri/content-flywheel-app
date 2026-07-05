@@ -99,6 +99,15 @@ const TextAlignExtension = Extension.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Module-level table picker callback
+// Allows the slash extension (created once by TipTap) to open the React picker
+// ─────────────────────────────────────────────────────────────────────────────
+
+const tablePickerCallbacks = {
+  open: null as ((pos: { top: number; left: number }, range: Range | null) => void) | null,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Slash-command items
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -115,7 +124,18 @@ const SLASH_ITEMS = [
   // Blocks
   { title: "Quote",          description: "Blockquote callout",               icon: "❝",   group: "Block", command: (e: Editor, r: Range) => e.chain().focus().deleteRange(r).toggleBlockquote().run() },
   { title: "Code Block",     description: "Multiline code with syntax hints", icon: "</>", group: "Block", command: (e: Editor, r: Range) => e.chain().focus().deleteRange(r).toggleCodeBlock().run() },
-  { title: "Table",          description: "Insert a 3 × 3 table",            icon: "⊞",   group: "Block", command: (e: Editor, r: Range) => e.chain().focus().deleteRange(r).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  { title: "Table",          description: "Choose table size",                icon: "⊞",   group: "Block", command: (e: Editor, r: Range) => {
+    if (tablePickerCallbacks.open) {
+      try {
+        const coords = e.view.coordsAtPos(r.from);
+        tablePickerCallbacks.open({ top: coords.bottom + 8, left: coords.left }, r);
+      } catch {
+        e.chain().focus().deleteRange(r).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+      }
+    } else {
+      e.chain().focus().deleteRange(r).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    }
+  }},
   { title: "Divider",        description: "Horizontal separator line",        icon: "─",   group: "Block", command: (e: Editor, r: Range) => e.chain().focus().deleteRange(r).setHorizontalRule().run() },
 ];
 
@@ -398,6 +418,57 @@ function ColorPicker({ editor, onClose }: { editor: Editor; onClose: () => void 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TablePicker — Notion-style 8×8 hover grid for choosing table dimensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TablePicker({ position, onSelect, onClose }: {
+  position: { top: number; left: number };
+  onSelect: (rows: number, cols: number) => void;
+  onClose: () => void;
+}) {
+  const [hovered, setHovered] = useState({ rows: 0, cols: 0 });
+  const MAX = 8;
+  return (
+    <div
+      style={{ top: position.top, left: position.left, position: "fixed" }}
+      className="z-[9999] p-3 bg-popover border border-border rounded-xl shadow-2xl space-y-2"
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <p className="text-[11px] font-semibold text-center text-foreground">
+        {hovered.rows > 0 ? `${hovered.rows} × ${hovered.cols} table` : "Select table size"}
+      </p>
+      <div
+        className="grid gap-1"
+        style={{ gridTemplateColumns: `repeat(${MAX}, 1fr)` }}
+        onMouseLeave={() => setHovered({ rows: 0, cols: 0 })}
+      >
+        {Array.from({ length: MAX }).flatMap((_, rowIdx) =>
+          Array.from({ length: MAX }).map((_, colIdx) => (
+            <button
+              key={`${rowIdx}-${colIdx}`}
+              onMouseEnter={() => setHovered({ rows: rowIdx + 1, cols: colIdx + 1 })}
+              onClick={() => onSelect(rowIdx + 1, colIdx + 1)}
+              className={cn(
+                "w-5 h-5 rounded-sm border transition-colors",
+                rowIdx < hovered.rows && colIdx < hovered.cols
+                  ? "bg-orange-500/30 border-orange-500/50"
+                  : "bg-muted/40 border-border/60 hover:bg-accent"
+              )}
+            />
+          ))
+        )}
+      </div>
+      <button
+        onClick={onClose}
+        className="w-full text-center text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AI actions in the floating bubble
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -631,6 +702,9 @@ export function NoteEditor({
   const [aiLoading, setAiLoading]                 = useState<string | null>(null);
   const [bubbleVisible, setBubbleVisible]         = useState(false);
   const [bubbleCoords, setBubbleCoords]           = useState({ top: 0, left: 0 });
+  const [tablePickerOpen, setTablePickerOpen]     = useState(false);
+  const [tablePickerPos, setTablePickerPos]       = useState({ top: 0, left: 0 });
+  const pendingTableRange                         = useRef<Range | null>(null);
 
   // Refs
   const bubbleRef    = useRef<HTMLDivElement>(null);
@@ -640,6 +714,13 @@ export function NoteEditor({
   const colorRef     = useRef<HTMLDivElement>(null);
   const allNotesRef  = useRef(allNotes);
   allNotesRef.current = allNotes;
+
+  // Wire table picker callback so slash extension (created once) can open it
+  tablePickerCallbacks.open = (pos, range) => {
+    pendingTableRange.current = range;
+    setTablePickerPos(pos);
+    setTablePickerOpen(true);
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -799,6 +880,19 @@ export function NoteEditor({
     });
   }, [editor, onAiAction]);
 
+  // Insert table with chosen dimensions
+  const insertTable = useCallback((rows: number, cols: number) => {
+    if (!editor) return;
+    const range = pendingTableRange.current;
+    if (range) {
+      editor.chain().focus().deleteRange(range).insertTable({ rows, cols, withHeaderRow: true }).run();
+      pendingTableRange.current = null;
+    } else {
+      editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run();
+    }
+    setTablePickerOpen(false);
+  }, [editor]);
+
   // Alignment helper
   const setAlign = useCallback((align: string) => {
     if (!editor) return;
@@ -955,8 +1049,22 @@ export function NoteEditor({
               ))}
               {/* Insert */}
               <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Insert</p>
+              {/* Table — opens size picker */}
+              <button
+                onClick={(e) => {
+                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                  pendingTableRange.current = null;
+                  setTablePickerPos({ top: rect.bottom + 4, left: rect.left });
+                  setTablePickerOpen(true);
+                  setShowMoreMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left text-foreground hover:bg-accent transition-colors"
+              >
+                <span className="text-muted-foreground"><Table2 className="w-3.5 h-3.5" /></span>
+                Table
+                <span className="ml-auto text-[10px] text-muted-foreground/40">pick size</span>
+              </button>
               {[
-                { label: "Table",   icon: <Table2 className="w-3.5 h-3.5" />, action: () => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); setShowMoreMenu(false); } },
                 { label: "Divider", icon: <Minus className="w-3.5 h-3.5" />,  action: () => { editor.chain().focus().setHorizontalRule().run(); setShowMoreMenu(false); } },
                 { label: "Link",    icon: <Link2 className="w-3.5 h-3.5" />,  active: editor.isActive("link"), action: () => {
                   if (editor.isActive("link")) { editor.chain().focus().unsetLink().run(); }
@@ -1134,6 +1242,19 @@ export function NoteEditor({
             </button>
           ))}
         </div>
+      )}
+
+      {/* ── Table size picker ─────────────────────────────────────────────── */}
+      {tablePickerOpen && (
+        <>
+          {/* Backdrop to close picker on outside click */}
+          <div className="fixed inset-0 z-[9998]" onClick={() => setTablePickerOpen(false)} />
+          <TablePicker
+            position={tablePickerPos}
+            onSelect={insertTable}
+            onClose={() => setTablePickerOpen(false)}
+          />
+        </>
       )}
 
       {/* ── Command Palette ───────────────────────────────────────────────── */}
