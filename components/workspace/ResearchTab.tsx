@@ -49,6 +49,36 @@ interface ActionStep {
   cta: string;
 }
 
+interface RecommendedOpp {
+  name: string;
+  why: string;
+  demand: "Very High" | "High" | "Medium" | "Low";
+  competition: "Very High" | "High" | "Medium" | "Low";
+  monetisationPotential: "Very High" | "High" | "Medium" | "Low";
+  contentPotential: "Very High" | "High" | "Medium" | "Low";
+  estimatedRevenue: string;
+  timeToFirstSale: string;
+}
+
+interface BuildPath {
+  withFlywheel: {
+    estimatedTime: string;
+    difficulty: "Easy" | "Medium" | "Hard";
+    steps: string[];
+  };
+  manually: {
+    estimatedTime: string;
+    tools: string[];
+    note: string;
+  };
+}
+
+interface AiRecommendation {
+  nextStep: string;
+  category: "Build Now" | "Validate First" | "Create Content First" | "Research More";
+  reasoning: string;
+}
+
 interface ResearchReport {
   summary: string;
   insights: string[];
@@ -58,6 +88,9 @@ interface ResearchReport {
   competitorInsights: Competitor[];
   keywords: Keyword[];
   actionPlan: ActionStep[];
+  recommendedOpportunity?: RecommendedOpp;
+  buildPath?: BuildPath;
+  aiRecommendation?: AiRecommendation;
 }
 
 type ResearchState = "idle" | "loading" | "done";
@@ -109,6 +142,47 @@ const OPP_COLORS: Record<string, string> = {
   Medium: "text-yellow-500",
   Low:    "text-muted-foreground",
 };
+
+// Metrics where High = good (demand, monetisation, content potential)
+const METRIC_COLORS: Record<string, string> = {
+  "Very High": "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/25",
+  "High":      "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+  "Medium":    "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+  "Low":       "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+};
+
+// Competition where Low = good
+const COMPETITION_COLORS: Record<string, string> = {
+  "Very High": "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/25",
+  "High":      "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  "Medium":    "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+  "Low":       "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  "Build Now":           "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/25",
+  "Validate First":      "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/25",
+  "Create Content First":"bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25",
+  "Research More":       "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25",
+};
+
+const FLYWHEEL_STEP_ROUTES: Record<string, string> = {
+  "Generate Product":       "/dashboard/library",
+  "Edit in Design Studio":  "/dashboard/design-studio",
+  "Generate Carousel":      "/dashboard/design-studio",
+  "Generate Video Guide":   "/dashboard/video-guide/new",
+  "Generate Publishing Kit":"/dashboard/video-guide/new",
+};
+
+const LAUNCH_ROADMAP = [
+  { label: "Research Done",          emoji: "🔍", route: null },
+  { label: "Generate Product",       emoji: "📦", route: "/dashboard/library" },
+  { label: "Edit in Design Studio",  emoji: "🎨", route: "/dashboard/design-studio" },
+  { label: "Generate Carousel",      emoji: "📱", route: "/dashboard/design-studio" },
+  { label: "Generate Video Guide",   emoji: "🎬", route: "/dashboard/video-guide/new" },
+  { label: "Generate Publishing Kit",emoji: "🚀", route: "/dashboard/video-guide/new" },
+  { label: "Launch",                 emoji: "⚡", route: "/dashboard/library" },
+];
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 
@@ -235,6 +309,269 @@ function CtaButton({ cta, router, onTabChange, context }: {
       {cfg.icon}
       {cfg.label}
     </button>
+  );
+}
+
+// ─── Recommended Opportunity Card ────────────────────────────────────────────
+
+function RecommendedOpportunityCard({ opp }: { opp: RecommendedOpp }) {
+  const metrics = [
+    { label: "Demand",               value: opp.demand,               colors: METRIC_COLORS },
+    { label: "Competition",          value: opp.competition,          colors: COMPETITION_COLORS },
+    { label: "Monetisation",         value: opp.monetisationPotential,colors: METRIC_COLORS },
+    { label: "Content Potential",    value: opp.contentPotential,     colors: METRIC_COLORS },
+  ];
+
+  return (
+    <div className="rounded-2xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/5 via-background to-amber-500/5 overflow-hidden">
+      {/* Header bar */}
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-orange-500/20 bg-orange-500/5">
+        <Star className="w-4 h-4 text-orange-500 fill-orange-500" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-orange-500">Top Opportunity</span>
+        <span className="ml-auto text-[10px] font-medium text-orange-500/60 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
+          AI Recommended
+        </span>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* Name */}
+        <h3 className="text-[18px] font-bold text-foreground leading-snug">{opp.name}</h3>
+
+        {/* Why */}
+        <p className="text-[13px] text-foreground/80 leading-relaxed">{opp.why}</p>
+
+        {/* Metric badges */}
+        <div className="grid grid-cols-2 gap-2">
+          {metrics.map(m => (
+            <div key={m.label} className="flex items-center justify-between px-3 py-2 rounded-xl bg-background border border-border">
+              <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
+              <span className={cn(
+                "text-[11px] font-bold px-2 py-0.5 rounded-lg border",
+                m.colors[m.value] ?? m.colors["Medium"]
+              )}>
+                {m.value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Stats row */}
+        <div className="flex items-center gap-4 pt-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground font-medium">💰 Est. revenue</span>
+            <span className="text-[12px] font-bold text-green-600 dark:text-green-400">{opp.estimatedRevenue}</span>
+          </div>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground font-medium">⏱ Time to first sale</span>
+            <span className="text-[12px] font-bold text-foreground">{opp.timeToFirstSale}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Build Path comparison ────────────────────────────────────────────────────
+
+function BuildPathSection({ buildPath, router }: {
+  buildPath: BuildPath;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const { withFlywheel, manually } = buildPath;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border/40">
+        <Zap className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Build Path</span>
+        <span className="text-[11px] text-muted-foreground/50 ml-1">— two ways to launch</span>
+      </div>
+
+      <div className="grid grid-cols-2 divide-x divide-border">
+        {/* ── Flywheel path ── */}
+        <div className="p-5 space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-orange-500">🚀 With Content Flywheel</span>
+            </div>
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-[28px] font-black text-orange-500 leading-none">{withFlywheel.estimatedTime.split("–")[0] ?? withFlywheel.estimatedTime}</span>
+              {withFlywheel.estimatedTime.includes("–") && (
+                <span className="text-[14px] font-bold text-orange-400/70">
+                  –{withFlywheel.estimatedTime.split("–")[1]}
+                </span>
+              )}
+            </div>
+            <span className={cn(
+              "inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg border",
+              DIFFICULTY_COLORS[withFlywheel.difficulty] ?? DIFFICULTY_COLORS.Easy
+            )}>
+              {withFlywheel.difficulty}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {withFlywheel.steps.map((step, i) => {
+              const route = FLYWHEEL_STEP_ROUTES[step];
+              return (
+                <button
+                  key={i}
+                  onClick={() => route && router.push(route)}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium text-left transition-all border",
+                    route
+                      ? "bg-orange-500/8 border-orange-500/20 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15"
+                      : "bg-muted/30 border-border text-muted-foreground cursor-default"
+                  )}
+                >
+                  <span className="w-5 h-5 rounded-md bg-orange-500/15 text-orange-500 flex items-center justify-center text-[10px] font-black shrink-0">
+                    {i + 1}
+                  </span>
+                  {step}
+                  {route && <ArrowRight className="w-3 h-3 ml-auto opacity-60" />}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => router.push("/dashboard/library")}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-semibold transition-all"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Start Building
+          </button>
+        </div>
+
+        {/* ── Manual path ── */}
+        <div className="p-5 space-y-4 bg-muted/10">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">🔧 Build Manually</span>
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-[28px] font-black text-muted-foreground/60 leading-none">{manually.estimatedTime.split("–")[0] ?? manually.estimatedTime}</span>
+              {manually.estimatedTime.includes("–") && (
+                <span className="text-[14px] font-bold text-muted-foreground/40">
+                  –{manually.estimatedTime.split("–")[1]}
+                </span>
+              )}
+            </div>
+            <span className="inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-muted/40 border-border text-muted-foreground">
+              More steps involved
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {manually.tools.map((tool, i) => (
+              <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-background border border-border text-[12px] text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                {tool}
+              </div>
+            ))}
+          </div>
+
+          {manually.note && (
+            <p className="text-[11px] text-muted-foreground/60 leading-relaxed italic">{manually.note}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Launch Roadmap ───────────────────────────────────────────────────────────
+
+function LaunchRoadmap({ router }: { router: ReturnType<typeof useRouter> }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border/40">
+        <Target className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Fastest Path to Launch</span>
+      </div>
+      <div className="px-5 py-5">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {LAUNCH_ROADMAP.map((step, i) => (
+            <div key={i} className="flex items-center gap-1 shrink-0">
+              {/* Node */}
+              <button
+                onClick={() => step.route && router.push(step.route)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border text-center transition-all min-w-[90px]",
+                  i === 0
+                    ? "bg-green-500/10 border-green-500/25 text-green-600 dark:text-green-400 cursor-default"
+                    : step.route
+                    ? "bg-orange-500/8 border-orange-500/20 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15 cursor-pointer"
+                    : "bg-muted/20 border-border text-muted-foreground cursor-default"
+                )}
+              >
+                <span className="text-[16px] leading-none">{step.emoji}</span>
+                <span className="text-[10px] font-semibold leading-tight">{step.label}</span>
+                {step.route && (
+                  <ArrowRight className="w-2.5 h-2.5 opacity-50 rotate-90" />
+                )}
+              </button>
+
+              {/* Arrow connector */}
+              {i < LAUNCH_ROADMAP.length - 1 && (
+                <div className="flex items-center shrink-0">
+                  <div className="w-3 h-px bg-border" />
+                  <ChevronDown className="w-3 h-3 text-muted-foreground/40 -rotate-90" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground/50 mt-3">
+          Click any step to jump directly to that tool in Content Flywheel
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── AI Recommendation Card ───────────────────────────────────────────────────
+
+function AiRecommendationCard({ rec, router, onTabChange }: {
+  rec: AiRecommendation;
+  router: ReturnType<typeof useRouter>;
+  onTabChange?: (tab: string) => void;
+}) {
+  const ctaMap: Record<string, { label: string; action: () => void }> = {
+    "Build Now":           { label: "Generate Product →", action: () => router.push("/dashboard/library") },
+    "Validate First":      { label: "Generate Carousel →", action: () => router.push("/dashboard/design-studio") },
+    "Create Content First":{ label: "Generate Script →", action: () => router.push("/dashboard/video-guide/new") },
+    "Research More":       { label: "Refine Research", action: () => {} },
+  };
+  const cta = ctaMap[rec.category] ?? ctaMap["Build Now"];
+
+  return (
+    <div className="rounded-2xl border-2 border-orange-500/25 bg-gradient-to-br from-orange-500/5 to-background overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-orange-500/20">
+        <Sparkles className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Recommended Next Step</span>
+        <span className={cn(
+          "ml-auto text-[11px] font-bold px-2.5 py-1 rounded-full border",
+          CATEGORY_COLORS[rec.category] ?? CATEGORY_COLORS["Build Now"]
+        )}>
+          {rec.category}
+        </span>
+      </div>
+
+      <div className="p-5 space-y-4">
+        <p className="text-[16px] font-bold text-foreground leading-snug">
+          &ldquo;{rec.nextStep}&rdquo;
+        </p>
+        <p className="text-[13px] text-foreground/75 leading-relaxed">{rec.reasoning}</p>
+
+        <button
+          onClick={cta.action}
+          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-semibold transition-all"
+        >
+          <Zap className="w-4 h-4" />
+          {cta.label}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -561,6 +898,19 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
         </div>
       </div>
 
+      {/* ── Recommended Opportunity ───────────────────────────────────────── */}
+      {report.recommendedOpportunity && (
+        <RecommendedOpportunityCard opp={report.recommendedOpportunity} />
+      )}
+
+      {/* ── Build Path comparison ──────────────────────────────────────────── */}
+      {report.buildPath && (
+        <BuildPathSection buildPath={report.buildPath} router={router} />
+      )}
+
+      {/* ── Fastest Path to Launch roadmap ────────────────────────────────── */}
+      <LaunchRoadmap router={router} />
+
       {/* ── 1. Executive Summary ───────────────────────────────────────────── */}
       <Section
         id="summary"
@@ -874,6 +1224,15 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           },
         ]} />
       </Section>
+
+      {/* ── AI Recommendation ─────────────────────────────────────────────── */}
+      {report.aiRecommendation && (
+        <AiRecommendationCard
+          rec={report.aiRecommendation}
+          router={router}
+          onTabChange={onTabChange}
+        />
+      )}
 
       {/* ── AI Follow-up ──────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">

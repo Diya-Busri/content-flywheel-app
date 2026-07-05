@@ -66,7 +66,37 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text whatsoever) w
       "detail": "Specific guidance: what to make, what to say, how to distribute, and what the success metric is",
       "cta": "Create Note|Generate Carousel|Generate Video|Generate Script|Create Product|Open Design Studio"
     }
-  ]
+  ],
+
+  "recommendedOpportunity": {
+    "name": "The single best opportunity — a specific, marketable name (e.g. 'Shift-Work Meal Planner Template for NHS Nurses')",
+    "why": "2-3 sentences: why this specific opportunity is the standout choice given the demand, competition gap, and monetisation ceiling",
+    "demand": "Very High|High|Medium|Low",
+    "competition": "Very High|High|Medium|Low",
+    "monetisationPotential": "Very High|High|Medium|Low",
+    "contentPotential": "Very High|High|Medium|Low",
+    "estimatedRevenue": "£X–£Y per month at realistic scale (e.g. '£500–£2,000/mo')",
+    "timeToFirstSale": "Realistic timeline (e.g. '2–4 weeks', '1–2 months')"
+  },
+
+  "buildPath": {
+    "withFlywheel": {
+      "estimatedTime": "Realistic time using Content Flywheel tools (e.g. '15–25 minutes', '1–2 hours')",
+      "difficulty": "Easy|Medium|Hard",
+      "steps": ["Generate Product", "Edit in Design Studio", "Generate Carousel", "Generate Video Guide", "Generate Publishing Kit"]
+    },
+    "manually": {
+      "estimatedTime": "Honest estimate for doing this without Content Flywheel (e.g. '4–8 hours', '1–2 days')",
+      "tools": ["Canva", "ChatGPT", "Google Docs", "Manual editing"],
+      "note": "1-2 sentences describing what the manual workflow actually involves — be honest, not dismissive"
+    }
+  },
+
+  "aiRecommendation": {
+    "nextStep": "One precise, actionable instruction in imperative form — tell the user exactly what to do right now",
+    "category": "Build Now|Validate First|Create Content First|Research More",
+    "reasoning": "2-3 sentences: why this is the highest-leverage next action given the specific research findings, not generic advice"
+  }
 }
 
 RULES:
@@ -75,7 +105,11 @@ RULES:
 - All prices in GBP (£)
 - Competitor names should be real or clearly archetypal (e.g. "Ali Abdaal-style productivity content")
 - The action plan should escalate: quick win first, bigger bets later
-- cta values must be one of the exact strings listed above`;
+- cta values must be one of the exact strings listed above
+- recommendedOpportunity.demand/competition/monetisationPotential/contentPotential must be one of: Very High|High|Medium|Low
+- buildPath.withFlywheel.steps must only use: Generate Product|Edit in Design Studio|Generate Carousel|Generate Video Guide|Generate Publishing Kit
+- aiRecommendation.category must be one of: Build Now|Validate First|Create Content First|Research More
+- max_tokens is 4000 — be concise in descriptions, do not pad`;
 
 const FOLLOWUP_SYSTEM_PROMPT = `You are an AI research analyst. The user has received a market research report and wants to ask a follow-up question.
 
@@ -148,7 +182,7 @@ export async function POST(req: NextRequest) {
         { role: "user", content: `Research query: ${query.trim()}` },
       ],
       temperature: 0.7,
-      max_tokens: 4000,
+      max_tokens: 5000,
       response_format: { type: "json_object" },
     }),
   });
