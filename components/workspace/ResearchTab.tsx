@@ -1111,6 +1111,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   // Misc
   const [copiedKeywords, setCopiedKeywords] = useState(false);
   const [exportCopied, setExportCopied]     = useState(false);
+  const [tasksAdded, setTasksAdded]         = useState(false);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1278,6 +1279,43 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     } catch { /* ignore */ }
     router.push("/dashboard/digital-products/create-from-research");
   };
+
+  // Save the full report summary + insights as a Note, then switch to Notes tab
+  const handleSaveAsNote = useCallback(() => {
+    if (!report) return;
+    const body = [
+      `## Summary\n${report.summary}`,
+      `## Key Insights\n${report.insights.map((ins, i) => `${i + 1}. ${ins}`).join("\n")}`,
+      report.productOpportunities.length > 0
+        ? `## Product Ideas\n${report.productOpportunities.map(o => `- **${o.title}** (${o.type}, ${o.priceRange})\n  ${o.description}`).join("\n")}`
+        : "",
+      `## Action Plan\n${report.actionPlan.map(s => `**Step ${s.step}: ${s.action}**\n${s.detail}`).join("\n\n")}`,
+    ].filter(Boolean).join("\n\n");
+    try {
+      sessionStorage.setItem("note_from_research", JSON.stringify({ title: `Research: ${query}`, body, tag: "research" }));
+    } catch {}
+    onTabChange?.("notes");
+  }, [report, query, onTabChange]);
+
+  // Add all action plan steps to the todos list
+  const handleAddTasksFromPlan = useCallback(() => {
+    if (!report?.actionPlan?.length) return;
+    const newTasks = report.actionPlan.map(step => ({
+      id: Math.random().toString(36).slice(2, 10),
+      text: step.action,
+      completed: false,
+      priority: "medium" as const,
+      category: "growth",
+      notes: step.detail,
+      createdAt: Date.now(),
+    }));
+    try {
+      const existing = JSON.parse(localStorage.getItem("cf_todos") ?? "[]") as object[];
+      localStorage.setItem("cf_todos", JSON.stringify([...newTasks, ...existing]));
+      setTasksAdded(true);
+      setTimeout(() => setTasksAdded(false), 3000);
+    } catch {}
+  }, [report]);
 
   const handleExportReport = useCallback(() => {
     if (!report) return;
@@ -1612,6 +1650,38 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
         </div>
       </div>
 
+      {/* ── One-click actions bar ─────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap p-4 rounded-2xl border border-border bg-gradient-to-r from-orange-500/5 to-amber-500/5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mr-0.5">Take action</span>
+        <button
+          onClick={handleCreateProduct}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white transition-all shadow-sm">
+          <Package className="w-3.5 h-3.5" />Build Product
+        </button>
+        <button
+          onClick={() => router.push("/dashboard/design-studio")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all">
+          <Layers className="w-3.5 h-3.5" />Create Design
+        </button>
+        <button
+          onClick={() => router.push("/dashboard/video-guide/new")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all">
+          <Mic className="w-3.5 h-3.5" />Video Script
+        </button>
+        <button
+          onClick={handleSaveAsNote}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all">
+          <StickyNote className="w-3.5 h-3.5" />Save as Note
+        </button>
+        <button
+          onClick={handleAddTasksFromPlan}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all",
+            tasksAdded ? "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400" : "border-border bg-background hover:bg-accent text-foreground")}>
+          {tasksAdded ? <Check className="w-3.5 h-3.5" /> : <Library className="w-3.5 h-3.5" />}
+          {tasksAdded ? "Tasks added!" : "Add Plan as Tasks"}
+        </button>
+      </div>
+
       {/* ── Business Scorecard ────────────────────────────────────────────── */}
       {report.scorecard && (
         <BusinessScorecard scorecard={report.scorecard} report={report} />
@@ -1641,7 +1711,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           ))}
           <QuickActions actions={[
             { label: "Save to Research", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("summary", `Summary: ${query}`, report.summary) },
-            { label: "Turn into Note",   icon: <StickyNote className="w-3 h-3" />,   onClick: () => onTabChange?.("notes") },
+            { label: "Save as Note", icon: <StickyNote className="w-3 h-3" />, onClick: handleSaveAsNote },
           ]} />
         </div>
       </Section>
@@ -1916,6 +1986,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           ))}
         </div>
         <QuickActions actions={[
+          { label: tasksAdded ? "Tasks added!" : "Add All as Tasks", icon: tasksAdded ? <Check className="w-3 h-3" /> : <Library className="w-3 h-3" />, onClick: handleAddTasksFromPlan, primary: true },
           { label: "Save Action Plan", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("action-plan", `Action Plan: ${query}`, report.actionPlan.map(s => `Step ${s.step}: ${s.action}\n${s.detail}`).join("\n\n")) },
         ]} />
       </Section>

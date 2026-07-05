@@ -1144,11 +1144,19 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
   useEffect(() => {
     try {
       const n = localStorage.getItem("cf_notes");
-      if (n) {
-        const parsed = JSON.parse(n) as Note[];
-        setNotes(parsed);
-        if (parsed.length > 0) setActiveId(parsed[0].id);
-      }
+      const parsed = n ? (JSON.parse(n) as Note[]) : [];
+      // Check for note_from_research prefill (from Research tab)
+      let prefillNote: Note | null = null;
+      try {
+        const raw = sessionStorage.getItem("note_from_research");
+        if (raw) {
+          const { title, body, tag } = JSON.parse(raw) as { title: string; body: string; tag: NoteTag };
+          prefillNote = { id: uid(), title, body, updatedAt: Date.now(), tag };
+          sessionStorage.removeItem("note_from_research");
+        }
+      } catch {}
+      const all = prefillNote ? [prefillNote, ...parsed] : parsed;
+      if (all.length > 0) { setNotes(all); setActiveId(all[0].id); }
     } catch {}
   }, []);
 
