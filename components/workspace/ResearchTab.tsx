@@ -10,7 +10,7 @@ import {
   Send, AlertCircle, RefreshCw, Copy, Check,
   ArrowRight, Zap, Hash, Star, MessageSquare,
   Library, Trash2, Heart, Brain, Building2, FlaskConical,
-  DatabaseZap, BookOpen, Plus, GitMerge,
+  DatabaseZap, BookOpen, Plus, GitMerge, Megaphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -227,12 +227,181 @@ const LOADING_STEPS = [
   { label: "Building your report", icon: <Sparkles className="w-3.5 h-3.5" /> },
 ];
 
-const SOURCES = [
-  { id: "web", label: "Web", icon: Globe, active: true },
-  { id: "social", label: "Social Media", icon: Users, active: false },
-  { id: "communities", label: "Communities", icon: MessageSquare, active: false },
-  { id: "marketplaces", label: "Marketplaces", icon: ShoppingBag, active: false },
-  { id: "seo", label: "SEO Data", icon: BarChart3, active: false },
+// ─── Research Sources Config ──────────────────────────────────────────────────
+
+type SourceStatus = "live" | "connected" | "coming-soon" | "disabled";
+
+interface ResearchSource {
+  id: string;
+  name: string;
+  description: string;
+  status: SourceStatus;
+  provider?: string;
+}
+
+interface ResearchSourceCategory {
+  id: string;
+  label: string;
+  emoji: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  sources: ResearchSource[];
+}
+
+const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
+  {
+    id: "web",
+    label: "Web",
+    emoji: "🌐",
+    icon: Globe,
+    description: "Web search, news, blogs, Wikipedia, government data, academic papers",
+    sources: [
+      { id: "web-search",       name: "Web Search",       description: "Live web search across billions of pages",         status: "live",         provider: "openai" },
+      { id: "news",             name: "News",             description: "Current news articles and press releases",          status: "coming-soon" },
+      { id: "blogs",            name: "Blogs",            description: "Industry blogs and thought leadership",              status: "coming-soon",  provider: "firecrawl" },
+      { id: "wikipedia",        name: "Wikipedia",        description: "Encyclopedic background on any topic",              status: "coming-soon" },
+      { id: "government",       name: "Government Data",  description: "Official statistics and public datasets",           status: "coming-soon" },
+      { id: "academic",         name: "Academic Papers",  description: "Peer-reviewed research and studies",                status: "coming-soon" },
+      { id: "industry-reports", name: "Industry Reports", description: "Market research and analyst reports",               status: "coming-soon" },
+    ],
+  },
+  {
+    id: "social",
+    label: "Social Media",
+    emoji: "📱",
+    icon: Users,
+    description: "TikTok, YouTube, Instagram, X, LinkedIn, Facebook, Pinterest",
+    sources: [
+      { id: "tiktok",     name: "TikTok",      description: "Viral trends and creator content",              status: "coming-soon", provider: "tiktok-api" },
+      { id: "youtube",    name: "YouTube",     description: "Video trends, channels, and comments",           status: "coming-soon", provider: "youtube-api" },
+      { id: "instagram",  name: "Instagram",   description: "Hashtags, posts, and engagement data",           status: "coming-soon" },
+      { id: "x-twitter",  name: "X (Twitter)", description: "Real-time conversations and trending topics",    status: "coming-soon" },
+      { id: "linkedin",   name: "LinkedIn",    description: "Professional discussions and articles",          status: "coming-soon" },
+      { id: "facebook",   name: "Facebook",    description: "Groups, pages, and public posts",                status: "coming-soon" },
+      { id: "pinterest",  name: "Pinterest",   description: "Visual trend discovery and saves",               status: "coming-soon" },
+    ],
+  },
+  {
+    id: "communities",
+    label: "Communities",
+    emoji: "💬",
+    icon: MessageSquare,
+    description: "Reddit, Discord, Skool, Quora, Indie Hackers, Hacker News",
+    sources: [
+      { id: "reddit",         name: "Reddit",         description: "Subreddits, threads, and upvotes",              status: "coming-soon", provider: "reddit-api" },
+      { id: "discord",        name: "Discord",        description: "Public server conversations and trends",         status: "coming-soon" },
+      { id: "skool",          name: "Skool",          description: "Community posts and discussions",                status: "coming-soon" },
+      { id: "facebook-groups",name: "Facebook Groups",description: "Niche community discussions",                   status: "coming-soon" },
+      { id: "quora",          name: "Quora",          description: "Questions, answers, and expert opinions",        status: "coming-soon" },
+      { id: "indie-hackers",  name: "Indie Hackers",  description: "Founder stories and product discussions",        status: "coming-soon" },
+      { id: "hacker-news",    name: "Hacker News",    description: "Tech and startup conversations",                 status: "coming-soon" },
+    ],
+  },
+  {
+    id: "marketplaces",
+    label: "Marketplaces",
+    emoji: "🛍️",
+    icon: ShoppingBag,
+    description: "Etsy, Gumroad, Amazon, Shopify, Creative Market, Envato, Product Hunt, AppSumo",
+    sources: [
+      { id: "etsy",            name: "Etsy",            description: "Digital product listings and trends",           status: "coming-soon" },
+      { id: "gumroad",         name: "Gumroad",         description: "Creator products and bestsellers",              status: "coming-soon" },
+      { id: "amazon",          name: "Amazon",          description: "Books, courses, and bestseller lists",          status: "coming-soon" },
+      { id: "shopify",         name: "Shopify",         description: "E-commerce trends and product data",            status: "coming-soon" },
+      { id: "creative-market", name: "Creative Market", description: "Design assets and template trends",             status: "coming-soon" },
+      { id: "envato",          name: "Envato",          description: "Digital assets, themes, and plugins",           status: "coming-soon" },
+      { id: "product-hunt",    name: "Product Hunt",    description: "New product launches and upvotes",              status: "coming-soon", provider: "product-hunt-api" },
+      { id: "appsumo",         name: "AppSumo",         description: "SaaS lifetime deals and popular tools",         status: "coming-soon" },
+    ],
+  },
+  {
+    id: "seo",
+    label: "SEO",
+    emoji: "📈",
+    icon: BarChart3,
+    description: "Google Trends, keyword research, search volume, difficulty, intent analysis",
+    sources: [
+      { id: "google-trends",    name: "Google Trends",    description: "Rising and falling search interest over time",   status: "coming-soon", provider: "google-trends-api" },
+      { id: "keyword-research", name: "Keyword Research", description: "Keyword ideas, variations, and suggestions",     status: "coming-soon", provider: "semrush" },
+      { id: "search-volume",    name: "Search Volume",    description: "Monthly search volume data by keyword",          status: "coming-soon", provider: "ahrefs" },
+      { id: "keyword-diff",     name: "Keyword Difficulty",description: "Ranking difficulty scores per keyword",         status: "coming-soon", provider: "semrush" },
+      { id: "related-searches", name: "Related Searches", description: "Semantically related queries and clusters",      status: "coming-soon" },
+      { id: "search-intent",    name: "Search Intent",    description: "Commercial vs informational classification",     status: "coming-soon" },
+    ],
+  },
+  {
+    id: "advertising",
+    label: "Advertising",
+    emoji: "📢",
+    icon: Megaphone,
+    description: "Meta Ads Library, TikTok Creative Center, Google Ads, LinkedIn Ads",
+    sources: [
+      { id: "meta-ads",        name: "Meta Ads Library",       description: "Active Facebook and Instagram ads",           status: "coming-soon" },
+      { id: "tiktok-creative", name: "TikTok Creative Center", description: "Trending TikTok ad creatives and hooks",      status: "coming-soon" },
+      { id: "google-ads",      name: "Google Ads",             description: "Search and display ad intelligence",          status: "coming-soon" },
+      { id: "linkedin-ads",    name: "LinkedIn Ads",           description: "B2B advertising copy and targeting",          status: "coming-soon" },
+    ],
+  },
+  {
+    id: "reviews",
+    label: "Reviews",
+    emoji: "⭐",
+    icon: Star,
+    description: "Trustpilot, Google Reviews, App Store, G2, Capterra",
+    sources: [
+      { id: "trustpilot",    name: "Trustpilot",          description: "Customer reviews and brand ratings",           status: "coming-soon" },
+      { id: "google-reviews",name: "Google Reviews",      description: "Local business and product reviews",           status: "coming-soon" },
+      { id: "app-store",     name: "App Store Reviews",   description: "iOS and Android app user feedback",            status: "coming-soon" },
+      { id: "g2",            name: "G2",                  description: "B2B software reviews and comparisons",         status: "coming-soon" },
+      { id: "capterra",      name: "Capterra",            description: "Business software reviews and ratings",        status: "coming-soon" },
+    ],
+  },
+  {
+    id: "competitors",
+    label: "Competitors",
+    emoji: "🏢",
+    icon: Building2,
+    description: "Company websites, pricing pages, features, landing pages, changelogs",
+    sources: [
+      { id: "company-websites",  name: "Company Websites",   description: "Scrape and analyse competitor sites",          status: "coming-soon", provider: "firecrawl" },
+      { id: "pricing-pages",     name: "Pricing Pages",      description: "Competitor pricing tiers and positioning",     status: "coming-soon", provider: "bright-data" },
+      { id: "feature-comparison",name: "Feature Comparison", description: "Side-by-side feature matrix analysis",         status: "coming-soon" },
+      { id: "landing-pages",     name: "Landing Pages",      description: "Messaging and positioning analysis",           status: "coming-soon", provider: "firecrawl" },
+      { id: "product-libraries", name: "Product Libraries",  description: "Full competitor product catalogues",           status: "coming-soon" },
+      { id: "changelogs",        name: "Changelogs",         description: "Track competitor product updates over time",   status: "coming-soon" },
+    ],
+  },
+  {
+    id: "content",
+    label: "Content",
+    emoji: "🎥",
+    icon: FileText,
+    description: "Blogs, podcasts, YouTube transcripts, newsletters, documentation",
+    sources: [
+      { id: "blog-content",       name: "Blogs",               description: "Blog posts, articles, and written content",   status: "coming-soon", provider: "firecrawl" },
+      { id: "podcasts",           name: "Podcasts",            description: "Episode descriptions and transcripts",         status: "coming-soon" },
+      { id: "youtube-transcripts",name: "YouTube Transcripts", description: "Full video content analysis",                 status: "coming-soon", provider: "youtube-api" },
+      { id: "newsletters",        name: "Newsletters",         description: "Email newsletter archives and trends",         status: "coming-soon" },
+      { id: "documentation",      name: "Documentation",       description: "Product docs and help centre content",        status: "coming-soon" },
+    ],
+  },
+  {
+    id: "ai-intelligence",
+    label: "AI Intelligence",
+    emoji: "🤖",
+    icon: Brain,
+    description: "Opportunity detection, pattern recognition, trend clustering, semantic analysis",
+    sources: [
+      { id: "opportunity-detection",name: "Opportunity Detection", description: "AI finds market gaps before you do",          status: "live" },
+      { id: "pattern-recognition",  name: "Pattern Recognition",  description: "Recurring signals across sources",            status: "live" },
+      { id: "trend-clustering",     name: "Trend Clustering",     description: "Group related trends automatically",          status: "coming-soon", provider: "openai" },
+      { id: "semantic-similarity",  name: "Semantic Similarity",  description: "Find related topics via embeddings",          status: "coming-soon", provider: "openai" },
+      { id: "competitor-comparison",name: "Competitor Comparison", description: "AI-powered competitor positioning analysis",  status: "coming-soon", provider: "perplexity" },
+      { id: "market-gap-detection", name: "Market Gap Detection", description: "Identify underserved niches automatically",   status: "coming-soon" },
+      { id: "deep-research",        name: "Deep Research",        description: "Multi-step autonomous research agent",        status: "coming-soon", provider: "openai-deep-research" },
+      { id: "perplexity",           name: "Perplexity",           description: "Real-time AI search and synthesis",           status: "coming-soon", provider: "perplexity" },
+    ],
+  },
 ];
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -1245,6 +1414,137 @@ function KnowledgeComparisonPanel({
   );
 }
 
+// ─── Research Sources Panel ───────────────────────────────────────────────────
+
+const SOURCE_STATUS_CONFIG: Record<SourceStatus, { label: string; className: string }> = {
+  "live":        { label: "Live",        className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20" },
+  "connected":   { label: "Connected",   className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
+  "coming-soon": { label: "Coming Soon", className: "bg-muted text-muted-foreground/50 border-border/60" },
+  "disabled":    { label: "Disabled",    className: "bg-red-500/10 text-red-500/60 border-red-500/20" },
+};
+
+function ResearchSourcesPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (id: string) =>
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const totalSources = RESEARCH_SOURCE_CATEGORIES.reduce((acc, cat) => acc + cat.sources.length, 0);
+  const totalLive    = RESEARCH_SOURCE_CATEGORIES.reduce(
+    (acc, cat) => acc + cat.sources.filter(s => s.status === "live" || s.status === "connected").length, 0
+  );
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-accent/30 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <DatabaseZap className="w-4 h-4 text-orange-500 shrink-0" />
+          <span className="font-semibold text-[15px] text-foreground">Research Sources</span>
+          <span className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[11px] font-bold border border-orange-500/20">
+            {totalSources} sources
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[11px] font-bold border border-green-500/20">
+            {totalLive} live
+          </span>
+        </div>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+        }
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-2">
+          {RESEARCH_SOURCE_CATEGORIES.map(cat => {
+            const liveCount    = cat.sources.filter(s => s.status === "live" || s.status === "connected").length;
+            const comingCount  = cat.sources.filter(s => s.status === "coming-soon").length;
+            const isExpanded   = expandedCategories.has(cat.id);
+            const CatIcon      = cat.icon;
+
+            return (
+              <div key={cat.id} className="rounded-xl border border-border bg-background overflow-hidden">
+                <button
+                  onClick={() => toggleCategory(cat.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/20 transition-colors text-left"
+                >
+                  <span className="text-[16px] leading-none shrink-0">{cat.emoji}</span>
+                  <CatIcon className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-semibold text-foreground">{cat.label}</span>
+                      {liveCount > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                          {liveCount} live
+                        </span>
+                      )}
+                      {comingCount > 0 && (
+                        <span className="text-[10px] font-medium text-muted-foreground/40">
+                          +{comingCount} coming soon
+                        </span>
+                      )}
+                    </div>
+                    {!isExpanded && (
+                      <p className="text-[11px] text-muted-foreground/50 truncate mt-0.5">{cat.description}</p>
+                    )}
+                  </div>
+                  {isExpanded
+                    ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  }
+                </button>
+
+                {isExpanded && (
+                  <div className="px-4 pb-3 pt-0.5 space-y-1.5 border-t border-border/40">
+                    {cat.sources.map(source => {
+                      const badge = SOURCE_STATUS_CONFIG[source.status];
+                      return (
+                        <div
+                          key={source.id}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-muted/20 border border-border/50"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-semibold text-foreground">{source.name}</p>
+                            <p className="text-[11px] text-muted-foreground/55 truncate mt-0.5">{source.description}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {source.provider && (
+                              <span className="text-[9px] font-mono text-muted-foreground/30 hidden sm:block">
+                                {source.provider}
+                              </span>
+                            )}
+                            <span className={cn(
+                              "text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap",
+                              badge.className
+                            )}>
+                              {badge.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <p className="text-[11px] text-muted-foreground/40 text-center pt-1">
+            Adding a new provider only requires adding one object to the config.{" "}
+            <span className="text-orange-500/70">More sources shipping soon.</span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ResearchTab ─────────────────────────────────────────────────────────
 
 export function ResearchTab({ onTabChange }: ResearchTabProps) {
@@ -1264,6 +1564,9 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   const [error, setError]             = useState<string | null>(null);
   const [loadingStep, setLoadingStep] = useState(0);
   const [advancedMode, setAdvancedMode] = useState(false);
+
+  // Sources panel
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   // Sections
   const [openSections, setOpenSections] = useState<Set<string>>(new Set([
@@ -1639,25 +1942,32 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             />
           </div>
 
-          {/* Sources */}
+          {/* Sources pill row */}
           <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-semibold text-muted-foreground/50 uppercase tracking-wider mr-1">Sources</span>
-            {SOURCES.map(s => (
+            {RESEARCH_SOURCE_CATEGORIES.filter(cat =>
+              cat.sources.some(s => s.status === "live" || s.status === "connected")
+            ).map(cat => (
               <div
-                key={s.id}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[12px] font-medium transition-all",
-                  s.active
-                    ? "bg-orange-500/10 border-orange-500/30 text-orange-500"
-                    : "bg-muted/30 border-border text-muted-foreground/40 cursor-not-allowed"
-                )}
-                title={s.active ? undefined : "Coming soon"}
+                key={cat.id}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border bg-orange-500/10 border-orange-500/30 text-orange-500 text-[12px] font-medium"
               >
-                <s.icon className="w-3 h-3" />
-                {s.label}
-                {!s.active && <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 ml-0.5">Soon</span>}
+                <span className="text-[11px] leading-none">{cat.emoji}</span>
+                {cat.label}
               </div>
             ))}
+            <button
+              onClick={() => setSourcesOpen(prev => !prev)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all",
+                sourcesOpen
+                  ? "border-orange-500/30 text-orange-500 bg-orange-500/5"
+                  : "border-dashed border-border/60 text-muted-foreground/50 hover:border-orange-500/30 hover:text-orange-500"
+              )}
+            >
+              View all 63 sources
+              <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", sourcesOpen && "rotate-180")} />
+            </button>
           </div>
 
           <div className="px-4 pb-4 flex items-center justify-between gap-3">
@@ -1674,6 +1984,9 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             </Button>
           </div>
         </div>
+
+        {/* Research Sources Panel */}
+        <ResearchSourcesPanel open={sourcesOpen} onToggle={() => setSourcesOpen(prev => !prev)} />
 
         {error && (
           <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
