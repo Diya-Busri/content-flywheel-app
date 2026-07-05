@@ -552,28 +552,40 @@
 }
 
 /* Table */
+.note-editor-content .tableWrapper {
+  overflow-x: auto;
+  border-radius: 0.625rem;
+  border: 1.5px solid color-mix(in srgb, hsl(var(--foreground)) 15%, transparent);
+  margin: 1.125rem 0;
+  /* Clip the table so border-radius is visible */
+  overflow: hidden;
+}
 .note-editor-content table {
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
-  margin: 1rem 0;
-  overflow: hidden;
-  border-radius: 0.5rem;
-  border: 1.5px solid color-mix(in srgb, hsl(var(--foreground)) 20%, transparent);
+  /* No border here — border is on .tableWrapper */
 }
 .note-editor-content th {
-  background: color-mix(in srgb, hsl(var(--foreground)) 6%, transparent);
-  font-weight: 600;
+  background: color-mix(in srgb, hsl(var(--foreground)) 5%, transparent);
+  font-weight: 700;
   text-align: left;
-  padding: 0.625rem 1rem;
-  border: 1.5px solid color-mix(in srgb, hsl(var(--foreground)) 18%, transparent);
-  font-size: 0.875rem;
+  padding: 0.5rem 0.875rem;
+  border-bottom: 1.5px solid color-mix(in srgb, hsl(var(--foreground)) 15%, transparent);
+  border-right: 1px solid color-mix(in srgb, hsl(var(--foreground)) 10%, transparent);
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
   color: hsl(var(--foreground));
   position: relative;
+  white-space: nowrap;
+}
+.note-editor-content th:last-child {
+  border-right: none;
 }
 .note-editor-content td {
-  padding: 0.625rem 1rem;
-  border: 1.5px solid color-mix(in srgb, hsl(var(--foreground)) 14%, transparent);
+  padding: 0.5rem 0.875rem;
+  border-bottom: 1px solid color-mix(in srgb, hsl(var(--foreground)) 8%, transparent);
+  border-right: 1px solid color-mix(in srgb, hsl(var(--foreground)) 8%, transparent);
   vertical-align: top;
   font-size: 0.875rem;
   color: hsl(var(--foreground));
@@ -581,21 +593,32 @@
   position: relative;
   transition: background 0.1s;
 }
+.note-editor-content td:last-child {
+  border-right: none;
+}
+.note-editor-content tr:last-child td {
+  border-bottom: none;
+}
+/* Alternating row tint */
+.note-editor-content tr:nth-child(even) td {
+  background: color-mix(in srgb, hsl(var(--foreground)) 2%, transparent);
+}
 .note-editor-content td:hover {
-  background: color-mix(in srgb, hsl(var(--foreground)) 3%, transparent);
+  background: color-mix(in srgb, hsl(var(--primary)) 6%, transparent) !important;
 }
 .note-editor-content td > p,
 .note-editor-content th > p {
   margin-bottom: 0;
 }
 .note-editor-content .selectedCell:after {
-  background: rgba(249, 115, 22, 0.18);
+  background: rgba(249, 115, 22, 0.15);
   content: "";
   left: 0; right: 0; top: 0; bottom: 0;
   pointer-events: none;
   position: absolute;
   z-index: 2;
-  border: 1.5px solid rgba(249, 115, 22, 0.5);
+  outline: 1.5px solid rgba(249, 115, 22, 0.45);
+  outline-offset: -1px;
 }
 .note-editor-content .column-resize-handle {
   background-color: #f97316;
@@ -603,7 +626,7 @@
   position: absolute;
   right: -2px;
   top: 0;
-  width: 4px;
+  width: 3px;
   cursor: col-resize;
   opacity: 0;
   transition: opacity 0.15s;
@@ -612,10 +635,6 @@
 .note-editor-content table:hover .column-resize-handle,
 .note-editor-content .column-resize-handle:hover {
   opacity: 1;
-}
-.note-editor-content .tableWrapper {
-  overflow-x: auto;
-  border-radius: 0.5rem;
 }
 .note-editor-content p.is-editor-empty:first-child::before {
   color: hsl(var(--muted-foreground));

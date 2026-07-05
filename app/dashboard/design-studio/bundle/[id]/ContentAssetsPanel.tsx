@@ -345,64 +345,77 @@ export function ContentAssetsPanel({
 
   if (!assets) {
     const WHAT_YOU_GET = [
-      { label: "Platform captions",   note: "Instagram, TikTok, Threads, X" },
-      { label: "Hooks",               note: "Opening lines that stop the scroll" },
-      { label: "CTAs",                note: "Click-worthy calls to action" },
-      { label: "Hashtag sets",        note: "Niche + trending combos" },
-      { label: "SEO title + meta",    note: "Google-ready product description" },
-      { label: "Email subject lines", note: "High-open-rate variants" },
-      { label: "Short-form hooks",    note: "Reels / Shorts / TikTok openers" },
+      { emoji: "📸", label: "Platform Captions",   note: "Instagram, TikTok, Threads, X" },
+      { emoji: "🎣", label: "Scroll-Stopping Hooks", note: "First lines that demand attention" },
+      { emoji: "⚡", label: "High-Convert CTAs",   note: "Copy that drives clicks & sales" },
+      { emoji: "#️⃣", label: "Hashtag Sets",         note: "Niche + trending combos" },
+      { emoji: "🔍", label: "SEO Title + Meta",    note: "Google-ready descriptions" },
+      { emoji: "📧", label: "Email Subject Lines", note: "High-open-rate variants" },
+      { emoji: "🎬", label: "Short-Form Hooks",    note: "Reels / Shorts / TikTok openers" },
     ];
     return (
-      <div className="flex items-center justify-center h-full p-8">
-        <div className="flex flex-col items-center gap-8 w-full max-w-[560px] text-center">
-          <div className="w-20 h-20 rounded-2xl bg-orange-500/10 flex items-center justify-center shrink-0">
-            <Sparkles className="w-10 h-10 text-orange-500" />
+      <div className="flex items-center justify-center h-full min-h-[500px] p-8">
+        <div className="flex flex-col items-center gap-6 w-full max-w-[520px] text-center">
+
+          {/* Hero glow icon */}
+          <div className="relative">
+            <div className="absolute inset-0 rounded-3xl bg-orange-500/20 blur-2xl scale-150" />
+            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-xl shadow-orange-500/30">
+              <Sparkles className="w-9 h-9 text-white" />
+            </div>
           </div>
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-              Generate your content package
+
+          {/* Copy */}
+          <div className="space-y-1.5">
+            <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+              Your content package is one click away
             </h3>
-            <p className={`text-sm leading-relaxed ${dimCls}`}>
-              One click. AI writes everything you need to launch your{" "}
-              <span className="font-semibold text-orange-500">{bundleStyle.replace(/-/g, " ")}</span>{" "}
-              product across every platform — matched to your style.
+            <p className={`text-sm leading-relaxed max-w-sm mx-auto ${dimCls}`}>
+              AI writes{" "}
+              <span className="font-semibold text-orange-500">7 types of launch content</span>{" "}
+              tailored to your{" "}
+              <span className="font-semibold">{bundleStyle.replace(/-/g, " ")}</span>{" "}
+              product — ready to copy and post.
             </p>
           </div>
-          <div className="w-full rounded-xl border border-border bg-muted/30 p-4">
-            <p className={`text-[10px] font-bold uppercase tracking-wider mb-3 ${dimCls} opacity-60`}>
-              What you&apos;ll get
-            </p>
+
+          {/* What you get grid */}
+          <div className="w-full">
             <div className="grid grid-cols-2 gap-1.5">
               {WHAT_YOU_GET.map((item) => (
-                <div key={item.label} className="flex items-start gap-2 rounded-lg px-3 py-2 bg-background border border-border/40">
-                  <span className="mt-0.5 w-3.5 h-3.5 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 block" />
-                  </span>
-                  <div className="text-left">
-                    <p className="text-[12px] font-semibold text-foreground leading-tight">{item.label}</p>
-                    <p className={`text-[10px] leading-snug ${dimCls}`}>{item.note}</p>
+                <div key={item.label}
+                  className="flex items-start gap-2.5 rounded-xl px-3 py-2.5 bg-background border border-border/60 hover:border-orange-500/30 hover:bg-orange-500/3 transition-all text-left">
+                  <span className="text-base leading-none mt-px shrink-0">{item.emoji}</span>
+                  <div>
+                    <p className="text-[12px] font-bold text-foreground leading-tight">{item.label}</p>
+                    <p className={`text-[10px] leading-snug mt-0.5 ${dimCls}`}>{item.note}</p>
                   </div>
                 </div>
               ))}
+              {/* 7th item is odd — full width */}
             </div>
           </div>
+
+          {/* Time estimate pill */}
+          <div className={`flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border ${isDark ? "border-white/10 text-gray-400 bg-white/5" : "border-orange-200 text-orange-600 bg-orange-50"}`}>
+            <Zap className="w-3 h-3" />
+            Usually ready in 5–10 seconds
+          </div>
+
           {error && (
-            <p className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-4 py-2 w-full">
+            <p className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl px-4 py-2.5 w-full">
               {error}
             </p>
           )}
-          <div className="flex flex-col items-center gap-2">
-            <Button onClick={generate} disabled={generating} size="lg"
-              className="bg-orange-500 hover:bg-orange-600 text-white gap-2 px-8 text-[15px] font-semibold shadow-lg shadow-orange-500/20">
-              {generating ? (
-                <><RotateCcw className="w-4 h-4 animate-spin" /> Generating…</>
-              ) : (
-                <><Sparkles className="w-4 h-4" /> Generate Content Package</>
-              )}
-            </Button>
-            <p className={`text-xs ${dimCls}`}>Usually takes 5–10 seconds</p>
-          </div>
+
+          <Button onClick={generate} disabled={generating} size="lg"
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white gap-2 px-10 text-[15px] font-bold shadow-xl shadow-orange-500/25 transition-all hover:shadow-orange-500/40 hover:-translate-y-px w-full max-w-xs">
+            {generating ? (
+              <><RotateCcw className="w-4 h-4 animate-spin" /> Generating your package…</>
+            ) : (
+              <><Sparkles className="w-4 h-4" /> Generate Content Package</>
+            )}
+          </Button>
         </div>
       </div>
     );
