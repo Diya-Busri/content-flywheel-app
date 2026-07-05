@@ -705,6 +705,8 @@ export function NoteEditor({
   const [tablePickerOpen, setTablePickerOpen]     = useState(false);
   const [tablePickerPos, setTablePickerPos]       = useState({ top: 0, left: 0 });
   const pendingTableRange                         = useRef<Range | null>(null);
+  const [ctxMenu, setCtxMenu]                     = useState<{ x: number; y: number } | null>(null);
+  const ctxMenuRef                                = useRef<HTMLDivElement>(null);
 
   // Refs
   const bubbleRef    = useRef<HTMLDivElement>(null);
@@ -725,10 +727,11 @@ export function NoteEditor({
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (moreRef.current  && !moreRef.current.contains(e.target as Node))   setShowMoreMenu(false);
-      if (blockRef.current && !blockRef.current.contains(e.target as Node))  setShowBlockMenu(false);
-      if (listRef.current  && !listRef.current.contains(e.target as Node))   setShowListMenu(false);
-      if (colorRef.current && !colorRef.current.contains(e.target as Node))  setShowColorPicker(false);
+      if (moreRef.current   && !moreRef.current.contains(e.target as Node))  setShowMoreMenu(false);
+      if (blockRef.current  && !blockRef.current.contains(e.target as Node)) setShowBlockMenu(false);
+      if (listRef.current   && !listRef.current.contains(e.target as Node))  setShowListMenu(false);
+      if (colorRef.current  && !colorRef.current.contains(e.target as Node)) setShowColorPicker(false);
+      if (ctxMenuRef.current && !ctxMenuRef.current.contains(e.target as Node)) setCtxMenu(null);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -1214,6 +1217,14 @@ export function NoteEditor({
       <div
         className="flex-1 min-h-0 overflow-y-auto"
         onClick={() => editor.commands.focus()}
+        onContextMenu={(e) => {
+          // Only show table context menu when right-clicking inside a table
+          const target = e.target as HTMLElement;
+          if (target.closest("td, th")) {
+            e.preventDefault();
+            setCtxMenu({ x: e.clientX, y: e.clientY });
+          }
+        }}
       >
         <EditorContent editor={editor} className="h-full" />
       </div>
@@ -1265,6 +1276,47 @@ export function NoteEditor({
           onAiAction={onAiAction}
           onClose={() => setShowCmdPalette(false)}
         />
+      )}
+
+      {/* ── Table right-click context menu ────────────────────────────────── */}
+      {ctxMenu && (
+        <>
+          <div className="fixed inset-0 z-[9997]" onClick={() => setCtxMenu(null)} />
+          <div
+            ref={ctxMenuRef}
+            className="fixed z-[9998] bg-popover border border-border rounded-xl shadow-xl py-1.5 min-w-[200px] overflow-hidden"
+            style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          >
+            {[
+              { label: "Insert Row Above",    icon: "↑", run: () => editor.chain().focus().addRowBefore().run() },
+              { label: "Insert Row Below",    icon: "↓", run: () => editor.chain().focus().addRowAfter().run() },
+              { label: "Insert Column Left",  icon: "←", run: () => editor.chain().focus().addColumnBefore().run() },
+              { label: "Insert Column Right", icon: "→", run: () => editor.chain().focus().addColumnAfter().run() },
+              null, // divider
+              { label: "Delete Row",    icon: "✕", run: () => editor.chain().focus().deleteRow().run(),    danger: true },
+              { label: "Delete Column", icon: "✕", run: () => editor.chain().focus().deleteColumn().run(), danger: true },
+              { label: "Delete Table",  icon: "⊠", run: () => editor.chain().focus().deleteTable().run(),  danger: true },
+            ].map((item, i) =>
+              item === null
+                ? <div key={i} className="my-1 border-t border-border/50" />
+                : (
+                  <button
+                    key={i}
+                    onClick={() => { item.run(); setCtxMenu(null); }}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
+                      item.danger
+                        ? "text-red-500 hover:bg-red-500/10"
+                        : "text-foreground hover:bg-accent"
+                    )}
+                  >
+                    <span className="w-5 text-center text-[11px] font-bold shrink-0 opacity-60">{item.icon}</span>
+                    {item.label}
+                  </button>
+                )
+            )}
+          </div>
+        </>
       )}
     </div>
   );

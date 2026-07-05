@@ -325,37 +325,82 @@ export function ContentAssetsPanel({
 
   // ── Empty state ─────────────────────────────────────────────────────────
   if (!assets) {
+    const WHAT_YOU_GET = [
+      { label: "Platform captions",    note: "Instagram, TikTok, LinkedIn, Twitter" },
+      { label: "Hooks",                note: "Opening lines that stop the scroll" },
+      { label: "CTAs",                 note: "Click-worthy calls to action" },
+      { label: "Hashtag sets",         note: "Niche + trending combos" },
+      { label: "SEO title + meta",     note: "Google-ready product description" },
+      { label: "Email subject lines",  note: "High-open-rate variants" },
+      { label: "Short-form hooks",     note: "Reels / Shorts / TikTok openers" },
+    ];
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-6 p-8 text-center">
-        <div className="w-20 h-20 rounded-2xl bg-orange-500/10 flex items-center justify-center">
-          <Sparkles className="w-10 h-10 text-orange-500" />
-        </div>
-        <div>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
-            Generate your content package
-          </h3>
-          <p className={`text-sm max-w-sm ${dimCls}`}>
-            AI will write captions, hooks, CTAs, hashtags, and platform-ready copy — all matched to your{" "}
-            <span className="font-semibold text-orange-500">{bundleStyle.replace(/-/g, " ")}</span> style.
-          </p>
-        </div>
-        {error && (
-          <p className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-4 py-2">
-            {error}
-          </p>
-        )}
-        <Button
-          onClick={generate}
-          disabled={generating}
-          className="bg-orange-500 hover:bg-orange-600 text-white gap-2 px-6"
-        >
-          {generating ? (
-            <><RotateCcw className="w-4 h-4 animate-spin" /> Generating…</>
-          ) : (
-            <><Sparkles className="w-4 h-4" /> Generate Content Package</>
+      <div className="flex items-center justify-center h-full p-8">
+        <div className="flex flex-col items-center gap-8 w-full max-w-[560px] text-center">
+          {/* Icon */}
+          <div className="w-20 h-20 rounded-2xl bg-orange-500/10 flex items-center justify-center shrink-0">
+            <Sparkles className="w-10 h-10 text-orange-500" />
+          </div>
+
+          {/* Heading */}
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+              Generate your content package
+            </h3>
+            <p className={`text-sm leading-relaxed ${dimCls}`}>
+              One click. AI writes everything you need to launch your{" "}
+              <span className="font-semibold text-orange-500">{bundleStyle.replace(/-/g, " ")}</span>{" "}
+              product across every platform — matched to your style.
+            </p>
+          </div>
+
+          {/* What you'll get */}
+          <div className="w-full rounded-xl border border-border bg-muted/30 p-4">
+            <p className={`text-[10px] font-bold uppercase tracking-wider mb-3 ${dimCls} opacity-60`}>
+              What you&apos;ll get
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {WHAT_YOU_GET.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-start gap-2 rounded-lg px-3 py-2 bg-background border border-border/40"
+                >
+                  <span className="mt-0.5 w-3.5 h-3.5 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 block" />
+                  </span>
+                  <div className="text-left">
+                    <p className="text-[12px] font-semibold text-foreground leading-tight">{item.label}</p>
+                    <p className={`text-[10px] leading-snug ${dimCls}`}>{item.note}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <p className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-4 py-2 w-full">
+              {error}
+            </p>
           )}
-        </Button>
-        <p className={`text-xs ${dimCls}`}>Usually takes 5–10 seconds</p>
+
+          {/* CTA */}
+          <div className="flex flex-col items-center gap-2">
+            <Button
+              onClick={generate}
+              disabled={generating}
+              size="lg"
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-2 px-8 text-[15px] font-semibold shadow-lg shadow-orange-500/20"
+            >
+              {generating ? (
+                <><RotateCcw className="w-4 h-4 animate-spin" /> Generating…</>
+              ) : (
+                <><Sparkles className="w-4 h-4" /> Generate Content Package</>
+              )}
+            </Button>
+            <p className={`text-xs ${dimCls}`}>Usually takes 5–10 seconds</p>
+          </div>
+        </div>
       </div>
     );
   }

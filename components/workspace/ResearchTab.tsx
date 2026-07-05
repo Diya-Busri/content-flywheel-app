@@ -746,6 +746,17 @@ const SCORE_COLORS = {
   orange: "bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20 text-orange-700 dark:text-orange-400",
 } as const;
 
+// Visual score bar for numeric metrics
+function ScoreBar({ value, max = 100 }: { value: number; max?: number }) {
+  const pct = Math.min(100, Math.max(0, (value / max) * 100));
+  const barColor = pct >= 75 ? "bg-green-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden mt-1.5">
+      <div className={cn("h-full rounded-full transition-all duration-700", barColor)} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 function scorecardColor(value: string | number): keyof typeof SCORE_COLORS {
   if (typeof value === "number") {
     if (value >= 75) return "green";
@@ -768,14 +779,20 @@ function ScorecardMetric({
   subLabel?: string;
   colorKey: keyof typeof SCORE_COLORS;
 }) {
+  // Extract numeric part for bar rendering (e.g. "82/100" → 82, "75%" → 75)
+  const numericMatch = typeof value === "string" ? value.match(/^(\d+)/) : null;
+  const numericVal: number | null = numericMatch ? parseInt(numericMatch[1]) : typeof value === "number" ? value : null;
+  const showBar = numericVal !== null && numericVal <= 100;
+
   return (
     <div className={cn("rounded-xl border p-3 flex flex-col gap-1.5", SCORE_COLORS[colorKey])}>
       <div className="flex items-center gap-1.5">
         <span className="opacity-70 shrink-0">{icon}</span>
         <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{title}</span>
       </div>
-      <div className="font-bold text-[18px] leading-tight">{value}</div>
-      {subLabel && <div className="text-[11px] opacity-60 leading-tight">{subLabel}</div>}
+      <div className="font-bold text-[20px] leading-tight">{value}</div>
+      {showBar && <ScoreBar value={numericVal!} />}
+      {subLabel && <div className="text-[11px] opacity-60 leading-tight mt-0.5">{subLabel}</div>}
     </div>
   );
 }
@@ -1093,6 +1110,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
 
   // Misc
   const [copiedKeywords, setCopiedKeywords] = useState(false);
+  const [exportCopied, setExportCopied]     = useState(false);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1228,6 +1246,57 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     const content = `${query}\n\n${report.summary}\n\nKey Insights:\n${report.insights.map(i => `• ${i}`).join("\n")}`;
     save("full-report", `Research: ${query}`, content);
   };
+
+  const handleExportReport = useCallback(() => {
+    if (!report) return;
+    const lines = [
+      `# Research Report: ${query}`,
+      `*${activeReportType} · ${generatedAt ? new Date(generatedAt).toLocaleDateString("en-GB") : ""}*`,
+      "",
+      "## Executive Summary",
+      report.summary,
+      "",
+      "## Key Insights",
+      ...report.insights.map((ins, i) => `${i + 1}. ${ins}`),
+      "",
+      "## Product Opportunities",
+      ...report.productOpportunities.map(o => `- **${o.title}** | ${o.type} | ${o.priceRange}\n  ${o.description}`),
+      "",
+      "## Content Opportunities",
+      ...report.contentOpportunities.map(o => `- **${o.title}** (${o.format}, ${o.difficulty})\n  ${o.description}`),
+      "",
+      "## Action Plan",
+      ...report.actionPlan.map(s => `${s.step}. **${s.action}**: ${s.detail}`),
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    setExportCopied(true);
+    setTimeout(() => setExportCopied(false), 2500);
+  }, [report, query, activeReportType, generatedAt]);
+
+  const handleGenerateStrategy = useCallback(async () => {
+    if (!report) return;
+    const content = [
+      `# Marketing Strategy: ${query}`,
+      "",
+      "## Market Overview",
+      report.summary,
+      "",
+      "## Top Content Opportunities",
+      ...report.contentOpportunities.slice(0, 5).map(o => `### ${o.title}\n${o.description}\n*Format: ${o.format} · Difficulty: ${o.difficulty}*`),
+      "",
+      "## Product Strategy",
+      ...report.productOpportunities.slice(0, 4).map(o => `- **${o.title}** (${o.priceRange}) — ${o.description}`),
+      "",
+      "## Action Plan",
+      ...report.actionPlan.map(s => `${s.step}. **${s.action}**: ${s.detail}`),
+    ].join("\n");
+    await fetch("/api/founder-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "notes", type: "strategy", title: `Marketing Strategy: ${query}`, content }),
+    });
+    onTabChange?.("notes");
+  }, [report, query, onTabChange]);
 
   const formatTime = (iso: string) => {
     try { return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); }
@@ -1455,6 +1524,27 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Generate Marketing Strategy */}
+          <button
+            onClick={handleGenerateStrategy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[12px] font-medium transition-all"
+          >
+            <Target className="w-3 h-3" />
+            Save Strategy
+          </button>
+          {/* Export */}
+          <button
+            onClick={handleExportReport}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-all",
+              exportCopied
+                ? "bg-green-500/10 border-green-500/20 text-green-600"
+                : "bg-background hover:bg-accent border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {exportCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {exportCopied ? "Copied!" : "Export"}
+          </button>
           {/* Advanced toggle */}
           <button
             onClick={() => setAdvancedMode(!advancedMode)}
@@ -1466,7 +1556,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             )}
           >
             <Brain className="w-3 h-3" />
-            {advancedMode ? "Advanced: On" : "Advanced Analysis"}
+            {advancedMode ? "Advanced: On" : "Advanced"}
           </button>
           <button
             onClick={handleSaveReport}
@@ -1485,7 +1575,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-accent text-[12px] font-medium text-muted-foreground hover:text-foreground transition-all"
           >
             <RefreshCw className="w-3 h-3" />
-            New Research
+            New
           </button>
         </div>
       </div>
@@ -1526,17 +1616,27 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
 
       {/* ── 2. Key Insights ───────────────────────────────────────────────── */}
       <Section id="insights" title="Key Insights" icon={<Lightbulb className="w-4 h-4" />} badge={report.insights.length} open={openSections.has("insights")} onToggle={toggleSection}>
-        <ul className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {report.insights.map((insight, i) => (
-            <li key={i} className="flex items-start gap-3">
-              <span className="w-5 h-5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-              <p className="text-[14px] text-foreground/90 leading-relaxed">{stripMd(insight)}</p>
-            </li>
+            <div key={i} className="relative flex flex-col gap-2.5 p-4 rounded-xl border border-border bg-background hover:border-orange-500/20 hover:bg-accent/20 transition-all">
+              <div className="flex items-start gap-3">
+                <span className="w-6 h-6 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[11px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                <p className="text-[13px] text-foreground/90 leading-relaxed flex-1">{stripMd(insight)}</p>
+              </div>
+              <div className="flex gap-1.5 pl-9">
+                <button onClick={() => router.push("/dashboard/design-studio")} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-orange-500/8 hover:bg-orange-500/15 text-orange-500 border border-orange-500/15 transition-all">
+                  <Layers className="w-2.5 h-2.5" />Carousel
+                </button>
+                <button onClick={() => router.push("/dashboard/video-guide/new")} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-background hover:bg-accent text-muted-foreground border border-border transition-all">
+                  <Mic className="w-2.5 h-2.5" />Script
+                </button>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
         <QuickActions actions={[
-          { label: "Generate Carousel", icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio"), primary: true },
-          { label: "Save Insights",     icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("insights", `Insights: ${query}`, report.insights.map((ins, n) => `${n + 1}. ${ins}`).join("\n")) },
+          { label: "Generate Carousel from All Insights", icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio"), primary: true },
+          { label: "Save Insights",                       icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("insights", `Insights: ${query}`, report.insights.map((ins, n) => `${n + 1}. ${ins}`).join("\n")) },
         ]} />
       </Section>
 
@@ -1582,23 +1682,30 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
 
       {/* ── 5. Content Opportunities ──────────────────────────────────────── */}
       <Section id="content" title="Content Opportunities" icon={<Layers className="w-4 h-4" />} badge={report.contentOpportunities.length} open={openSections.has("content")} onToggle={toggleSection}>
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {report.contentOpportunities.map((opp, i) => (
-            <div key={i} className="p-4 rounded-xl border border-border bg-background hover:bg-accent/20 transition-colors group">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
-                  <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/8 border-blue-500/20 text-blue-500 dark:text-blue-400">{opp.format}</span>
-                  <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold", DIFFICULTY_COLORS[opp.difficulty] ?? DIFFICULTY_COLORS.Medium)}>{opp.difficulty}</span>
+            <div key={i} className="p-4 rounded-xl border border-border bg-background hover:border-orange-500/20 hover:bg-accent/20 transition-all">
+              <div className="flex items-start justify-between gap-3 mb-2.5">
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
+                    <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/8 border-blue-500/20 text-blue-500 dark:text-blue-400">{opp.format}</span>
+                    <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold", DIFFICULTY_COLORS[opp.difficulty] ?? DIFFICULTY_COLORS.Medium)}>{opp.difficulty}</span>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
                 </div>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
               </div>
-              <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => router.push("/dashboard/video-guide/new")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all">
+              {/* Always-visible execution buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => router.push("/dashboard/video-guide/new")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all">
                   <Mic className="w-3 h-3" />Generate Script
                 </button>
-                <button onClick={() => router.push("/dashboard/design-studio")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-background hover:bg-accent text-muted-foreground border border-border transition-all">
+                <button onClick={() => router.push("/dashboard/design-studio")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-background hover:bg-accent text-muted-foreground hover:text-foreground border border-border transition-all">
                   <Layers className="w-3 h-3" />Make Carousel
+                </button>
+                <button onClick={() => save(`content-${i}`, opp.title, `${opp.description}\n\nFormat: ${opp.format}\nDifficulty: ${opp.difficulty}`)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-background hover:bg-accent text-muted-foreground hover:text-foreground border border-border transition-all">
+                  {saved.has(`content-${i}`) ? <Check className="w-3 h-3 text-green-500" /> : <BookmarkPlus className="w-3 h-3" />}
+                  {saved.has(`content-${i}`) ? "Saved!" : "Save"}
                 </button>
               </div>
             </div>
@@ -1606,38 +1713,50 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
         </div>
         <QuickActions actions={[
           { label: "Open Design Studio",    icon: <Wand2 className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio"), primary: true },
-          { label: "Save Opportunities",    icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("content-opps", `Content Opps: ${query}`, report.contentOpportunities.map(o => `${o.title} (${o.format}, ${o.difficulty})\n${o.description}`).join("\n\n")) },
+          { label: "Generate Video Guide",  icon: <Zap className="w-3 h-3" />,         onClick: () => router.push("/dashboard/video-guide/new") },
+          { label: "Save All",              icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("content-opps", `Content Opps: ${query}`, report.contentOpportunities.map(o => `${o.title} (${o.format}, ${o.difficulty})\n${o.description}`).join("\n\n")) },
         ]} />
       </Section>
 
       {/* ── 6. Product Opportunities ──────────────────────────────────────── */}
       <Section id="product" title="Product Opportunities" icon={<Package className="w-4 h-4" />} badge={report.productOpportunities.length} open={openSections.has("product")} onToggle={toggleSection}>
-        <div className="space-y-3">
-          {report.productOpportunities.map((opp, i) => (
-            <div key={i} className="p-4 rounded-xl border border-border bg-background hover:bg-accent/20 transition-colors group">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
-                  <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/8 border-purple-500/20 text-purple-500 dark:text-purple-400">{opp.type}</span>
-                </div>
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
-                <p className="text-[12px] font-bold text-green-600 dark:text-green-400">{opp.priceRange}</p>
-              </div>
-              <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => router.push("/dashboard/library")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all">
-                  <Package className="w-3 h-3" />Create Product
-                </button>
-                <button onClick={() => save(`product-${i}`, opp.title, `${opp.description}\n\nType: ${opp.type}\nPrice: ${opp.priceRange}`)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-background hover:bg-accent text-muted-foreground border border-border transition-all">
-                  {saved.has(`product-${i}`) ? <Check className="w-3 h-3 text-green-500" /> : <BookmarkPlus className="w-3 h-3" />}
-                  {saved.has(`product-${i}`) ? "Saved!" : "Save Idea"}
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/60 bg-muted/30">
+                <th className="text-left py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Product Idea</th>
+                <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 w-[100px]">Type</th>
+                <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-green-600/70 dark:text-green-400/70 w-[110px]">Price Range</th>
+                <th className="py-2.5 px-3 w-[80px]" />
+              </tr>
+            </thead>
+            <tbody>
+              {report.productOpportunities.map((opp, i) => (
+                <tr key={i} className={cn("border-b border-border/40 hover:bg-accent/30 transition-colors", i === report.productOpportunities.length - 1 && "border-b-0")}>
+                  <td className="py-3 px-4">
+                    <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5 max-w-xs">{stripMd(opp.description)}</p>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/8 border-purple-500/20 text-purple-500 dark:text-purple-400 whitespace-nowrap">{opp.type}</span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="text-[13px] font-bold text-green-600 dark:text-green-400 whitespace-nowrap">{opp.priceRange}</span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <button onClick={() => router.push("/dashboard/library")} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all whitespace-nowrap">
+                      <Package className="w-3 h-3" />Build →
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <QuickActions actions={[
           { label: "Create Digital Product", icon: <Package className="w-3 h-3" />,      onClick: () => router.push("/dashboard/library"), primary: true },
-          { label: "Save All",               icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("product-opps", `Product Opps: ${query}`, report.productOpportunities.map(o => `${o.title}\n${o.description}\nType: ${o.type} · ${o.priceRange}`).join("\n\n")) },
+          { label: "Generate Carousel",      icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio") },
+          { label: "Save All Ideas",         icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("product-opps", `Product Opps: ${query}`, report.productOpportunities.map(o => `${o.title}\n${o.description}\nType: ${o.type} · ${o.priceRange}`).join("\n\n")) },
         ]} />
       </Section>
 
@@ -1666,47 +1785,41 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
       {/* ── 8. Competitor Insights ────────────────────────────────────────── */}
       {showSection("competitors") && (
         <Section id="competitors" title="Competitor Insights" icon={<Star className="w-4 h-4" />} badge={report.competitorInsights.length} open={openSections.has("competitors")} onToggle={toggleSection} advancedOnly={!alwaysShowCompetitors}>
-          <div className="space-y-3">
+          {/* Column header row */}
+          <div className="grid grid-cols-[1fr_1fr_1fr] gap-3 mb-2 px-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Competitor</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Their Strength</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-green-600/70 dark:text-green-400/70">Your Opportunity</p>
+          </div>
+          <div className="space-y-2">
             {report.competitorInsights.map((comp, i) => (
-              <div key={i} className="p-4 rounded-xl border border-border bg-background space-y-3">
-                <p className="text-[13px] font-bold text-foreground">{stripMd(comp.name)}</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Strength</p>
-                    <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(comp.strength)}</p>
+              <div key={i} className="rounded-xl border border-border bg-background overflow-hidden hover:border-orange-500/20 transition-colors">
+                <div className="grid grid-cols-[1fr_1fr_1fr] gap-0 divide-x divide-border/60">
+                  <div className="p-3.5">
+                    <p className="text-[13px] font-bold text-foreground leading-snug">{stripMd(comp.name)}</p>
+                    {comp.popularProducts && (
+                      <p className="text-[11px] text-muted-foreground/60 mt-1 leading-relaxed">{stripMd(comp.popularProducts)}</p>
+                    )}
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400">Your Opportunity</p>
+                  <div className="p-3.5">
+                    <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(comp.strength)}</p>
+                    {comp.contentStrategy && (
+                      <p className="text-[11px] text-muted-foreground/60 mt-1 italic leading-relaxed">{stripMd(comp.contentStrategy)}</p>
+                    )}
+                  </div>
+                  <div className="p-3.5 bg-green-500/4">
                     <p className="text-[12px] text-green-700 dark:text-green-300 leading-relaxed font-medium">{stripMd(comp.gap)}</p>
+                    {comp.whatToLearn && (
+                      <p className="text-[11px] text-orange-500/80 mt-1.5 italic leading-relaxed">{stripMd(comp.whatToLearn)}</p>
+                    )}
                   </div>
                 </div>
-                {(comp.popularProducts || comp.contentStrategy || comp.whatToLearn) && (
-                  <div className="pt-2 border-t border-border/40 space-y-2">
-                    {comp.popularProducts && (
-                      <div className="space-y-0.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Popular Products</p>
-                        <p className="text-[12px] text-muted-foreground">{stripMd(comp.popularProducts)}</p>
-                      </div>
-                    )}
-                    {comp.contentStrategy && (
-                      <div className="space-y-0.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Content Strategy</p>
-                        <p className="text-[12px] text-muted-foreground">{stripMd(comp.contentStrategy)}</p>
-                      </div>
-                    )}
-                    {comp.whatToLearn && (
-                      <div className="space-y-0.5 p-2.5 rounded-lg bg-orange-500/5 border border-orange-500/15">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500/70">Key Lesson</p>
-                        <p className="text-[12px] text-foreground/80 italic">{stripMd(comp.whatToLearn)}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             ))}
           </div>
           <QuickActions actions={[
-            { label: "Save Analysis", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("competitors", `Competitor Analysis: ${query}`, report.competitorInsights.map(c => `${c.name}\nStrength: ${c.strength}\nOpportunity: ${c.gap}`).join("\n\n")) },
+            { label: "Create Positioning Content", icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio"), primary: true },
+            { label: "Save Analysis",              icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("competitors", `Competitor Analysis: ${query}`, report.competitorInsights.map(c => `${c.name}\nStrength: ${c.strength}\nOpportunity: ${c.gap}`).join("\n\n")) },
           ]} />
         </Section>
       )}
@@ -1714,20 +1827,38 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
       {/* ── 9. Keywords ───────────────────────────────────────────────────── */}
       {showSection("keywords") && (
         <Section id="keywords" title="Keywords & Search Intent" icon={<Hash className="w-4 h-4" />} badge={report.keywords.length} open={openSections.has("keywords")} onToggle={toggleSection} advancedOnly={!alwaysShowKeywords}>
-          <div className="space-y-2">
-            {report.keywords.map((kw, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-background hover:bg-accent/20 transition-colors">
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-mono font-semibold text-foreground">{kw.term}</span>
-                    <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold", INTENT_COLORS[kw.intent] ?? INTENT_COLORS.informational)}>{kw.intent}</span>
-                    {kw.type && <span className="px-2 py-0.5 rounded-md border text-[10px] font-medium bg-muted/30 border-border text-muted-foreground">{kw.type}</span>}
-                    <span className={cn("text-[11px] font-bold", OPP_COLORS[kw.opportunity] ?? "text-muted-foreground")}>● {kw.opportunity} opp</span>
-                  </div>
-                  {kw.note && <p className="text-[11px] text-muted-foreground">{kw.note}</p>}
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border/60 bg-muted/30">
+                  <th className="text-left py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Keyword</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 w-[120px]">Intent</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 w-[100px]">Opportunity</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.keywords.map((kw, i) => (
+                  <tr key={i} className={cn("border-b border-border/40 hover:bg-accent/30 transition-colors", i === report.keywords.length - 1 && "border-b-0")}>
+                    <td className="py-2.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-semibold text-foreground text-[13px]">{kw.term}</span>
+                        {kw.type && <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-muted/40 border border-border text-muted-foreground">{kw.type}</span>}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold whitespace-nowrap", INTENT_COLORS[kw.intent] ?? INTENT_COLORS.informational)}>{kw.intent}</span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={cn("text-[11px] font-bold whitespace-nowrap", OPP_COLORS[kw.opportunity] ?? "text-muted-foreground")}>● {kw.opportunity}</span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className="text-[11px] text-muted-foreground leading-relaxed">{kw.note}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           <QuickActions actions={[
             { label: copiedKeywords ? "Copied!" : "Copy All Keywords", icon: copiedKeywords ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />, onClick: handleCopyKeywords, primary: true },
