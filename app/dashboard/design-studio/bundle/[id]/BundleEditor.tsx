@@ -429,6 +429,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
                 isDark={isDark}
                 slideCount={slides.length}
                 onAssetsChange={(a) => setAssets(a)}
+                slides={slides}
               />
             </div>
           </SheetContent>
@@ -454,6 +455,7 @@ export function BundleEditor({ bundleId }: { bundleId: string }) {
           isDark={isDark}
           slideCount={slides.length}
           onAssetsChange={(a) => setAssets(a)}
+          slides={slides}
         />
       </div>
 
