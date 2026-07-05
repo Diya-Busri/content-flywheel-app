@@ -137,10 +137,10 @@ const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
   { id: "notes",    label: "Notes",            icon: <StickyNote className="w-4 h-4" /> },
   { id: "calendar", label: "Content Calendar", icon: <Calendar className="w-4 h-4" /> },
   { id: "goals",    label: "Goals",            icon: <Target className="w-4 h-4" /> },
+  { id: "research", label: "Research",         icon: <BookOpen className="w-4 h-4" /> },
 ];
 
 const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
-  { id: "research",              label: "Research",             icon: <BookOpen className="w-4 h-4" /> },
   { id: "marketing-psychology",  label: "Mktg Psychology",      icon: <Brain className="w-4 h-4" /> },
   { id: "copywriting",           label: "Copywriting",          icon: <FileText className="w-4 h-4" /> },
   { id: "content-ideas",         label: "Content Ideas",        icon: <Lightbulb className="w-4 h-4" /> },
@@ -1869,7 +1869,7 @@ export default function WorkspacePage() {
     notes:                "Capture ideas, scripts, and notes",
     calendar:             "Plan and schedule your content drops",
     goals:                "Track revenue, growth, and product targets",
-    "research":           "AI-powered research assistant — find opportunities, not just information",
+    "research":           "AI Business Analyst — discover opportunities, understand markets, take action",
     "marketing-psychology": "Psychological triggers and buyer behavior principles",
     "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
     "content-ideas":      "Hooks, angles, scripts, and viral content formats",
@@ -1923,7 +1923,7 @@ export default function WorkspacePage() {
       {tab === "goals"    && <GoalsTab />}
 
       {/* Admin-only tab content */}
-      {isAdmin && tab === "research"              && <ResearchTab onTabChange={setTab} />}
+      {tab === "research"                          && <ResearchTab onTabChange={setTab} />}
       {isAdmin && tab === "marketing-psychology"  && <MarketingPsychologyTab />}
       {isAdmin && tab === "copywriting"           && <CopywritingTab />}
       {isAdmin && tab === "content-ideas"         && <ContentIdeasTab />}
