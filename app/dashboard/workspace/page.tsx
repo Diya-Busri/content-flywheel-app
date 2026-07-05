@@ -26,9 +26,14 @@ type WorkspaceTab = "dashboard" | "todos" | "notes" | "calendar" | "goals"
 type Priority = "high" | "medium" | "low";
 type TodoFilter = "all" | "active" | "completed";
 
+interface Subtask { id: string; text: string; completed: boolean; }
 interface Todo {
   id: string; text: string; completed: boolean; priority: Priority;
   category?: string; dueDate?: string; createdAt: number;
+  subtasks?: Subtask[];
+  recurring?: "daily" | "weekly" | "monthly";
+  duration?: number; // minutes
+  notes?: string;
 }
 interface SavedTask { id: string; text: string; priority: Priority; category?: string; }
 type NoteTag = "script" | "idea" | "research" | "strategy" | "personal";
@@ -96,6 +101,13 @@ const STARTER_TASKS: { text: string; priority: Priority; category: string }[] = 
   { text: "Set up your first digital product",           priority: "high",   category: "admin" },
   { text: "Share your store link on social media",       priority: "medium", category: "growth" },
   { text: "Write your welcome email sequence",           priority: "medium", category: "content" },
+];
+
+const DURATION_OPTIONS = [
+  { value: 15, label: "15 min" }, { value: 30, label: "30 min" },
+  { value: 45, label: "45 min" }, { value: 60, label: "1 hour" },
+  { value: 90, label: "1.5 hours" }, { value: 120, label: "2 hours" },
+  { value: 180, label: "3 hours" },
 ];
 
 // ─── Knowledge Base helpers ───────────────────────────────────────────────────
@@ -168,6 +180,18 @@ function fmtRelative(dateStr: string): string {
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function isOverdue(d?: string) { return !!d && new Date(d) < new Date(new Date().toDateString()); }
+function fmtDuration(mins: number): string {
+  const h = Math.floor(mins / 60); const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+function getNextRecurringDate(date: string, r: "daily" | "weekly" | "monthly"): string {
+  const d = new Date(date + "T12:00:00");
+  if (r === "daily") d.setDate(d.getDate() + 1);
+  else if (r === "weekly") d.setDate(d.getDate() + 7);
+  else d.setMonth(d.getMonth() + 1);
+  return d.toISOString().slice(0, 10);
+}
 function fmtDate(d?: string) {
   if (!d) return null;
   const today = new Date(new Date().toDateString()).getTime();
@@ -628,6 +652,8 @@ function TodoTab() {
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [subInput, setSubInput] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const priorityRef = useRef<HTMLDivElement>(null);
   const categoryRef = useRef<HTMLDivElement>(null);
@@ -662,14 +688,39 @@ function TodoTab() {
   const toggle = (id: string) => {
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
-    if (!todo.completed) { setCompletingIds(prev => new Set(prev).add(id)); setTimeout(() => setCompletingIds(prev => { const s = new Set(prev); s.delete(id); return s; }), 500); }
+    if (!todo.completed) {
+      setCompletingIds(prev => new Set(prev).add(id));
+      setTimeout(() => setCompletingIds(prev => { const s = new Set(prev); s.delete(id); return s; }), 500);
+      // Recurring: auto-create next instance
+      if (todo.recurring && todo.dueDate) {
+        const nextDate = getNextRecurringDate(todo.dueDate, todo.recurring);
+        setTodos(prev => [...prev, { ...todo, id: uid(), completed: false, dueDate: nextDate, subtasks: todo.subtasks?.map(s => ({ ...s, completed: false })), createdAt: Date.now() }]);
+      }
+    }
     setTodos(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
   };
-  const remove = (id: string) => setTodos(prev => prev.filter(t => t.id !== id));
+  const remove = (id: string) => { setTodos(prev => prev.filter(t => t.id !== id)); if (expandedId === id) setExpandedId(null); };
+  const updateTodo = (id: string, patch: Partial<Todo>) => setTodos(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
   const toggleSaved = (todo: Todo) => {
     const isSaved = saved.some(s => s.text === todo.text);
     if (isSaved) setSaved(prev => prev.filter(s => s.text !== todo.text));
     else setSaved(prev => [...prev, { id: uid(), text: todo.text, priority: todo.priority, category: todo.category }]);
+  };
+  const addSubtask = (todoId: string, text: string) => {
+    if (!text.trim()) return;
+    const todo = todos.find(t => t.id === todoId);
+    updateTodo(todoId, { subtasks: [...(todo?.subtasks ?? []), { id: uid(), text: text.trim(), completed: false }] });
+    setSubInput(prev => ({ ...prev, [todoId]: "" }));
+  };
+  const toggleSubtask = (todoId: string, subId: string) => {
+    const todo = todos.find(t => t.id === todoId);
+    if (!todo?.subtasks) return;
+    updateTodo(todoId, { subtasks: todo.subtasks.map(s => s.id === subId ? { ...s, completed: !s.completed } : s) });
+  };
+  const removeSubtask = (todoId: string, subId: string) => {
+    const todo = todos.find(t => t.id === todoId);
+    if (!todo?.subtasks) return;
+    updateTodo(todoId, { subtasks: todo.subtasks.filter(s => s.id !== subId) });
   };
   const handleDrop = (targetId: string) => {
     if (!dragId || dragId === targetId) { setDragId(null); setDragOverId(null); return; }
@@ -736,7 +787,7 @@ function TodoTab() {
             {priorityOpen && (
               <div className="absolute top-full mt-1 left-0 z-20 bg-popover border border-border rounded-xl shadow-lg min-w-[110px] py-1">
                 {(["high","medium","low"] as Priority[]).map(p => (
-                  <button key={p} onClick={() => { setPriority(p); setPriorityOpen(false); }} className={cn("flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent rounded-md mx-1 w-[calc(100%-8px)]", priority === p && "font-semibold")}>
+                  <button key={p} onClick={() => { setPriority(p); setPriorityOpen(false); }} className={cn("flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent", priority === p && "font-semibold")}>
                     <span className={cn("w-2 h-2 rounded-full", PRIORITY[p].dot)} /><span className={PRIORITY[p].color}>{PRIORITY[p].label}</span>
                   </button>
                 ))}
@@ -808,7 +859,7 @@ function TodoTab() {
         </div>
       </div>
 
-      {/* Filter tabs — single row */}
+      {/* Filter tabs */}
       <div className="mb-4 flex items-center gap-1 flex-wrap">
         {(["all","active","completed"] as TodoFilter[]).map(f => (
           <button key={f} onClick={() => setFilter(f)} className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all", filter === f ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "text-muted-foreground hover:text-foreground hover:bg-accent")}>
@@ -824,7 +875,7 @@ function TodoTab() {
       </div>
 
       {/* Task list */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {filtered.length === 0 && todos.length === 0 && (
           <div>
             <div className="mb-4 p-4 rounded-2xl bg-gradient-to-br from-orange-500/8 to-amber-500/8 border border-orange-500/15">
@@ -860,35 +911,171 @@ function TodoTab() {
           const overdue = isOverdue(todo.dueDate) && !todo.completed;
           const isCompleting = completingIds.has(todo.id);
           const isSaved = saved.some(s => s.text === todo.text);
+          const isExpanded = expandedId === todo.id;
+          const subDone = todo.subtasks?.filter(s => s.completed).length ?? 0;
+          const subTotal = todo.subtasks?.length ?? 0;
+
           return (
-            <div key={todo.id} draggable onDragStart={() => setDragId(todo.id)} onDragOver={e => { e.preventDefault(); setDragOverId(todo.id); }} onDrop={() => handleDrop(todo.id)} onDragEnd={() => { setDragId(null); setDragOverId(null); }}
-              className={cn("group flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card transition-all duration-150",
-                dragOverId === todo.id && dragId !== todo.id ? "border-orange-500/40 bg-orange-500/5" : "border-border",
-                dragId === todo.id && "opacity-40 scale-[0.98]",
-                todo.completed && "opacity-50",
-                overdue && !todo.completed && "border-red-500/30 bg-red-500/5")}>
-              <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <button onClick={() => toggle(todo.id)} className={cn("shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200",
-                todo.completed ? "border-green-500 bg-green-500 text-white" : "border-muted-foreground/30 hover:border-orange-500",
-                isCompleting && "scale-125")}>
-                {todo.completed && <Check className="w-3 h-3" strokeWidth={3} />}
-              </button>
-              <div className="flex-1 min-w-0">
-                <span className={cn("text-sm font-medium", todo.completed ? "line-through text-muted-foreground" : "text-foreground")}>{todo.text}</span>
-                {(todo.dueDate || cat) && (
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {todo.dueDate && <span className={cn("text-xs flex items-center gap-0.5 font-medium", overdue ? "text-red-400" : "text-muted-foreground")}>{overdue && "⚠ "}{fmtDate(todo.dueDate)}</span>}
-                    {cat && <span className={cn("text-xs px-1.5 py-0.5 rounded-full", cat.color)}>{cat.name}</span>}
+            <div key={todo.id}>
+              {/* Task row */}
+              <div
+                draggable
+                onDragStart={() => setDragId(todo.id)}
+                onDragOver={e => { e.preventDefault(); setDragOverId(todo.id); }}
+                onDrop={() => handleDrop(todo.id)}
+                onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                className={cn("group flex items-center gap-2.5 px-3 py-2.5 bg-card border transition-all duration-150",
+                  isExpanded ? "rounded-t-xl border-b-0" : "rounded-xl",
+                  dragOverId === todo.id && dragId !== todo.id ? "border-orange-500/40 bg-orange-500/5" : "border-border",
+                  dragId === todo.id && "opacity-40 scale-[0.98]",
+                  todo.completed && "opacity-50",
+                  overdue && !todo.completed && "border-red-500/30 bg-red-500/5")}
+              >
+                <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                {/* Checkbox */}
+                <button onClick={() => toggle(todo.id)} className={cn("shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200",
+                  todo.completed ? "border-green-500 bg-green-500 text-white" : "border-muted-foreground/30 hover:border-orange-500",
+                  isCompleting && "scale-125")}>
+                  {todo.completed && <Check className="w-3 h-3" strokeWidth={3} />}
+                </button>
+
+                {/* Main content — click to expand */}
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : todo.id)}>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={cn("text-sm font-medium leading-snug", todo.completed ? "line-through text-muted-foreground" : "text-foreground")}>{todo.text}</span>
+                    {todo.recurring && (
+                      <span className="text-[10px] bg-blue-500/10 text-blue-500 dark:text-blue-400 px-1.5 py-px rounded-full font-medium">🔁 {todo.recurring}</span>
+                    )}
+                    {todo.duration && (
+                      <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-px rounded-full font-medium">⏱ {fmtDuration(todo.duration)}</span>
+                    )}
                   </div>
-                )}
+                  {(todo.dueDate || cat || subTotal > 0) && (
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {todo.dueDate && <span className={cn("text-[11px] flex items-center gap-0.5 font-medium", overdue ? "text-red-400" : "text-muted-foreground")}>{overdue && "⚠ "}{fmtDate(todo.dueDate)}</span>}
+                      {cat && <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", cat.color)}>{cat.name}</span>}
+                      {subTotal > 0 && <span className="text-[10px] text-muted-foreground font-medium">{subDone}/{subTotal} subtasks</span>}
+                    </div>
+                  )}
+                  {subTotal > 0 && (
+                    <div className="mt-1 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden max-w-[160px]">
+                      <div className="h-full bg-orange-500 rounded-full transition-all duration-300" style={{ width: `${Math.round(subDone / subTotal * 100)}%` }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Priority dot */}
+                <span className={cn("w-2 h-2 rounded-full shrink-0", PRIORITY[todo.priority].dot)} />
+
+                {/* Expand chevron */}
+                <button onClick={() => setExpandedId(isExpanded ? null : todo.id)}
+                  className={cn("shrink-0 transition-all text-muted-foreground/40 hover:text-muted-foreground opacity-0 group-hover:opacity-100", isExpanded && "opacity-100 rotate-90")}>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                {/* Bookmark */}
+                <button onClick={() => toggleSaved(todo)} className={cn("shrink-0 transition-all", isSaved ? "opacity-100 text-orange-500" : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-orange-500")}>
+                  {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                </button>
+
+                {/* Delete */}
+                <button onClick={() => remove(todo.id)} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <span className={cn("text-xs shrink-0 flex items-center gap-1 font-medium", PRIORITY[todo.priority].color)}>
-                <span className={cn("w-1.5 h-1.5 rounded-full", PRIORITY[todo.priority].dot)} />
-              </span>
-              <button onClick={() => toggleSaved(todo)} className={cn("shrink-0 transition-all", isSaved ? "opacity-100 text-orange-500" : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-orange-500")}>
-                {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-              </button>
-              <button onClick={() => remove(todo.id)} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500"><X className="w-4 h-4" /></button>
+
+              {/* ── Expanded detail panel ─────────────────────────────────────── */}
+              {isExpanded && (
+                <div className="border border-t-0 border-border rounded-b-xl bg-card px-4 pb-4 pt-3 space-y-3">
+
+                  {/* Editable title */}
+                  <input
+                    value={todo.text}
+                    onChange={e => updateTodo(todo.id, { text: e.target.value })}
+                    className="w-full text-sm font-semibold text-foreground bg-transparent border-b border-border focus:outline-none focus:border-orange-500 pb-1 transition-colors"
+                  />
+
+                  {/* Meta selects row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Priority */}
+                    <select value={todo.priority} onChange={e => updateTodo(todo.id, { priority: e.target.value as Priority })}
+                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
+                      <option value="high">🔴 High</option>
+                      <option value="medium">🟡 Medium</option>
+                      <option value="low">🟢 Low</option>
+                    </select>
+                    {/* Due date */}
+                    <input type="date" value={todo.dueDate ?? ""} onChange={e => updateTodo(todo.id, { dueDate: e.target.value || undefined })}
+                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer" />
+                    {/* Duration */}
+                    <select value={todo.duration ?? ""} onChange={e => updateTodo(todo.id, { duration: e.target.value ? Number(e.target.value) : undefined })}
+                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
+                      <option value="">⏱ Duration</option>
+                      {DURATION_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </select>
+                    {/* Recurring */}
+                    <select value={todo.recurring ?? ""} onChange={e => updateTodo(todo.id, { recurring: (e.target.value as "daily" | "weekly" | "monthly") || undefined })}
+                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
+                      <option value="">🔁 Repeat</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                    {/* Category */}
+                    <select value={todo.category ?? ""} onChange={e => updateTodo(todo.id, { category: e.target.value || undefined })}
+                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
+                      <option value="">🏷 Label</option>
+                      {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5 font-semibold">Notes / Link</p>
+                    <textarea
+                      value={todo.notes ?? ""}
+                      onChange={e => updateTodo(todo.id, { notes: e.target.value || undefined })}
+                      placeholder="Add notes, a link, or context…"
+                      rows={2}
+                      className="w-full text-xs text-foreground bg-background border border-border rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-ring resize-none placeholder:text-muted-foreground/50"
+                    />
+                  </div>
+
+                  {/* Subtasks */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2 font-semibold">Subtasks</p>
+                    <div className="space-y-1 mb-2">
+                      {(todo.subtasks ?? []).map(sub => (
+                        <div key={sub.id} className="flex items-center gap-2 group/sub py-0.5">
+                          <button onClick={() => toggleSubtask(todo.id, sub.id)}
+                            className={cn("w-4 h-4 rounded border-2 flex items-center justify-center transition-all shrink-0",
+                              sub.completed ? "bg-green-500 border-green-500 text-white" : "border-muted-foreground/30 hover:border-orange-500")}>
+                            {sub.completed && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+                          </button>
+                          <span className={cn("flex-1 text-xs", sub.completed ? "line-through text-muted-foreground" : "text-foreground")}>{sub.text}</span>
+                          <button onClick={() => removeSubtask(todo.id, sub.id)}
+                            className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={subInput[todo.id] ?? ""}
+                        onChange={e => setSubInput(prev => ({ ...prev, [todo.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === "Enter") addSubtask(todo.id, subInput[todo.id] ?? ""); }}
+                        placeholder="Add subtask… press Enter"
+                        className="flex-1 text-xs bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                      />
+                      <button onClick={() => addSubtask(todo.id, subInput[todo.id] ?? "")}
+                        className="shrink-0 w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center hover:bg-orange-600 transition-colors">
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
