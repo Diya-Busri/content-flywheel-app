@@ -151,7 +151,8 @@ export async function saveAgentDiscoveries(
   agentType: AgentType,
   discoveries: AgentDiscoveryPayload[],
 ): Promise<void> {
-  if (discoveries.length === 0) return;
+  const safe = Array.isArray(discoveries) ? discoveries : [];
+  if (safe.length === 0) return;
 
   // Deduplicate: don't re-insert if the same title was saved in the last 7 days
   const cutoff = new Date(Date.now() - 7 * 86_400_000);
@@ -167,7 +168,7 @@ export async function saveAgentDiscoveries(
     );
   const existingTitles = new Set(existing.map(r => r.title.toLowerCase()));
 
-  const toInsert = discoveries.filter(
+  const toInsert = safe.filter(
     d => !existingTitles.has(d.title.toLowerCase()),
   );
   if (toInsert.length === 0) return;
@@ -194,7 +195,8 @@ export async function saveAgentTasks(
   agentType: AgentType,
   tasks: AgentTaskPayload[],
 ): Promise<void> {
-  if (tasks.length === 0) return;
+  const safe = Array.isArray(tasks) ? tasks : [];
+  if (safe.length === 0) return;
 
   // Don't create duplicate pending tasks with the same title
   const existing = await db
@@ -208,7 +210,7 @@ export async function saveAgentTasks(
     );
   const existingTitles = new Set(existing.map(r => r.title.toLowerCase()));
 
-  const toInsert = tasks.filter(
+  const toInsert = safe.filter(
     t => !existingTitles.has(t.title.toLowerCase()),
   );
   if (toInsert.length === 0) return;
@@ -245,8 +247,8 @@ export async function completeAgentRun(
     .update(agentRunsTable)
     .set({
       status: "completed",
-      discoveriesCount: result.discoveries.length,
-      tasksCount: result.tasks.length,
+      discoveriesCount: (result.discoveries ?? []).length,
+      tasksCount: (result.tasks ?? []).length,
       reasoningLog: result.reasoningLog as unknown as Record<string, unknown>[],
       completedAt: new Date(),
     })

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(rows);
   } catch (err) {
     console.error("[agents/discoveries GET]", err);
-    return NextResponse.json({ error: "Failed to fetch discoveries" }, { status: 500 });
+    return NextResponse.json([], { status: 200 });
   }
 }
 

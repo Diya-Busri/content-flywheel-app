@@ -162,8 +162,8 @@ export async function runAllAgents(
     else agentsRun.push("coach");
   }
 
-  const totalDiscoveries = results.reduce((s, r) => s + r.discoveries.length, 0);
-  const totalTasks = results.reduce((s, r) => s + r.tasks.length, 0);
+  const totalDiscoveries = results.reduce((s, r) => s + (r.discoveries ?? []).length, 0);
+  const totalTasks = results.reduce((s, r) => s + (r.tasks ?? []).length, 0);
 
   return {
     results,

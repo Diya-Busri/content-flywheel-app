@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(rows);
   } catch (err) {
     console.error("[agents/tasks GET]", err);
-    return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
+    return NextResponse.json([], { status: 200 });
   }
 }
 

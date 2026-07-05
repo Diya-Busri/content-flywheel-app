@@ -62,7 +62,7 @@ export async function GET() {
     return NextResponse.json(agents);
   } catch (err) {
     console.error("[agents GET]", err);
-    return NextResponse.json({ error: "Failed to fetch agents" }, { status: 500 });
+    return NextResponse.json([], { status: 200 });
   }
 }
 
