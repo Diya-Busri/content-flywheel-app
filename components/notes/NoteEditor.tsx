@@ -17,7 +17,6 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { Extension } from "@tiptap/core";
 import { Suggestion } from "@tiptap/suggestion";
-import { FontFamily } from "@tiptap/extension-font-family";
 import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
 
@@ -37,6 +36,30 @@ import {
   Undo, Redo, Highlighter, Search, X,
   Mic, Layers, Video, Package, Maximize2, Minimize2, BookOpen,
 } from "lucide-react";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FontFamily extension — inline, no external package needed
+// (avoids @tiptap/extension-font-family which peer-depends on the uninstalled
+//  @tiptap/extension-text-style@3.27.1 and breaks Vercel builds)
+// ─────────────────────────────────────────────────────────────────────────────
+const FontFamily = Extension.create({
+  name: "fontFamily",
+  addGlobalAttributes() {
+    return [{
+      types: ["textStyle"],
+      attributes: {
+        fontFamily: {
+          default: null,
+          parseHTML: (element: HTMLElement) => element.style.fontFamily?.replace(/['"]+/g, "") || null,
+          renderHTML: (attributes: Record<string, unknown>) => {
+            if (!attributes.fontFamily) return {};
+            return { style: `font-family: ${attributes.fontFamily}` };
+          },
+        },
+      },
+    }];
+  },
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FontSize extension (adds fontSize attr to TextStyle globalAttributes)
@@ -1011,8 +1034,7 @@ export function NoteEditor({
                 ].map(item => (
                   <button key={item.label}
                     onClick={() => {
-                      if (item.value) editor.chain().focus().setFontFamily(item.value).run();
-                      else editor.chain().focus().unsetFontFamily().run();
+                      editor.chain().focus().setMark("textStyle", { fontFamily: item.value || null }).run();
                       setShowFontMenu(false);
                     }}
                     className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left hover:bg-accent transition-colors text-foreground">
