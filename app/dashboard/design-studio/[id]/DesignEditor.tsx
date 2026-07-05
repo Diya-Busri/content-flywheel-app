@@ -403,6 +403,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [data, setData] = useState<DesignData>({ width: 800, height: 1100, background: "#ffffff", elements: [] });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
@@ -575,6 +576,7 @@ export function DesignEditor({ designId }: { designId: string }) {
     };
     updateData((prev) => ({ ...prev, elements: [...prev.elements, el] }));
     setSelectedId(el.id);
+    setEditingId(el.id);
   }
 
   function addShape(shapeType = "rect") {
@@ -873,9 +875,16 @@ export function DesignEditor({ designId }: { designId: string }) {
     if ((e.target as HTMLElement).dataset.resize || (e.target as HTMLElement).dataset.rotate) return;
     e.stopPropagation();
     e.preventDefault(); // prevent page scroll while dragging on touch
-    // Skip interaction if element is locked
+    // Always select on pointer down — this was the primary selection bug
+    setSelectedId(id);
     const el = data.elements.find((x) => x.id === id)!;
-    if (el?.locked) { setSelectedId(id); return; } // allow select but no drag
+    if (!el) return;
+    // Second tap on an already-selected text element → enter inline edit mode
+    if (selectedIdRef.current === id && el.type === "text" && !el.locked) {
+      setEditingId(id);
+      return;
+    }
+    if (el.locked) { return; } // allow select but no drag
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
     // Pointer capture keeps events flowing even if finger slides off the element
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -1029,7 +1038,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   }
 
   function onCanvasClick(e: React.MouseEvent) {
-    if ((e.target as HTMLElement) === canvasRef.current) setSelectedId(null);
+    if ((e.target as HTMLElement) === canvasRef.current) { setSelectedId(null); setEditingId(null); }
   }
 
   // Keyboard shortcuts — use refs to avoid stale closures and unnecessary re-registration
@@ -1225,7 +1234,7 @@ export function DesignEditor({ designId }: { designId: string }) {
           ref={containerRef}
           className={`flex-1 flex items-center justify-center overflow-auto p-2 sm:p-8 pb-editor-toolbar md:pb-8 ${selectedEl ? "pt-14" : ""} ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
-          onClick={() => { setSelectedId(null); setActivePanel(null); }}
+          onClick={() => { setSelectedId(null); setEditingId(null); setActivePanel(null); }}
         >
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
@@ -1254,6 +1263,8 @@ export function DesignEditor({ designId }: { designId: string }) {
               )}
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
+                  isEditing={el.id === editingId}
+                  onEditEnd={() => setEditingId(null)}
                   onPointerDown={onElementPointerDown}
                   onResizePointerDown={onResizePointerDown}
                   onResizeCornerPointerDown={onResizeCornerPointerDown}
@@ -2018,8 +2029,10 @@ function ToolBtn({ icon, label, onClick, isDark, danger }: { icon: React.ReactNo
 
 // ── Canvas element ─────────────────────────────────────────────────────────
 
-function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onResizeCornerPointerDown, onResizeEdgePointerDown, onRotatePointerDown, onUpdate }: {
+function CanvasElement({ el, selected, isEditing, onEditEnd, onPointerDown, onResizePointerDown, onResizeCornerPointerDown, onResizeEdgePointerDown, onRotatePointerDown, onUpdate }: {
   el: DesignElement; selected: boolean;
+  isEditing?: boolean;
+  onEditEnd?: () => void;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   onResizePointerDown: (e: React.PointerEvent, id: string) => void;
   onResizeCornerPointerDown: (e: React.PointerEvent, id: string, corner: "nw" | "ne" | "sw" | "se") => void;
@@ -2028,6 +2041,10 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
   onUpdate: (patch: Partial<DesignElement>) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  // Enter edit mode when parent signals it (new element added, or second-click)
+  useEffect(() => { if (isEditing) setEditing(true); }, [isEditing]);
+  // Clear editing when element is deselected — prevents ghost text editors
+  useEffect(() => { if (!selected) setEditing(false); }, [selected]);
   // Pinch-to-resize state — tracks the initial pinch distance + element size
   const pinchRef = useRef<{ startDist: number; origW: number; origH: number } | null>(null);
 
@@ -2083,6 +2100,21 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
     }
   };
   const onTouchEnd = () => { pinchRef.current = null; };
+
+  // Lock badge shown on selected locked elements
+  const lockedBadge = el.locked && selected ? (
+    <div style={{
+      position: "absolute", top: -26, left: "50%", transform: "translateX(-50%)",
+      background: "#374151", border: "2px solid white",
+      borderRadius: 12, padding: "2px 8px", zIndex: 1001,
+      display: "flex", alignItems: "center", gap: 3,
+      fontSize: 10, color: "white", fontWeight: 600, whiteSpace: "nowrap",
+      pointerEvents: "none",
+    }}>
+      <Lock style={{ width: 9, height: 9 }} />
+      LOCKED
+    </div>
+  ) : null;
 
   const rotateHandle = selected && !el.locked ? (
     <div
@@ -2152,14 +2184,19 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
     };
     return (
       <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => !el.locked && setEditing(true)} {...sharedTouchProps}>
+        {lockedBadge}
         {rotateHandle}
         {editing ? (
           <textarea
             autoFocus
             value={el.content ?? ""}
             onChange={(e) => onUpdate({ content: e.target.value })}
-            onBlur={() => setEditing(false)}
-            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setEditing(false); } }}
+            onFocus={(e) => {
+              // Auto-select placeholder text so any keystroke immediately replaces it
+              if (el.content === "Add your text here") e.target.select();
+            }}
+            onBlur={() => { setEditing(false); onEditEnd?.(); }}
+            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setEditing(false); onEditEnd?.(); } }}
             style={{ ...sharedTextStyle, height: "100%", border: "none", outline: "none", resize: "none", cursor: "text", touchAction: "auto", whiteSpace: "pre-wrap" }}
           />
         ) : (
@@ -2174,6 +2211,7 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
 
   if (el.type === "image") return (
     <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} {...sharedTouchProps}>
+      {lockedBadge}
       {rotateHandle}
       {el.imageUrl
         // eslint-disable-next-line @next/next/no-img-element
@@ -2186,6 +2224,7 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
   const shapeDef = SHAPES.find((s) => s.id === (el.shapeType ?? "rect")) ?? SHAPES[0];
   return (
     <div style={{ ...base, overflow: "visible" }} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} {...sharedTouchProps}>
+      {lockedBadge}
       {rotateHandle}
       {shapeDef.render(el.fill ?? "#f97316", el.stroke, (el.strokeWidth ?? 0) > 0 ? el.strokeWidth : undefined)}
       {cornerHandles}
@@ -2457,9 +2496,9 @@ function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, onApplyTemplate, 
       <div className={`rounded-xl p-3 text-xs space-y-1 ${isDark ? "bg-white/5 text-gray-400" : "bg-gray-50 text-gray-500"}`}>
         <p className="font-semibold">Shortcuts</p>
         <p>⌘Z undo · ⌘⇧Z redo · ⌘D duplicate</p>
-        <p>Double-click text to edit</p>
+        <p>Click to select · Click again to edit text</p>
         <p>Orange circle above = rotate</p>
-        <p>Orange corner = resize</p>
+        <p>Orange corner = resize · Del = delete</p>
       </div>
     </div>
   );
@@ -2618,40 +2657,6 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
             <label className={lbl}>Content</label>
             <textarea value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} rows={3} className={`w-full text-xs rounded-md border px-2 py-1.5 resize-none ${sel}`} />
           </div>
-          {/* AI Rewrite actions */}
-          <div>
-            <p className={lbl}><Sparkles className="w-3 h-3 inline mr-1 text-orange-500" />AI Rewrite</p>
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { action: "viral",        label: "Make Viral" },
-                { action: "hook",         label: "Rewrite Hook" },
-                { action: "shorten",      label: "Shorten" },
-                { action: "expand",       label: "Expand" },
-                { action: "cta",          label: "Write CTA" },
-                { action: "luxury",       label: "Luxury Tone" },
-                { action: "casual",       label: "Casual" },
-                { action: "professional", label: "Professional" },
-                { action: "motivational", label: "Motivational" },
-                { action: "wellness",     label: "Wellness" },
-              ] as { action: string; label: string }[]).map(({ action, label }) => (
-                <button
-                  key={action}
-                  onClick={() => runAiRewrite(action)}
-                  disabled={!!aiRewriteAction}
-                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
-                    aiRewriteAction === action
-                      ? "bg-orange-500 text-white border-orange-500"
-                      : isDark
-                        ? "border-white/10 text-gray-300 hover:border-orange-500/60 hover:text-orange-400 disabled:opacity-40"
-                        : "border-gray-200 text-gray-600 hover:border-orange-400 hover:text-orange-500 disabled:opacity-40"
-                  }`}
-                >
-                  {aiRewriteAction === action ? <Loader2 className="w-2.5 h-2.5 animate-spin inline" /> : label}
-                </button>
-              ))}
-            </div>
-            {aiRewriteError && <p className="text-[10px] text-red-500 mt-1">{aiRewriteError}</p>}
-          </div>
           <div>
             <label className={lbl}>Font</label>
             <select value={el.fontFamily ?? "Inter"} onChange={(e) => onUpdate({ fontFamily: e.target.value })} className={`w-full h-8 text-xs rounded-md border px-2 ${sel}`}>
@@ -2742,6 +2747,40 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
           <div>
             <label className={lbl}>Paragraph spacing: {el.paragraphSpacing ?? 0}px</label>
             <input type="range" min={0} max={80} step={1} value={el.paragraphSpacing ?? 0} onChange={(e) => onUpdate({ paragraphSpacing: Number(e.target.value) || undefined })} className="w-full" />
+          </div>
+          {/* AI Rewrite — grouped at bottom of text section */}
+          <div>
+            <p className={sec} style={{ marginBottom: 6 }}><Sparkles className="w-3 h-3 inline mr-1 text-orange-500" />AI Rewrite</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { action: "viral",        label: "Make Viral" },
+                { action: "hook",         label: "Rewrite Hook" },
+                { action: "shorten",      label: "Shorten" },
+                { action: "expand",       label: "Expand" },
+                { action: "cta",          label: "Write CTA" },
+                { action: "luxury",       label: "Luxury Tone" },
+                { action: "casual",       label: "Casual" },
+                { action: "professional", label: "Professional" },
+                { action: "motivational", label: "Motivational" },
+                { action: "wellness",     label: "Wellness" },
+              ] as { action: string; label: string }[]).map(({ action, label }) => (
+                <button
+                  key={action}
+                  onClick={() => runAiRewrite(action)}
+                  disabled={!!aiRewriteAction}
+                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                    aiRewriteAction === action
+                      ? "bg-orange-500 text-white border-orange-500"
+                      : isDark
+                        ? "border-white/10 text-gray-300 hover:border-orange-500/60 hover:text-orange-400 disabled:opacity-40"
+                        : "border-gray-200 text-gray-600 hover:border-orange-400 hover:text-orange-500 disabled:opacity-40"
+                  }`}
+                >
+                  {aiRewriteAction === action ? <Loader2 className="w-2.5 h-2.5 animate-spin inline" /> : label}
+                </button>
+              ))}
+            </div>
+            {aiRewriteError && <p className="text-[10px] text-red-500 mt-1">{aiRewriteError}</p>}
           </div>
         </div>
       )}
