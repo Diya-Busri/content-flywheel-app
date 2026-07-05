@@ -294,6 +294,33 @@ function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) 
 
   const recentNotes = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
 
+  // Recent Activity feed — merge note edits + task events, sorted by timestamp
+  const activityFeed = useMemo(() => {
+    const events: { ts: number; icon: string; label: string; text: string; badge?: string; onClick: () => void }[] = [];
+    // Note events — last 8 by updatedAt
+    [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8).forEach(n => {
+      events.push({
+        ts: n.updatedAt, icon: "📝", label: "Note",
+        text: n.title || "Untitled",
+        badge: n.tag,
+        onClick: () => { try { sessionStorage.setItem("cf_open_note", n.id); } catch {} onTabChange("notes"); },
+      });
+    });
+    // Task events — last 8 by createdAt
+    [...todos].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8).forEach(t => {
+      events.push({
+        ts: t.createdAt,
+        icon: t.completed ? "✅" : "⬜",
+        label: t.completed ? "Completed" : "Task added",
+        text: t.text,
+        badge: t.priority,
+        onClick: () => onTabChange("todos"),
+      });
+    });
+    return events.sort((a, b) => b.ts - a.ts).slice(0, 12);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes, todos]);
+
   const greeting = (() => {
     const h = new Date().getHours();
     if (h < 12) return "Good morning";
@@ -628,6 +655,61 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
           ))}
         </div>
       </div>
+
+      {/* ── Recent Activity ──────────────────────────────────────────────── */}
+      {activityFeed.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <Clock className="w-4 h-4 text-orange-500" />
+            <p className="text-sm font-bold text-foreground">Recent Activity</p>
+            <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+              {activityFeed.length} event{activityFeed.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {/* Timeline */}
+          <div className="relative pl-2">
+            {/* Vertical line */}
+            <div className="absolute left-[18px] top-2 bottom-2 w-px bg-border/50 pointer-events-none" />
+
+            <div className="space-y-0.5">
+              {activityFeed.map((ev, i) => (
+                <button
+                  key={i}
+                  onClick={ev.onClick}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-accent transition-colors text-left group"
+                >
+                  {/* Timeline node */}
+                  <div className="w-5 h-5 rounded-full bg-background border border-border/80 flex items-center justify-center shrink-0 z-10 group-hover:border-orange-500/50 transition-colors">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500/50 group-hover:bg-orange-500 transition-colors" />
+                  </div>
+
+                  {/* Emoji */}
+                  <span className="text-sm leading-none shrink-0">{ev.icon}</span>
+
+                  {/* Label + text */}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50 block leading-none mb-0.5">{ev.label}</span>
+                    <p className="text-xs text-foreground/80 group-hover:text-foreground transition-colors truncate">{ev.text}</p>
+                  </div>
+
+                  {/* Badge */}
+                  {ev.badge && (
+                    <span className="text-[9px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0 capitalize">
+                      {ev.badge}
+                    </span>
+                  )}
+
+                  {/* Time */}
+                  <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums">
+                    {formatRelativeTime(ev.ts)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
