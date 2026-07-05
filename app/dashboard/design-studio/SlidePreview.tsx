@@ -32,28 +32,51 @@ function PreviewElement({ el, scale }: { el: DesignElement; scale: number }) {
     const textStyle: React.CSSProperties = { ...style, overflow: "visible" };
     return (
       <div style={textStyle}>
-        <div style={{
-          width: "100%",
-          background: el.textBackground ?? "transparent",
-          fontFamily: el.fontFamily ?? "Inter",
-          fontSize: (el.fontSize ?? 32) * scale,
-          color: el.color ?? "#1a1a1a",
-          fontWeight: el.fontWeight ?? "normal",
-          fontStyle: el.fontStyle ?? "normal",
-          textDecoration: el.textDecoration,
-          textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left",
-          lineHeight: el.lineHeight ?? 1.3,
-          letterSpacing: `${(el.letterSpacing ?? 0) * scale}px`,
-          wordBreak: "break-word",
-          overflowWrap: "break-word",
-          whiteSpace: "pre-wrap",
-          overflow: "visible",
-          padding: el.textBackground ? `${28 * scale}px ${40 * scale}px` : undefined,
-          boxSizing: "border-box",
-          borderRadius: el.textBackground ? 16 * scale : undefined,
-        }}>
-          {el.content}
-        </div>
+        {(() => {
+          const lineClamp = el.autoFit && el.autoFit !== "auto" && el.autoFit !== "unlimited"
+            ? parseInt(el.autoFit, 10)
+            : (el.lineClamp ?? 0);
+          const clampStyle: React.CSSProperties = lineClamp > 0
+            ? { display: "-webkit-box", WebkitLineClamp: lineClamp, WebkitBoxOrient: "vertical" as const, overflow: "hidden", whiteSpace: "normal" }
+            : { whiteSpace: "pre-wrap", overflow: "visible" };
+          const baseStyle: React.CSSProperties = {
+            width: "100%",
+            background: el.textBackground ?? "transparent",
+            fontFamily: el.fontFamily ?? "Inter",
+            fontSize: (el.fontSize ?? 32) * scale,
+            color: el.color ?? "#1a1a1a",
+            fontWeight: el.fontWeight ?? "normal",
+            fontStyle: el.fontStyle ?? "normal",
+            textDecoration: el.textDecoration,
+            textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left",
+            lineHeight: el.lineHeight ?? 1.3,
+            letterSpacing: `${(el.letterSpacing ?? 0) * scale}px`,
+            wordBreak: "break-word",
+            overflowWrap: "break-word",
+            padding: el.textBackground ? `${28 * scale}px ${40 * scale}px` : undefined,
+            boxSizing: "border-box",
+            borderRadius: el.textBackground ? 16 * scale : undefined,
+            ...(el.balanceLines ? { textWrap: "balance" } as React.CSSProperties : {}),
+            ...clampStyle,
+          };
+          // Render with paragraph spacing if set
+          if (el.paragraphSpacing && el.paragraphSpacing > 0 && lineClamp === 0) {
+            const paras = (el.content ?? "").split(/\n\n/);
+            return (
+              <div style={baseStyle}>
+                {paras.map((para, i) => (
+                  <React.Fragment key={i}>
+                    <span style={{ display: "block" }}>{para}</span>
+                    {i < paras.length - 1 && (
+                      <span style={{ display: "block", height: el.paragraphSpacing! * scale }} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            );
+          }
+          return <div style={baseStyle}>{el.content}</div>;
+        })()}
       </div>
     );
   }

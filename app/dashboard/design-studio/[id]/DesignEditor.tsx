@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft, Type, ImageIcon, Square, Trash2, Copy, Loader2, Check,
-  Download, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Minus, Plus,
+  Download, Bold, Italic, AlignLeft, AlignCenter, AlignRight, AlignJustify, Minus, Plus,
   ChevronDown, FlipHorizontal, FlipVertical, RotateCw, Sparkles,
   AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter,
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
   LayoutTemplate, Images, Layers, X, Settings2, Palette,
-  Grid3x3, Smartphone, Lock, Unlock, ArrowUp, ArrowDown, MessageSquare, Send, Package,
+  Grid3x3, Smartphone, Lock, Unlock, ArrowUp, ArrowDown, MessageSquare, Send, Package, WrapText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1375,6 +1375,57 @@ export function DesignEditor({ designId }: { designId: string }) {
                   <Plus className="w-4 h-4" />
                   <span className="text-[9px] font-medium leading-none">Bigger</span>
                 </button>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Text alignment */}
+                {(["left", "center", "right", "justify"] as const).map((a) => {
+                  const Icon = a === "left" ? AlignLeft : a === "center" ? AlignCenter : a === "right" ? AlignRight : AlignJustify;
+                  const label = a === "left" ? "Left" : a === "center" ? "Center" : a === "right" ? "Right" : "Justify";
+                  const active = (selectedEl.textAlign ?? "left") === a;
+                  return (
+                    <button key={a} type="button"
+                      onClick={() => updateElement(selectedEl.id, { textAlign: a })}
+                      className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${active ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                      title={`Align ${label.toLowerCase()}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="text-[9px] font-medium leading-none">{label}</span>
+                    </button>
+                  );
+                })}
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Auto Fit */}
+                <div className="flex flex-col items-center gap-0.5">
+                  <select
+                    value={selectedEl.autoFit ?? "auto"}
+                    onChange={(e) => updateElement(selectedEl.id, { autoFit: e.target.value })}
+                    className={`h-7 text-[10px] rounded-lg border px-1.5 cursor-pointer ${isDark ? "bg-[#1A1A1A] border-[#3A3A3A] text-gray-200" : "bg-white border-gray-200 text-gray-700"}`}
+                    title="Auto fit lines"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="1">1 Line</option>
+                    <option value="2">2 Lines</option>
+                    <option value="3">3 Lines</option>
+                    <option value="4">4 Lines</option>
+                    <option value="5">5 Lines</option>
+                    <option value="unlimited">Unlimited</option>
+                  </select>
+                  <span className="text-[9px] font-medium leading-none">Auto Fit</span>
+                </div>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Balance Lines */}
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { balanceLines: !selectedEl.balanceLines })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${selectedEl.balanceLines ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Balance lines"
+                >
+                  <WrapText className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Balance</span>
+                </button>
+
                 <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
               </>
             )}
@@ -2064,20 +2115,62 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
 
   const sharedTouchProps = { onTouchStart, onTouchMove, onTouchEnd };
 
-  if (el.type === "text") return (
-    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => !el.locked && setEditing(true)} {...sharedTouchProps}>
-      {rotateHandle}
-      {editing ? (
-        <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
-          style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text", touchAction: "auto" }} />
-      ) : (
-        <div style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "visible" }}>
-          {el.content}
-        </div>
-      )}
-      {cornerHandles}
-    </div>
-  );
+  if (el.type === "text") {
+    const lineClamp = el.autoFit && el.autoFit !== "auto" && el.autoFit !== "unlimited"
+      ? parseInt(el.autoFit, 10)
+      : (el.lineClamp ?? 0);
+    const clampStyle: React.CSSProperties = lineClamp > 0
+      ? { display: "-webkit-box", WebkitLineClamp: lineClamp, WebkitBoxOrient: "vertical" as const, overflow: "hidden", whiteSpace: "normal" }
+      : { whiteSpace: "pre-wrap", overflow: "visible" };
+    const sharedTextStyle: React.CSSProperties = {
+      width: "100%",
+      background: el.textBackground ?? "transparent",
+      fontFamily: el.fontFamily ?? "Inter",
+      fontSize: el.fontSize ?? 32,
+      color: el.color ?? "#1a1a1a",
+      fontWeight: el.fontWeight ?? "normal",
+      fontStyle: el.fontStyle ?? "normal",
+      textDecoration: el.textDecoration,
+      textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left",
+      lineHeight: el.lineHeight ?? 1.3,
+      letterSpacing: `${el.letterSpacing ?? 0}px`,
+      wordBreak: "break-word",
+      ...(el.balanceLines ? { textWrap: "balance" } as React.CSSProperties : {}),
+    };
+    // Render paragraphs with optional paragraph spacing
+    const renderTextContent = () => {
+      if (el.paragraphSpacing && el.paragraphSpacing > 0 && lineClamp === 0) {
+        const paras = (el.content ?? "").split(/\n\n/);
+        return paras.map((para, i) => (
+          <React.Fragment key={i}>
+            <span style={{ display: "block" }}>{para}</span>
+            {i < paras.length - 1 && <span style={{ display: "block", height: el.paragraphSpacing }} />}
+          </React.Fragment>
+        ));
+      }
+      return el.content;
+    };
+    return (
+      <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => !el.locked && setEditing(true)} {...sharedTouchProps}>
+        {rotateHandle}
+        {editing ? (
+          <textarea
+            autoFocus
+            value={el.content ?? ""}
+            onChange={(e) => onUpdate({ content: e.target.value })}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setEditing(false); } }}
+            style={{ ...sharedTextStyle, height: "100%", border: "none", outline: "none", resize: "none", cursor: "text", touchAction: "auto", whiteSpace: "pre-wrap" }}
+          />
+        ) : (
+          <div style={{ ...sharedTextStyle, height: "100%", ...clampStyle }}>
+            {renderTextContent()}
+          </div>
+        )}
+        {cornerHandles}
+      </div>
+    );
+  }
 
   if (el.type === "image") return (
     <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} {...sharedTouchProps}>
@@ -2596,11 +2689,39 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
             <Button size="sm" variant={el.fontStyle === "italic" ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ fontStyle: el.fontStyle === "italic" ? "normal" : "italic" })}><Italic className="w-3.5 h-3.5" /></Button>
             <Button size="sm" variant={(el.textDecoration ?? "").includes("underline") ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textDecoration: (el.textDecoration ?? "").includes("underline") ? (el.textDecoration ?? "").replace("underline","").trim() || undefined : ((el.textDecoration ?? "") + " underline").trim() })}><Underline className="w-3.5 h-3.5" /></Button>
             <Button size="sm" variant={(el.textDecoration ?? "").includes("line-through") ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textDecoration: (el.textDecoration ?? "").includes("line-through") ? (el.textDecoration ?? "").replace("line-through","").trim() || undefined : ((el.textDecoration ?? "") + " line-through").trim() })}><Strikethrough className="w-3.5 h-3.5" /></Button>
-            {(["left", "center", "right"] as const).map((a) => (
-              <Button key={a} size="sm" variant={el.textAlign === a ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textAlign: a })}>
-                {a === "left" ? <AlignLeft className="w-3.5 h-3.5" /> : a === "center" ? <AlignCenter className="w-3.5 h-3.5" /> : <AlignRight className="w-3.5 h-3.5" />}
-              </Button>
-            ))}
+          </div>
+          <div className="flex gap-1">
+            {(["left", "center", "right", "justify"] as const).map((a) => {
+              const Icon = a === "left" ? AlignLeft : a === "center" ? AlignCenter : a === "right" ? AlignRight : AlignJustify;
+              return (
+                <Button key={a} size="sm" variant={(el.textAlign ?? "left") === a ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textAlign: a })}>
+                  <Icon className="w-3.5 h-3.5" />
+                </Button>
+              );
+            })}
+          </div>
+          {/* Auto Fit */}
+          <div>
+            <label className={lbl}>Auto Fit</label>
+            <select value={el.autoFit ?? "auto"} onChange={(e) => onUpdate({ autoFit: e.target.value })} className={`w-full h-8 text-xs rounded-md border px-2 ${sel}`}>
+              <option value="auto">Auto (no limit)</option>
+              <option value="1">1 Line</option>
+              <option value="2">2 Lines</option>
+              <option value="3">3 Lines</option>
+              <option value="4">4 Lines</option>
+              <option value="5">5 Lines</option>
+              <option value="unlimited">Unlimited</option>
+            </select>
+          </div>
+          {/* Balance Lines toggle */}
+          <div className="flex items-center justify-between">
+            <label className={lbl} style={{ margin: 0 }}><WrapText className="w-3 h-3 inline mr-1" />Balance Lines</label>
+            <button
+              onClick={() => onUpdate({ balanceLines: !el.balanceLines })}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${el.balanceLines ? "bg-orange-500" : isDark ? "bg-white/20" : "bg-gray-200"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${el.balanceLines ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
           </div>
           <div>
             <label className={lbl}><Highlighter className="w-3 h-3 inline mr-1" />Text highlight</label>
@@ -2617,6 +2738,10 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
           <div>
             <label className={lbl}>Line height: {el.lineHeight ?? 1.3}</label>
             <input type="range" min={0.8} max={3} step={0.05} value={el.lineHeight ?? 1.3} onChange={(e) => onUpdate({ lineHeight: Number(e.target.value) })} className="w-full" />
+          </div>
+          <div>
+            <label className={lbl}>Paragraph spacing: {el.paragraphSpacing ?? 0}px</label>
+            <input type="range" min={0} max={80} step={1} value={el.paragraphSpacing ?? 0} onChange={(e) => onUpdate({ paragraphSpacing: Number(e.target.value) || undefined })} className="w-full" />
           </div>
         </div>
       )}
