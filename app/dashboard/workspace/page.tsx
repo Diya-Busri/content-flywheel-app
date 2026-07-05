@@ -1292,8 +1292,8 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
       try {
         const raw = sessionStorage.getItem("note_from_research");
         if (raw) {
-          const { title, body, tag } = JSON.parse(raw) as { title: string; body: string; tag: NoteTag };
-          prefillNote = { id: uid(), title, body, updatedAt: Date.now(), tag };
+          const { title, content, body, tag } = JSON.parse(raw) as { title: string; content?: string; body: string; tag: NoteTag };
+          prefillNote = { id: uid(), title, content, body: body || "", updatedAt: Date.now(), tag };
           sessionStorage.removeItem("note_from_research");
         }
       } catch {}

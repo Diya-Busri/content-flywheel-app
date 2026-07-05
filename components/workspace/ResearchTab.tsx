@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { markdownToTipTap } from "@/lib/markdown-to-tiptap";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1883,22 +1884,163 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     router.push("/dashboard/digital-products/create-from-research");
   };
 
-  // Save the full report summary + insights as a Note, then switch to Notes tab
+  // Save the full report as a rich Note (TipTap JSON), then switch to Notes tab
   const handleSaveAsNote = useCallback(() => {
     if (!report) return;
-    const body = [
-      `## Summary\n${report.summary}`,
-      `## Key Insights\n${report.insights.map((ins, i) => `${i + 1}. ${ins}`).join("\n")}`,
-      report.productOpportunities.length > 0
-        ? `## Product Ideas\n${report.productOpportunities.map(o => `- **${o.title}** (${o.type}, ${o.priceRange})\n  ${o.description}`).join("\n")}`
-        : "",
-      `## Action Plan\n${report.actionPlan.map(s => `**Step ${s.step}: ${s.action}**\n${s.detail}`).join("\n\n")}`,
-    ].filter(Boolean).join("\n\n");
+
+    const dateStr = generatedAt
+      ? new Date(generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+      : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+    const sections: string[] = [];
+
+    // ── Title ──────────────────────────────────────────────────────────────
+    sections.push(`# Research Report: ${query}\n*${activeReportType} analysis · ${dateStr}*`);
+
+    // ── Business Scorecard ────────────────────────────────────────────────
+    if (report.scorecard) {
+      const sc = report.scorecard;
+      sections.push(
+        `## Business Scorecard\n` +
+        `- **Opportunity Score:** ${sc.opportunityScore}/100\n` +
+        `- **Confidence Level:** ${sc.confidenceLevel}/100\n` +
+        `- **Audience Demand:** ${sc.audienceDemand}\n` +
+        `- **Competition:** ${sc.competitionLevel}\n` +
+        `- **Revenue Potential:** ${sc.revenuePotential}\n` +
+        `- **Difficulty:** ${sc.difficulty}\n` +
+        `- **Time to Launch:** ${sc.timeToLaunch}\n` +
+        `- **Priority:** ${sc.recommendedPriority}`
+      );
+    }
+
+    // ── Executive Summary ─────────────────────────────────────────────────
+    if (report.summary) {
+      sections.push(`## Executive Summary\n${report.summary}`);
+    }
+
+    // ── Key Insights ──────────────────────────────────────────────────────
+    if (report.insights?.length) {
+      sections.push(
+        `## Key Insights\n${report.insights.map((ins, i) => `${i + 1}. ${ins}`).join("\n")}`
+      );
+    }
+
+    // ── Product Opportunities ─────────────────────────────────────────────
+    if (report.productOpportunities?.length) {
+      sections.push(
+        `## Product Opportunities\n` +
+        report.productOpportunities.map(o =>
+          `### ${o.title}\n*${o.type} · ${o.priceRange}*\n${o.description}`
+        ).join("\n\n")
+      );
+    }
+
+    // ── Content Opportunities ─────────────────────────────────────────────
+    if (report.contentOpportunities?.length) {
+      sections.push(
+        `## Content Opportunities\n` +
+        report.contentOpportunities.map(o =>
+          `- **${o.title}** (${o.format}, ${o.difficulty}) — ${o.description}`
+        ).join("\n")
+      );
+    }
+
+    // ── Competitor Analysis ───────────────────────────────────────────────
+    if (report.competitorInsights?.length) {
+      sections.push(
+        `## Competitor Analysis\n` +
+        report.competitorInsights.map(c =>
+          `### ${c.name}\n` +
+          `- **Strength:** ${c.strength}\n` +
+          `- **Gap to exploit:** ${c.gap}` +
+          (c.whatToLearn ? `\n- **What to learn:** ${c.whatToLearn}` : "")
+        ).join("\n\n")
+      );
+    }
+
+    // ── Keywords ──────────────────────────────────────────────────────────
+    if (report.keywords?.length) {
+      sections.push(
+        `## Keywords\n` +
+        report.keywords.map(k =>
+          `- **${k.term}** (${k.intent}, ${k.opportunity} opportunity) — ${k.note}`
+        ).join("\n")
+      );
+    }
+
+    // ── Recommended Opportunity ───────────────────────────────────────────
+    if (report.recommendedOpportunity) {
+      const rec = report.recommendedOpportunity;
+      sections.push(
+        `## Recommended Opportunity\n` +
+        `**${rec.name}**\n` +
+        `${rec.why}\n` +
+        `- Estimated revenue: ${rec.estimatedRevenue}\n` +
+        `- Time to first sale: ${rec.timeToFirstSale}`
+      );
+    }
+
+    // ── AI Recommendation ─────────────────────────────────────────────────
+    if (report.aiRecommendation) {
+      const ai = report.aiRecommendation;
+      sections.push(
+        `## AI Recommendation\n` +
+        `**${ai.category}: ${ai.nextStep}**\n` +
+        `${ai.reasoning}`
+      );
+    }
+
+    // ── Best Next Action ──────────────────────────────────────────────────
+    if (report.bestNextAction) {
+      const bna = report.bestNextAction;
+      sections.push(
+        `## Best Next Action\n` +
+        `**${bna.action}**\n` +
+        `${bna.reasoning}\n` +
+        `- Price point: ${bna.estimatedPrice}\n` +
+        `- Time to first sale: ${bna.timeToFirstSale}`
+      );
+    }
+
+    // ── Action Plan ───────────────────────────────────────────────────────
+    if (report.actionPlan?.length) {
+      sections.push(
+        `## Action Plan\n` +
+        report.actionPlan.map(s =>
+          `${s.step}. **${s.action}**: ${s.detail}` +
+          (s.cta ? `\n   *Next: ${s.cta}*` : "")
+        ).join("\n")
+      );
+    }
+
+    // ── Build Path ────────────────────────────────────────────────────────
+    if (report.buildPath) {
+      const bp = report.buildPath;
+      sections.push(
+        `## Build Path\n` +
+        `### With Content Flywheel (${bp.withFlywheel.estimatedTime}, ${bp.withFlywheel.difficulty})\n` +
+        bp.withFlywheel.steps.map((s, i) => `${i + 1}. ${s}`).join("\n") +
+        `\n\n### Manual (${bp.manually.estimatedTime})\n` +
+        `Tools: ${bp.manually.tools.join(", ")}\n${bp.manually.note}`
+      );
+    }
+
+    const fullMarkdown = sections.join("\n\n");
+    const plainTextPreview =
+      `${query} research report — ` +
+      `${report.insights?.length ?? 0} insights, ` +
+      `${report.productOpportunities?.length ?? 0} product ideas, ` +
+      `${report.actionPlan?.length ?? 0} action steps`;
+
     try {
-      sessionStorage.setItem("note_from_research", JSON.stringify({ title: `Research: ${query}`, body, tag: "research" }));
+      const tipTapContent = markdownToTipTap(fullMarkdown);
+      sessionStorage.setItem(
+        "note_from_research",
+        JSON.stringify({ title: `Research: ${query}`, content: tipTapContent, body: plainTextPreview, tag: "research" })
+      );
     } catch {}
     onTabChange?.("notes");
-  }, [report, query, onTabChange]);
+  }, [report, query, onTabChange, generatedAt, activeReportType]);
 
   // Add all action plan steps to the todos list
   const handleAddTasksFromPlan = useCallback(() => {
