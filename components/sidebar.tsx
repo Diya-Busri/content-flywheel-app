@@ -20,6 +20,7 @@ import { useState, useEffect } from "react";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { useSidebar } from "@/components/sidebar-context";
 import { HelpPanel, HelpButton } from "@/components/help/HelpPanel";
+import { AdminToolbar } from "@/components/dev/AdminToolbar";
 
 interface SidebarProps {
   profile: SelectProfile | null;
@@ -274,6 +275,9 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
             <PanelLeftClose size={18} />
           </motion.button>
         </div>
+
+        {/* Admin Toolbar — Test Wizard, Restore, and future admin tools */}
+        <AdminToolbar isAdmin={isAdmin} />
 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 relative z-10 overflow-y-auto min-h-0">
