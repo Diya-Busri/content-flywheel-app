@@ -231,10 +231,13 @@ If the user asks "what should I build", give a direct recommendation with reason
 
 // ─── Provider types ───────────────────────────────────────────────────────────
 
+import type { SourceCitation } from "@/lib/research-sources/types";
+
 interface ProviderResult {
   summary: string;
   usedFallback: boolean;
   data: Record<string, unknown>;
+  citations?: SourceCitation[];
 }
 
 // ─── Analyst definitions ──────────────────────────────────────────────────────
@@ -245,6 +248,8 @@ export const RESEARCH_ANALYSTS = [
   { id: "social",      displayName: "Social Media Analyst",   emoji: "📱", description: "X/Twitter, LinkedIn, TikTok, YouTube trends" },
   { id: "marketplace", displayName: "Marketplace Analyst",    emoji: "🛒", description: "Gumroad, Etsy, Creative Market, AppSumo" },
   { id: "seo",         displayName: "SEO Analyst",            emoji: "🔍", description: "Keywords, search volume, content gaps" },
+  { id: "wikipedia",   displayName: "Wikipedia",              emoji: "📖", description: "Encyclopedic background, definitions, related topics" },
+  { id: "hackernews",  displayName: "Hacker News",            emoji: "🔶", description: "Tech community discussions, startup conversations" },
 ] as const;
 
 // ─── Helper: lightweight GPT-4o-mini call ────────────────────────────────────
@@ -385,7 +390,16 @@ Return JSON:
     ? data.summary
     : "Community analysis complete";
 
-  return { summary, usedFallback: !hasRealData, data };
+  // Build citations from real Reddit posts
+  const citations: SourceCitation[] = hasRealData
+    ? posts.slice(0, 5).map(p => ({
+        title: p.title,
+        url: p.permalink,
+        source: "Reddit",
+      }))
+    : [];
+
+  return { summary, usedFallback: !hasRealData, data, citations };
 }
 
 async function runSocialAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
@@ -466,6 +480,129 @@ Return JSON:
     : "SEO analysis complete";
   return { summary, usedFallback: true, data };
 }
+
+// ─── Real connector: Wikipedia ───────────────────────────────────────────────
+
+interface WikiSummary {
+  title: string;
+  extract: string;
+  content_urls?: { desktop?: { page?: string } };
+}
+
+async function runWikipediaAnalyst(query: string, _apiKey: string): Promise<ProviderResult> {
+  const t0 = Date.now();
+  try {
+    // 1. OpenSearch — get title suggestions and canonical URLs
+    const encoded = encodeURIComponent(query);
+    const searchRes = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=5&format=json&origin=*`,
+      { headers: { "User-Agent": "ContentFlywheel-Research/1.0" }, signal: AbortSignal.timeout(8_000) }
+    );
+    if (!searchRes.ok) throw new Error("Wikipedia search failed");
+    const [, titles, , urls] = await searchRes.json() as [string, string[], string[], string[]];
+
+    if (!titles.length) {
+      return { summary: "No Wikipedia articles found", usedFallback: false, data: {}, citations: [] };
+    }
+
+    // 2. Fetch summaries for top 3 articles
+    const summaries = await Promise.all(
+      titles.slice(0, 3).map(async (title, i): Promise<{ title: string; extract: string; url: string } | null> => {
+        try {
+          const r = await fetch(
+            `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+            { headers: { "User-Agent": "ContentFlywheel-Research/1.0" }, signal: AbortSignal.timeout(6_000) }
+          );
+          if (!r.ok) return null;
+          const d = await r.json() as WikiSummary;
+          return {
+            title: d.title,
+            extract: (d.extract ?? "").slice(0, 300),
+            url: (urls[i] ?? d.content_urls?.desktop?.page ?? ""),
+          };
+        } catch { return null; }
+      })
+    );
+
+    const valid = summaries.filter((s): s is { title: string; extract: string; url: string } => s !== null);
+    const duration = Date.now() - t0;
+
+    return {
+      summary: `${valid.length} Wikipedia article${valid.length !== 1 ? "s" : ""} analysed`,
+      usedFallback: false,
+      data: {
+        articles: valid.map(a => ({ title: a.title, summary: a.extract })),
+        topicBackground: valid[0]?.extract ?? "",
+        relatedTopics: valid.slice(1).map(a => a.title),
+        dataSource: "wikipedia-api",
+        duration,
+      },
+      citations: valid
+        .filter(a => a.url)
+        .map(a => ({ title: a.title, url: a.url, source: "Wikipedia" })),
+    };
+  } catch {
+    return { summary: "Wikipedia unavailable", usedFallback: true, data: { dataSource: "ai-synthesis" }, citations: [] };
+  }
+}
+
+// ─── Real connector: Hacker News (Algolia API) ────────────────────────────────
+
+interface HNHit {
+  objectID: string;
+  title: string;
+  url?: string;
+  points: number;
+  num_comments: number;
+  created_at: string;
+}
+
+async function runHackerNewsAnalyst(query: string, _apiKey: string): Promise<ProviderResult> {
+  try {
+    const encoded = encodeURIComponent(query);
+    const res = await fetch(
+      `https://hn.algolia.com/api/v1/search?query=${encoded}&tags=story&hitsPerPage=10&numericFilters=points%3E5`,
+      { headers: { "User-Agent": "ContentFlywheel-Research/1.0" }, signal: AbortSignal.timeout(8_000) }
+    );
+    if (!res.ok) throw new Error("HN search failed");
+    const json = await res.json() as { hits?: HNHit[]; nbHits?: number };
+    const hits = (json.hits ?? []).slice(0, 8);
+
+    if (!hits.length) {
+      return { summary: "No Hacker News discussions found", usedFallback: false, data: { dataSource: "hacker-news-api" }, citations: [] };
+    }
+
+    const totalPoints = hits.reduce((a, h) => a + h.points, 0);
+
+    return {
+      summary: `${hits.length} Hacker News discussions (${totalPoints} total points)`,
+      usedFallback: false,
+      data: {
+        topStories: hits.map(h => ({
+          title: h.title,
+          points: h.points,
+          comments: h.num_comments,
+          url: h.url ?? `https://news.ycombinator.com/item?id=${h.objectID}`,
+          hnUrl: `https://news.ycombinator.com/item?id=${h.objectID}`,
+        })),
+        techCommunityInterest: totalPoints > 300 ? "very high" : totalPoints > 100 ? "high" : "moderate",
+        topicMomentum: hits[0]?.points ?? 0 > 200 ? "strong" : "building",
+        dataSource: "hacker-news-api",
+      },
+      citations: hits.slice(0, 6).map(h => ({
+        title: h.title,
+        url: h.url ?? `https://news.ycombinator.com/item?id=${h.objectID}`,
+        source: "Hacker News",
+      })),
+    };
+  } catch {
+    return { summary: "Hacker News unavailable", usedFallback: true, data: { dataSource: "ai-synthesis" }, citations: [] };
+  }
+}
+
+// ─── Update Reddit runner to include citations ─────────────────────────────────
+
+// (fetchRedditPosts already defined above; extend runCommunityAnalyst to add citations)
 
 // ─── Synthesis: combines all provider data → existing report format ───────────
 
@@ -552,6 +689,8 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
         ["social",      runSocialAnalyst],
         ["marketplace", runMarketplaceAnalyst],
         ["seo",         runSeoAnalyst],
+        ["wikipedia",   runWikipediaAnalyst],
+        ["hackernews",  runHackerNewsAnalyst],
       ];
 
       await Promise.allSettled(
@@ -568,6 +707,7 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
               summary: result.summary,
               usedFallback: result.usedFallback,
               data: result.data,
+              citations: result.citations ?? [],
               duration: Math.round((Date.now() - t0) / 100) / 10,
             });
           } catch {
@@ -576,13 +716,25 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
         }),
       );
 
-      // 3. Synthesis — combine all into final report
+      // 3. Collect all citations from every source
+      const allCitations: SourceCitation[] = Object.values(collectedData)
+        .flatMap(r => r.citations ?? []);
+      // Deduplicate by URL
+      const seenUrls = new Set<string>();
+      const dedupedCitations = allCitations.filter(c => {
+        if (!c.url || seenUrls.has(c.url)) return false;
+        seenUrls.add(c.url);
+        return true;
+      });
+
+      // 4. Synthesis — combine all into final report
       await send({ type: "synthesis-start" });
       const report = await synthesizeReport(query, researchType, collectedData, apiKey);
 
       await send({
         type: "synthesis-done",
         report,
+        citations: dedupedCitations,
         providerData: Object.fromEntries(
           Object.entries(collectedData).map(([k, v]) => [k, v.data]),
         ),
@@ -591,6 +743,7 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
           displayName: a.displayName,
           usedFallback: collectedData[a.id]?.usedFallback ?? true,
           dataPoints: Object.keys(collectedData[a.id]?.data ?? {}).length,
+          liveData: !(collectedData[a.id]?.usedFallback ?? true),
         })),
         generatedAt: new Date().toISOString(),
       });

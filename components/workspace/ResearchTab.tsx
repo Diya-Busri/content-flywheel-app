@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { markdownToTipTap } from "@/lib/markdown-to-tiptap";
+import type { SourceCitation } from "@/lib/research-sources/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,6 +136,12 @@ interface SavedReport {
   report: ResearchReport;
   savedAt: string;
   favourite: boolean;
+  /** Live citations from real API connectors */
+  citations?: SourceCitation[];
+  /** Number of real-data sources that contributed */
+  liveSourceCount?: number;
+  /** Which analyst categories returned live data */
+  liveCategories?: string[];
 }
 
 interface ChatMessage {
@@ -263,7 +270,7 @@ const LOADING_STEPS = [
 
 // ─── Research Sources Config ──────────────────────────────────────────────────
 
-type SourceStatus = "live" | "connected" | "coming-soon" | "disabled";
+type SourceStatus = "connected" | "not-connected" | "coming-soon" | "error";
 
 interface ResearchSource {
   id: string;
@@ -290,10 +297,10 @@ const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
     icon: Globe,
     description: "Web search, news, blogs, Wikipedia, government data, academic papers",
     sources: [
-      { id: "web-search",       name: "Web Search",       description: "Live web search across billions of pages",         status: "live",         provider: "openai" },
+      { id: "web-search",       name: "Web Search",       description: "Live web search across billions of pages",         status: "connected",    provider: "openai" },
       { id: "news",             name: "News",             description: "Current news articles and press releases",          status: "coming-soon" },
       { id: "blogs",            name: "Blogs",            description: "Industry blogs and thought leadership",              status: "coming-soon",  provider: "firecrawl" },
-      { id: "wikipedia",        name: "Wikipedia",        description: "Encyclopedic background on any topic",              status: "coming-soon" },
+      { id: "wikipedia",        name: "Wikipedia",        description: "Encyclopedic background on any topic",              status: "connected",    provider: "wikipedia-api" },
       { id: "government",       name: "Government Data",  description: "Official statistics and public datasets",           status: "coming-soon" },
       { id: "academic",         name: "Academic Papers",  description: "Peer-reviewed research and studies",                status: "coming-soon" },
       { id: "industry-reports", name: "Industry Reports", description: "Market research and analyst reports",               status: "coming-soon" },
@@ -322,13 +329,13 @@ const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
     icon: MessageSquare,
     description: "Reddit, Discord, Skool, Quora, Indie Hackers, Hacker News",
     sources: [
-      { id: "reddit",         name: "Reddit",         description: "Subreddits, threads, and upvotes",              status: "connected",   provider: "reddit-api" },
+      { id: "reddit",         name: "Reddit",         description: "Subreddits, threads, and upvotes",              status: "connected",    provider: "reddit-api" },
       { id: "discord",        name: "Discord",        description: "Public server conversations and trends",         status: "coming-soon" },
       { id: "skool",          name: "Skool",          description: "Community posts and discussions",                status: "coming-soon" },
       { id: "facebook-groups",name: "Facebook Groups",description: "Niche community discussions",                   status: "coming-soon" },
       { id: "quora",          name: "Quora",          description: "Questions, answers, and expert opinions",        status: "coming-soon" },
       { id: "indie-hackers",  name: "Indie Hackers",  description: "Founder stories and product discussions",        status: "coming-soon" },
-      { id: "hacker-news",    name: "Hacker News",    description: "Tech and startup conversations",                 status: "coming-soon" },
+      { id: "hacker-news",    name: "Hacker News",    description: "Tech and startup conversations",                 status: "connected",    provider: "hn-algolia-api" },
     ],
   },
   {
@@ -426,8 +433,8 @@ const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
     icon: Brain,
     description: "Opportunity detection, pattern recognition, trend clustering, semantic analysis",
     sources: [
-      { id: "opportunity-detection",name: "Opportunity Detection", description: "AI finds market gaps before you do",          status: "live" },
-      { id: "pattern-recognition",  name: "Pattern Recognition",  description: "Recurring signals across sources",            status: "live" },
+      { id: "opportunity-detection",name: "Opportunity Detection", description: "AI finds market gaps before you do",          status: "connected",  provider: "openai" },
+      { id: "pattern-recognition",  name: "Pattern Recognition",  description: "Recurring signals across sources",            status: "connected",  provider: "openai" },
       { id: "trend-clustering",     name: "Trend Clustering",     description: "Group related trends automatically",          status: "coming-soon", provider: "openai" },
       { id: "semantic-similarity",  name: "Semantic Similarity",  description: "Find related topics via embeddings",          status: "coming-soon", provider: "openai" },
       { id: "competitor-comparison",name: "Competitor Comparison", description: "AI-powered competitor positioning analysis",  status: "coming-soon", provider: "perplexity" },
@@ -580,7 +587,12 @@ function useResearchLibrary() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
   }, []);
 
-  const saveReport = useCallback((query: string, researchType: string, report: ResearchReport) => {
+  const saveReport = useCallback((
+    query: string,
+    researchType: string,
+    report: ResearchReport,
+    meta?: { citations?: SourceCitation[]; liveSourceCount?: number; liveCategories?: string[] },
+  ) => {
     const entry: SavedReport = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       query,
@@ -588,6 +600,9 @@ function useResearchLibrary() {
       report,
       savedAt: new Date().toISOString(),
       favourite: false,
+      citations: meta?.citations,
+      liveSourceCount: meta?.liveSourceCount,
+      liveCategories: meta?.liveCategories,
     };
     setLibrary(prev => {
       let next = [entry, ...prev];
@@ -1238,10 +1253,15 @@ function ResearchLibraryPanel({
                   <span className="text-[18px] shrink-0">{typeInfo.emoji}</span>
                   <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLoad(saved)}>
                     <p className="text-[13px] font-semibold text-foreground truncate">{saved.query}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-[10px] font-medium text-muted-foreground/60 bg-muted/50 px-1.5 py-0.5 rounded-md border border-border">
                         {typeInfo.label}
                       </span>
+                      {saved.liveSourceCount != null && saved.liveSourceCount > 0 && (
+                        <span className="text-[10px] font-medium text-green-600 dark:text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-md border border-green-500/20">
+                          {saved.liveSourceCount} live
+                        </span>
+                      )}
                       <span className="text-[11px] text-muted-foreground/50">{formatDate(saved.savedAt)}</span>
                     </div>
                   </div>
@@ -1451,10 +1471,10 @@ function KnowledgeComparisonPanel({
 // ─── Research Sources Panel ───────────────────────────────────────────────────
 
 const SOURCE_STATUS_CONFIG: Record<SourceStatus, { label: string; className: string }> = {
-  "live":        { label: "Live",        className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20" },
-  "connected":   { label: "Connected",   className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
-  "coming-soon": { label: "Coming Soon", className: "bg-muted text-muted-foreground/50 border-border/60" },
-  "disabled":    { label: "Disabled",    className: "bg-red-500/10 text-red-500/60 border-red-500/20" },
+  "connected":     { label: "Connected",     className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20" },
+  "not-connected": { label: "Not Connected", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
+  "coming-soon":   { label: "Coming Soon",   className: "bg-muted text-muted-foreground/50 border-border/60" },
+  "error":         { label: "Error",         className: "bg-red-500/10 text-red-500/60 border-red-500/20" },
 };
 
 function ResearchSourcesPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
@@ -1469,7 +1489,7 @@ function ResearchSourcesPanel({ open, onToggle }: { open: boolean; onToggle: () 
 
   const totalSources = RESEARCH_SOURCE_CATEGORIES.reduce((acc, cat) => acc + cat.sources.length, 0);
   const totalLive    = RESEARCH_SOURCE_CATEGORIES.reduce(
-    (acc, cat) => acc + cat.sources.filter(s => s.status === "live" || s.status === "connected").length, 0
+    (acc, cat) => acc + cat.sources.filter(s => s.status === "connected").length, 0
   );
 
   return (
@@ -1497,7 +1517,7 @@ function ResearchSourcesPanel({ open, onToggle }: { open: boolean; onToggle: () 
       {open && (
         <div className="px-4 pb-4 space-y-2">
           {RESEARCH_SOURCE_CATEGORIES.map(cat => {
-            const liveCount    = cat.sources.filter(s => s.status === "live" || s.status === "connected").length;
+            const liveCount    = cat.sources.filter(s => s.status === "connected").length;
             const comingCount  = cat.sources.filter(s => s.status === "coming-soon").length;
             const isExpanded   = expandedCategories.has(cat.id);
             const CatIcon      = cat.icon;
@@ -1625,6 +1645,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   const [synthesisStatus, setSynthesisStatus] = useState<SynthesisStatus>("waiting");
   const [providerData, setProviderData] = useState<ProviderDataMap>({});
   const [sourceMeta, setSourceMeta]     = useState<SourceMeta[]>([]);
+  const [citations, setCitations]       = useState<SourceCitation[]>([]);
 
   // Read note → research prefill on mount
   useEffect(() => {
@@ -1692,6 +1713,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     setSynthesisStatus("waiting");
     setProviderData({});
     setSourceMeta([]);
+    setCitations([]);
     setState("loading");
 
     try {
@@ -1745,10 +1767,20 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                 setReport(r);
                 setGeneratedAt((event.generatedAt as string) ?? new Date().toISOString());
                 setSourceMeta(Array.isArray(event.sourceMeta) ? (event.sourceMeta as SourceMeta[]) : []);
+                const eventCitations = Array.isArray(event.citations) ? (event.citations as SourceCitation[]) : [];
+                setCitations(eventCitations);
                 setSynthesisStatus("done");
                 setState("done");
-                // Auto-save to library
-                lib.saveReport(q, type, r);
+                // Compute live source metadata from sourceMeta
+                const liveSources = Array.isArray(event.sourceMeta)
+                  ? (event.sourceMeta as SourceMeta[]).filter(s => !s.usedFallback)
+                  : [];
+                // Auto-save to library with enriched metadata
+                lib.saveReport(q, type, r, {
+                  citations: eventCitations,
+                  liveSourceCount: liveSources.length,
+                  liveCategories: liveSources.map(s => s.displayName),
+                });
                 // KB compare (non-blocking)
                 void kb.search(q);
                 // Auto-save to user memory
@@ -2196,7 +2228,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-semibold text-muted-foreground/50 uppercase tracking-wider mr-1">Sources</span>
             {RESEARCH_SOURCE_CATEGORIES.filter(cat =>
-              cat.sources.some(s => s.status === "live" || s.status === "connected")
+              cat.sources.some(s => s.status === "connected")
             ).map(cat => (
               <div
                 key={cat.id}
@@ -2557,6 +2589,42 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           {tasksAdded ? "Tasks added!" : "Add Plan as Tasks"}
         </button>
       </div>
+
+      {/* ── Live Citations Strip ──────────────────────────────────────────── */}
+      {citations.length > 0 && (
+        <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Live Sources</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-bold border border-green-500/20">
+              {citations.length} references
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {citations.map((c, i) => {
+              const sourceEmojis: Record<string, string> = {
+                "Wikipedia": "📖",
+                "Hacker News": "🔶",
+                "Reddit": "🔴",
+              };
+              const emoji = sourceEmojis[c.source] ?? "🔗";
+              return (
+                <a
+                  key={i}
+                  href={c.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`${c.source}: ${c.title}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background border border-border hover:border-orange-500/30 hover:bg-orange-500/5 text-[11px] text-foreground/70 hover:text-foreground transition-all no-underline group"
+                >
+                  <span className="text-[11px] leading-none">{emoji}</span>
+                  <span className="font-medium truncate max-w-[140px]">{c.title}</span>
+                  <ExternalLink className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 transition-colors" />
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Business Scorecard ────────────────────────────────────────────── */}
       {report.scorecard && (
