@@ -17,6 +17,7 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { Extension } from "@tiptap/core";
 import { Suggestion } from "@tiptap/suggestion";
+import { FontFamily } from "@tiptap/extension-font-family";
 import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
 
@@ -36,6 +37,28 @@ import {
   Undo, Redo, Highlighter, Search, X,
   Mic, Layers, Video, Package, Maximize2, Minimize2, BookOpen,
 } from "lucide-react";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FontSize extension (adds fontSize attr to TextStyle globalAttributes)
+// ─────────────────────────────────────────────────────────────────────────────
+const FontSize = Extension.create({
+  name: "fontSize",
+  addGlobalAttributes() {
+    return [{
+      types: ["textStyle"],
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: (element: HTMLElement) => element.style.fontSize || null,
+          renderHTML: (attributes: Record<string, unknown>) => {
+            if (!attributes.fontSize) return {};
+            return { style: `font-size: ${attributes.fontSize}` };
+          },
+        },
+      },
+    }];
+  },
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -698,6 +721,8 @@ export function NoteEditor({
   const [showAlignMenu, setShowAlignMenu]         = useState(false);
   const [showBlockMenu, setShowBlockMenu]         = useState(false);
   const [showListMenu, setShowListMenu]           = useState(false);
+  const [showFontMenu, setShowFontMenu]           = useState(false);
+  const [showSizeMenu, setShowSizeMenu]           = useState(false);
   const [showCmdPalette, setShowCmdPalette]       = useState(false);
   const [aiLoading, setAiLoading]                 = useState<string | null>(null);
   const [bubbleVisible, setBubbleVisible]         = useState(false);
@@ -715,6 +740,8 @@ export function NoteEditor({
   const blockRef       = useRef<HTMLDivElement>(null);
   const listRef        = useRef<HTMLDivElement>(null);
   const colorRef       = useRef<HTMLDivElement>(null);
+  const fontRef        = useRef<HTMLDivElement>(null);
+  const sizeRef        = useRef<HTMLDivElement>(null);
   const allNotesRef  = useRef(allNotes);
   allNotesRef.current = allNotes;
 
@@ -732,6 +759,8 @@ export function NoteEditor({
       if (blockRef.current   && !blockRef.current.contains(e.target as Node))  setShowBlockMenu(false);
       if (listRef.current    && !listRef.current.contains(e.target as Node))   setShowListMenu(false);
       if (colorRef.current   && !colorRef.current.contains(e.target as Node))  setShowColorPicker(false);
+      if (fontRef.current    && !fontRef.current.contains(e.target as Node))   setShowFontMenu(false);
+      if (sizeRef.current    && !sizeRef.current.contains(e.target as Node))   setShowSizeMenu(false);
       if (ctxMenuRef.current && !ctxMenuRef.current.contains(e.target as Node)) setCtxMenu(null);
     };
     document.addEventListener("mousedown", handler);
@@ -754,6 +783,8 @@ export function NoteEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       TextStyle,
+      FontFamily,
+      FontSize,
       Color,
       Highlight.configure({ multicolor: true }),
       Link.configure({ openOnClick: false, HTMLAttributes: { class: "note-link" } }),
@@ -925,15 +956,15 @@ export function NoteEditor({
   return (
     <div className={cn("relative flex-1 flex flex-col", className)}>
 
-      {/* ── Toolbar (single row, scrollable on narrow viewports) ────────────── */}
+      {/* ── Toolbar (single scrollable row, grouped like Notion/Google Docs) ─── */}
       <div className="relative z-10 border-b border-border/40 bg-background shrink-0 overflow-x-auto">
-        <div className="flex items-center gap-1 px-4 py-1.5 min-w-max">
+        <div className="flex items-center gap-0.5 px-3 py-1.5 min-w-max">
 
-          {/* Block type dropdown */}
+          {/* ── Group 1: Block type ▼ ──────────────────────────────────────── */}
           <div className="relative shrink-0" ref={blockRef}>
             <button
               onMouseDown={e => { e.preventDefault(); setShowBlockMenu(v => !v); }}
-              className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[52px]"
             >
               {blockLabel}
               <ChevronDown className="w-3 h-3 opacity-60" />
@@ -960,7 +991,78 @@ export function NoteEditor({
 
           <Divider />
 
-          {/* Bold · Italic · Underline · Strikethrough */}
+          {/* ── Group 2: Font family ▼ ─────────────────────────────────────── */}
+          <div className="relative shrink-0" ref={fontRef}>
+            <button
+              onMouseDown={e => { e.preventDefault(); setShowFontMenu(v => !v); }}
+              className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[60px]"
+              title="Font Family"
+            >
+              <span className="truncate max-w-[52px]">Font</span>
+              <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+            </button>
+            {showFontMenu && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[160px]">
+                {[
+                  { label: "Sans-serif", value: "",                      preview: "Aa" },
+                  { label: "Serif",      value: "Georgia, serif",         preview: "Aa" },
+                  { label: "Monospace",  value: "monospace",              preview: "Aa" },
+                  { label: "Cursive",    value: "cursive",                preview: "Aa" },
+                ].map(item => (
+                  <button key={item.label}
+                    onClick={() => {
+                      if (item.value) editor.chain().focus().setFontFamily(item.value).run();
+                      else editor.chain().focus().unsetFontFamily().run();
+                      setShowFontMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left hover:bg-accent transition-colors text-foreground">
+                    <span style={{ fontFamily: item.value || "inherit" }} className="text-[15px] w-6 text-center text-muted-foreground">{item.preview}</span>
+                    <span style={{ fontFamily: item.value || "inherit" }}>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
+          {/* ── Group 3: Font size ▼ ───────────────────────────────────────── */}
+          <div className="relative shrink-0" ref={sizeRef}>
+            <button
+              onMouseDown={e => { e.preventDefault(); setShowSizeMenu(v => !v); }}
+              className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[48px]"
+              title="Font Size"
+            >
+              <span>Size</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            {showSizeMenu && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[130px]">
+                {[
+                  { label: "Small",   value: "12px" },
+                  { label: "Default", value: "14px" },
+                  { label: "Medium",  value: "16px" },
+                  { label: "Large",   value: "18px" },
+                  { label: "XL",      value: "24px" },
+                  { label: "2XL",     value: "32px" },
+                ].map(item => (
+                  <button key={item.value}
+                    onClick={() => {
+                      editor.chain().focus().setMark("textStyle", { fontSize: item.value }).run();
+                      setShowSizeMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-left hover:bg-accent transition-colors text-foreground">
+                    <span style={{ fontSize: item.value }} className="leading-none">{item.label}</span>
+                    <span className="text-[10px] text-muted-foreground/60">{item.value}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
+          {/* ── Group 4: B I U S ──────────────────────────────────────────── */}
           <TBtn title={`Bold (${mod}B)`} active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
             <Bold className="w-3.5 h-3.5" />
           </TBtn>
@@ -976,7 +1078,27 @@ export function NoteEditor({
 
           <Divider />
 
-          {/* Alignment dropdown */}
+          {/* ── Group 5: Text Colour ──────────────────────────────────────── */}
+          <div className="relative shrink-0" ref={colorRef}>
+            <button
+              title="Text Colour & Highlight"
+              onMouseDown={e => { e.preventDefault(); setShowColorPicker(v => !v); }}
+              className="flex items-center gap-0.5 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Type className="w-3.5 h-3.5" />
+              <Highlighter className="w-3 h-3" />
+              <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+            </button>
+            {showColorPicker && (
+              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl">
+                <ColorPicker editor={editor} onClose={() => setShowColorPicker(false)} />
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
+          {/* ── Group 6: Align ▼ ──────────────────────────────────────────── */}
           <div className="relative shrink-0" ref={alignRef}>
             <button
               onMouseDown={e => { e.preventDefault(); setShowAlignMenu(v => !v); }}
@@ -1006,12 +1128,12 @@ export function NoteEditor({
 
           <Divider />
 
-          {/* Lists dropdown */}
+          {/* ── Group 7: Lists ▼ ──────────────────────────────────────────── */}
           <div className="relative shrink-0" ref={listRef}>
             <button
               onMouseDown={e => { e.preventDefault(); setShowListMenu(v => !v); }}
               className={cn(
-                "flex items-center gap-1 h-7 px-1.5 rounded-md transition-colors text-xs",
+                "flex items-center gap-1 h-7 px-1.5 rounded-md transition-colors",
                 (editor.isActive("bulletList") || editor.isActive("orderedList") || editor.isActive("taskList"))
                   ? "bg-orange-500/12 text-orange-500"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -1044,7 +1166,7 @@ export function NoteEditor({
 
           <Divider />
 
-          {/* Link */}
+          {/* ── Group 8: Link | Table | Divider | Code | Quote ────────────── */}
           <TBtn title="Link" active={editor.isActive("link")} onClick={() => {
             if (editor.isActive("link")) { editor.chain().focus().unsetLink().run(); }
             else {
@@ -1055,7 +1177,6 @@ export function NoteEditor({
             <Link2 className="w-3.5 h-3.5" />
           </TBtn>
 
-          {/* Table — opens size picker */}
           <button
             ref={tableButtonRef}
             title="Table"
@@ -1073,39 +1194,21 @@ export function NoteEditor({
             <Table2 className="w-3.5 h-3.5" />
           </button>
 
-          {/* Horizontal rule */}
           <TBtn title="Divider" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
             <Minus className="w-3.5 h-3.5" />
           </TBtn>
 
-          <Divider />
-
-          {/* Text Color & Highlight */}
-          <div className="relative shrink-0" ref={colorRef}>
-            <button
-              title="Text Color & Highlight"
-              onMouseDown={e => { e.preventDefault(); setShowColorPicker(v => !v); }}
-              className="flex items-center gap-0.5 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            >
-              <Type className="w-3.5 h-3.5" />
-              <Highlighter className="w-3 h-3" />
-              <ChevronDown className="w-2.5 h-2.5 opacity-60" />
-            </button>
-            {showColorPicker && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl">
-                <ColorPicker editor={editor} onClose={() => setShowColorPicker(false)} />
-              </div>
-            )}
-          </div>
-
-          {/* Inline Code */}
           <TBtn title="Inline Code" active={editor.isActive("code")} onClick={() => editor.chain().focus().toggleCode().run()}>
             <Code className="w-3.5 h-3.5" />
           </TBtn>
 
+          <TBtn title="Blockquote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+            <Quote className="w-3.5 h-3.5" />
+          </TBtn>
+
           <Divider />
 
-          {/* Undo / Redo */}
+          {/* ── Group 9: Undo | Redo ──────────────────────────────────────── */}
           <TBtn title={`Undo (${mod}Z)`} onClick={() => editor.chain().focus().undo().run()}>
             <Undo className="w-3.5 h-3.5" />
           </TBtn>
@@ -1115,14 +1218,13 @@ export function NoteEditor({
 
           <Divider />
 
-          {/* Word count + reading time */}
+          {/* ── Word count + ⌘K ──────────────────────────────────────────── */}
           <span className="text-[10px] text-muted-foreground/40 whitespace-nowrap select-none shrink-0">
             {charCount}w · {readMins}m
           </span>
 
           <Divider />
 
-          {/* Command palette trigger */}
           <button
             onMouseDown={e => { e.preventDefault(); setShowCmdPalette(true); }}
             title={`Command Palette (${mod}K)`}
