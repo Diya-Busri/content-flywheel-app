@@ -1114,6 +1114,19 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Read note → research prefill on mount
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("note_to_research");
+      if (raw) {
+        const { topic } = JSON.parse(raw) as { topic: string; context?: string };
+        if (topic) setInputQuery(topic);
+        sessionStorage.removeItem("note_to_research");
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Animate loading steps
   useEffect(() => {
     if (state === "loading") {

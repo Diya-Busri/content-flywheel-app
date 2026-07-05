@@ -1123,7 +1123,7 @@ function cleanPreview(body: string): string {
 
 const AI_WRITING_ACTIONS = new Set(["improve-writing", "expand-idea", "summarise", "shorten", "rewrite"]);
 
-function NotesTab() {
+function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }) {
   const router = useRouter();
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1133,7 +1133,9 @@ function NotesTab() {
   const [fontSize, setFontSize] = useState<FontSize>("base");
   const [fontFamily, setFontFamily] = useState<FontFamily>("sans");
   const [copied, setCopied] = useState(false);
-  const [, setAiLoading] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [autoSaved, setAutoSaved] = useState(false);
   const [showConnected, setShowConnected] = useState(true);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1187,6 +1189,21 @@ function NotesTab() {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
   };
 
+  const handleSummarize = async () => {
+    if (!active || !active.body.trim()) return;
+    setSummaryLoading(true);
+    try {
+      const res = await fetch("/api/notes/ai-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "summarise", title: active.title, body: active.body }),
+      });
+      const json = await res.json() as { result?: string; error?: string };
+      if (json.result) setAiSummary(json.result);
+    } catch {}
+    finally { setSummaryLoading(false); }
+  };
+
   const handleAiAction = async (actionId: string, selectedText?: string, replaceCallback?: (result: string) => void) => {
     if (!active) return;
     if (AI_WRITING_ACTIONS.has(actionId)) {
@@ -1200,22 +1217,20 @@ function NotesTab() {
         });
         const json = await res.json() as { result?: string; error?: string };
         if (json.result) {
-          if (replaceCallback) {
-            // Selection-level replacement
-            replaceCallback(json.result);
-          } else {
-            // Full note replacement
-            updateNote(active.id, { body: json.result, content: undefined });
-          }
+          if (replaceCallback) replaceCallback(json.result);
+          else updateNote(active.id, { body: json.result, content: undefined });
         }
       } catch {}
       finally { setAiLoading(null); }
       return;
     }
-    // Navigation actions — prefill via sessionStorage
+    // Navigation / convert actions
     const prefill = JSON.stringify({ title: active.title, body: active.body });
     try { sessionStorage.setItem("note_prefill", prefill); } catch {}
-    if (actionId === "turn-into-script" || actionId === "turn-into-video") {
+    if (actionId === "turn-into-research") {
+      try { sessionStorage.setItem("note_to_research", JSON.stringify({ topic: active.title, context: active.body })); } catch {}
+      onTabChange?.("research");
+    } else if (actionId === "turn-into-script" || actionId === "turn-into-video") {
       router.push("/dashboard/video-guide/new");
     } else if (actionId === "turn-into-carousel") {
       router.push("/dashboard/design-studio");
@@ -1526,6 +1541,81 @@ function NotesTab() {
                 </div>
               </div>
             </div>
+
+            {/* ── AI Actions bar ─────────────────────────────────────────────── */}
+            <div className="px-8 py-2 border-b border-border/40 shrink-0 flex items-center gap-1.5 flex-wrap bg-muted/10 dark:bg-[#0A0A0A]">
+              {/* AI write actions */}
+              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-0.5">AI</span>
+              <button
+                onClick={handleSummarize}
+                disabled={summaryLoading || !active.body.trim()}
+                className={cn("flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border transition-all",
+                  aiSummary ? "bg-orange-500/10 text-orange-500 border-orange-500/30" : "border-border text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40")}>
+                {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {summaryLoading ? "Summarising…" : aiSummary ? "Re-summarise" : "Summarise"}
+              </button>
+              <button
+                onClick={() => handleAiAction("rewrite")}
+                disabled={!!aiLoading || !active.body.trim()}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
+                {aiLoading === "rewrite" ? <Loader2 className="w-3 h-3 animate-spin" /> : <TrendingUp className="w-3 h-3" />}
+                Rewrite
+              </button>
+              <button
+                onClick={() => handleAiAction("expand-idea")}
+                disabled={!!aiLoading || !active.body.trim()}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
+                {aiLoading === "expand-idea" ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronUp className="w-3 h-3" />}
+                Expand
+              </button>
+
+              <div className="w-px h-4 bg-border/60 mx-0.5" />
+
+              {/* Convert to actions */}
+              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-0.5">Convert to</span>
+              <button
+                onClick={() => handleAiAction("turn-into-research")}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                🔬 Research
+              </button>
+              <button
+                onClick={() => handleAiAction("turn-into-product")}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                📦 Product
+              </button>
+              <button
+                onClick={() => handleAiAction("turn-into-carousel")}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                🎠 Carousel
+              </button>
+              <button
+                onClick={() => handleAiAction("turn-into-video")}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                🎬 Video Script
+              </button>
+
+              {aiSummary && (
+                <button onClick={() => setAiSummary(null)} className="ml-auto h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-all" title="Hide summary">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* ── AI Summary panel ───────────────────────────────────────────── */}
+            {aiSummary && (
+              <div className="px-8 py-3 border-b border-orange-500/20 bg-gradient-to-r from-orange-500/5 to-amber-500/5 shrink-0">
+                <div className="flex items-start gap-2.5">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-orange-500 mb-1.5">AI Summary</p>
+                    <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{aiSummary}</p>
+                  </div>
+                  <button onClick={() => setAiSummary(null)} className="shrink-0 text-muted-foreground/30 hover:text-muted-foreground transition-colors mt-0.5">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── Editor + Connected Notes ───────────────────────────────────── */}
             <div className="flex flex-1 overflow-hidden">
@@ -3003,7 +3093,7 @@ export default function WorkspacePage() {
       {/* Standard tab content */}
       {tab === "dashboard" && <WorkspaceDashboard onTabChange={setTab} />}
       {tab === "todos"    && <TodoTab />}
-      {tab === "notes"    && <NotesTab />}
+      {tab === "notes"    && <NotesTab onTabChange={setTab} />}
       {tab === "calendar" && <CalendarTab />}
       {tab === "goals"    && <GoalsTab />}
 
