@@ -558,7 +558,8 @@ export default function BusinessBrainTab() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: searchQ, limit: 20, excludeArchived: false }),
         });
-        setSearchResults(await res.json() as UserMemoryEntry[]);
+        const raw = await res.json();
+        setSearchResults(Array.isArray(raw) ? raw as UserMemoryEntry[] : []);
       } catch { setSearchResults([]); }
       setSearching(false);
     }, 450);
@@ -593,8 +594,9 @@ export default function BusinessBrainTab() {
 
   const handleSaveNew = useCallback(async (data: Record<string, unknown>) => {
     const res = await fetch("/api/user-memory/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    if (!res.ok) { setShowAddForm(false); return; }
     const entry = await res.json() as UserMemoryEntry;
-    setEntries(prev => [entry, ...prev]);
+    if (entry?.id) setEntries(prev => [entry, ...prev]);
     setShowAddForm(false);
     void loadDashboard();
   }, [loadDashboard]);
