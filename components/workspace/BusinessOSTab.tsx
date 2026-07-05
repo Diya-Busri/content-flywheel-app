@@ -588,7 +588,7 @@ export default function BusinessOSTab() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Today's Decisions
+                Today&apos;s Decisions
               </p>
               {orchestrator && orchestrator.hoursUntilNextRun > 0 && (
                 <span className="text-[9px] text-muted-foreground/40 flex items-center gap-0.5 ml-auto">

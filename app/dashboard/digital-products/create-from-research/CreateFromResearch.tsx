@@ -272,7 +272,7 @@ export default function CreateFromResearch() {
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Create This Product</h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Review the details, choose a format, and we'll set everything up.
+                  Review the details, choose a format, and we&apos;ll set everything up.
                 </p>
               </div>
 

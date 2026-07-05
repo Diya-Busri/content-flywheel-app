@@ -287,7 +287,7 @@ function DailyBriefPanel({ brief, onClose }: { brief: DailyBrief; onClose: () =>
 
       {brief.tasks.length > 0 && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Today's Priorities</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Today&apos;s Priorities</p>
           <ul className="space-y-1">
             {brief.tasks.map((t, i) => (
               <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
