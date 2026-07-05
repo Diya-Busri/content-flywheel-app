@@ -26,8 +26,20 @@ export type ContentRow = {
   isCta?: boolean;
 };
 
-type Platform = "instagram" | "tiktok-link" | "tiktok-nolink";
+type Platform = "instagram" | "tiktok-link" | "tiktok-nolink"; // legacy (kept for API compat)
 type CtaType = "automatic" | "link-in-bio" | "comment-keyword" | "visit-store" | "follow-for-more" | "custom";
+type CtaStrategy = "ai" | "manual";
+type PlatformId = "instagram" | "tiktok-link" | "tiktok-comment" | "linkedin" | "pinterest" | "facebook" | "twitter" | "threads";
+
+type PlatformCfg = { ctaType: CtaType; ctaKeyword: string; ctaCustom: string };
+
+type PlatformOutput = {
+  platformId: string;
+  caption: string;
+  hashtags: string[];
+  ctaSlide: ContentRow | null;
+  ctaSlideDesign: DesignData | null;
+};
 
 type TemplateStyle = EngineTemplateStyle;
 type Mode = "topic" | "products" | "url";
@@ -86,6 +98,17 @@ const FORMAT_LABELS: Record<string, string> = {
   guide: "Guide", planner: "Planner", journal: "Journal",
   spreadsheet: "Spreadsheet", notion: "Notion Template",
 };
+
+const PLATFORMS: { id: PlatformId; label: string; emoji: string; sub: string; hasLink: boolean }[] = [
+  { id: "instagram",      label: "Instagram",   emoji: "📸", sub: "Link in Bio",      hasLink: true  },
+  { id: "tiktok-link",    label: "TikTok",      emoji: "🎵", sub: "Link in Bio",      hasLink: true  },
+  { id: "tiktok-comment", label: "TikTok",      emoji: "🎵", sub: "Comment Keyword",  hasLink: false },
+  { id: "linkedin",       label: "LinkedIn",    emoji: "💼", sub: "Professional",     hasLink: true  },
+  { id: "pinterest",      label: "Pinterest",   emoji: "📌", sub: "Save Pin",         hasLink: true  },
+  { id: "facebook",       label: "Facebook",    emoji: "👥", sub: "Social",           hasLink: true  },
+  { id: "twitter",        label: "X (Twitter)", emoji: "𝕏",  sub: "Short form",      hasLink: true  },
+  { id: "threads",        label: "Threads",     emoji: "🧵", sub: "Micro-blog",       hasLink: true  },
+];
 
 // ── Mini preview card ─────────────────────────────────────────────────────────
 
@@ -213,48 +236,58 @@ function ProductCard({ product, selected, onToggle, isDark }: {
 
 // ── Export All as ZIP ─────────────────────────────────────────────────────────
 
+async function renderDesignToPng(design: DesignData): Promise<string> {
+  const { toPng } = await import("html-to-image");
+  const { createRoot } = await import("react-dom/client");
+  const W = design.width;
+  const H = design.height;
+  const container = document.createElement("div");
+  container.style.cssText = `position:fixed;left:-9999px;top:0;width:${W}px;height:${H}px;overflow:hidden;z-index:-1`;
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  root.render(React.createElement(SlidePreview, { data: design, scale: 1 }));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await new Promise((r) => setTimeout(r, 200));
+  try {
+    const dataUrl = await toPng(container.firstElementChild as HTMLElement, { pixelRatio: 2, width: W, height: H });
+    return dataUrl.split(",")[1];
+  } finally {
+    root.unmount();
+    document.body.removeChild(container);
+  }
+}
+
 async function exportAllAsZip(
   posts: ContentRow[],
   designs: DesignData[],
   batchLabel: string,
+  platformOutputs: PlatformOutput[],
 ): Promise<void> {
   const { default: JSZip } = await import("jszip");
-  const { toPng } = await import("html-to-image");
-  const { createRoot } = await import("react-dom/client");
   const zip = new JSZip();
+  const slug = batchLabel.replace(/[^a-z0-9]/gi, "-");
 
+  // Core carousel slides
   for (let i = 0; i < posts.length; i++) {
     const post = posts[i];
     const design = designs[i];
-    const W = design.width;
-    const H = design.height;
+    const fileName = post.productTitle
+      ? `${post.productTitle.replace(/[^a-z0-9]/gi, "-")}-post-${i + 1}.png`
+      : `${slug}-post-${i + 1}.png`;
+    zip.file(fileName, await renderDesignToPng(design), { base64: true });
+  }
 
-    const container = document.createElement("div");
-    container.style.cssText = `position:fixed;left:-9999px;top:0;width:${W}px;height:${H}px;overflow:hidden;z-index:-1`;
-    document.body.appendChild(container);
-
-    const root = createRoot(container);
-    root.render(React.createElement(SlidePreview, { data: design, scale: 1 }));
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    await new Promise((r) => setTimeout(r, 200));
-
-    try {
-      const dataUrl = await toPng(container.firstElementChild as HTMLElement, { pixelRatio: 2, width: W, height: H });
-      const base64 = dataUrl.split(",")[1];
-      const fileName = post.productTitle
-        ? `${post.productTitle.replace(/[^a-z0-9]/gi, "-")}-post-${i + 1}.png`
-        : `${batchLabel.replace(/[^a-z0-9]/gi, "-")}-post-${i + 1}.png`;
-      zip.file(fileName, base64, { base64: true });
-    } finally {
-      root.unmount();
-      document.body.removeChild(container);
+  // Per-platform CTA slides
+  for (const po of platformOutputs) {
+    if (po.ctaSlideDesign) {
+      zip.file(`cta-${po.platformId}.png`, await renderDesignToPng(po.ctaSlideDesign), { base64: true });
     }
   }
 
   const blob = await zip.generateAsync({ type: "blob" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url;
-  a.download = `${batchLabel.replace(/[^a-z0-9]/gi, "-")}-posts.zip`;
+  a.download = `${slug}-posts.zip`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -296,11 +329,12 @@ export function BulkContentDesigner() {
   const [urlScraping, setUrlScraping] = useState(false);
   const [urlScrapeError, setUrlScrapeError] = useState<string | null>(null);
 
-  // CTA settings
-  const [platform, setPlatform] = useState<Platform>("instagram");
-  const [ctaType, setCtaType] = useState<CtaType>("automatic");
-  const [ctaKeyword, setCtaKeyword] = useState("");
-  const [ctaCustom, setCtaCustom] = useState("");
+  // CTA settings — multi-platform
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<PlatformId>>(new Set<PlatformId>(["instagram"]));
+  const [ctaStrategy, setCtaStrategy] = useState<CtaStrategy>("ai");
+  const [perPlatformCta, setPerPlatformCta] = useState<Record<string, PlatformCfg>>({});
+  const [platformOutputs, setPlatformOutputs] = useState<PlatformOutput[]>([]);
+  const [activePlatformTab, setActivePlatformTab] = useState<string>("instagram");
 
   const containerCls = isDark ? "bg-[#0F0F0F] text-white" : "bg-[#F9FAFB] text-gray-900";
   const cardCls = isDark ? "bg-[#1A1A1A] border-white/10" : "bg-white border-gray-200";
@@ -318,6 +352,15 @@ export function BulkContentDesigner() {
     setSelectedProductIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function togglePlatform(id: PlatformId) {
+    setSelectedPlatforms(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { if (next.size > 1) next.delete(id); } // keep at least one
+      else next.add(id);
       return next;
     });
   }
@@ -358,8 +401,14 @@ export function BulkContentDesigner() {
     if (!canGenerate) return;
     setGenerating(true);
     setGenError(null);
+    setPlatformOutputs([]);
     try {
-      const body: Record<string, unknown> = { style, count, tone, niche, platform, ctaType, ctaKeyword, ctaCustom };
+      const body: Record<string, unknown> = {
+        style, count, tone, niche,
+        platforms: Array.from(selectedPlatforms),
+        ctaStrategy,
+        perPlatformCta: ctaStrategy === "manual" ? perPlatformCta : undefined,
+      };
       if (mode === "products") {
         const selected = products.filter((p) => selectedProductIds.has(p.id));
         body.products = selected.map((p) => ({
@@ -367,11 +416,7 @@ export function BulkContentDesigner() {
           description: p.marketingAssets?.productDescription ?? "",
         }));
       } else if (mode === "url" && urlScraped) {
-        const parts = [
-          urlScraped.title,
-          urlScraped.description,
-          urlScraped.excerpt,
-        ].filter(Boolean);
+        const parts = [urlScraped.title, urlScraped.description, urlScraped.excerpt].filter(Boolean);
         body.topic = parts.join(". ").slice(0, 800);
       } else {
         body.topic = topic;
@@ -379,13 +424,19 @@ export function BulkContentDesigner() {
       const res = await fetch("/api/designs/bulk-generate", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
-      const json = await res.json() as { posts?: ContentRow[]; error?: string };
+      const json = await res.json() as {
+        posts?: ContentRow[];
+        platformOutputs?: Array<{ platformId: string; caption: string; hashtags: string[]; ctaSlide: Record<string, unknown> }>;
+        error?: string;
+      };
       if (!res.ok) { setGenError(json.error ?? "Generation failed"); return; }
+
       const newPosts = (json.posts ?? []).map((p, i) => ({
         ...p, id: `post-${i}-${Date.now()}`,
         hook: p.hook ?? "", mainText: p.mainText ?? "", cta: p.cta ?? "", bgTheme: p.bgTheme ?? "light",
       }));
-      // Compute layout-varied designs immediately — one pass, carousel-aware
+
+      // Compute layout-varied designs — one pass, carousel-aware
       const usedLayouts: string[] = [];
       const newDesigns = newPosts.map((post, idx) => {
         const { data, layoutId } = buildSlideDesign(post, style, idx, newPosts.length, usedLayouts, canvasFormatHeight);
@@ -394,6 +445,30 @@ export function BulkContentDesigner() {
       });
       setPosts(newPosts);
       setPostDesigns(newDesigns);
+
+      // Build platform outputs (including CTA slide designs)
+      if (json.platformOutputs?.length) {
+        const newPlatformOutputs: PlatformOutput[] = json.platformOutputs.map(po => {
+          let ctaSlide: ContentRow | null = null;
+          let ctaSlideDesign: DesignData | null = null;
+          if (po.ctaSlide && typeof po.ctaSlide === "object") {
+            const raw = po.ctaSlide;
+            ctaSlide = {
+              id: `cta-${po.platformId}-${Date.now()}`,
+              hook: String(raw.hook ?? ""),
+              mainText: String(raw.mainText ?? ""),
+              cta: String(raw.cta ?? ""),
+              bgTheme: String(raw.bgTheme ?? "gradient-warm"),
+              isCta: true,
+            };
+            ctaSlideDesign = buildSlideDesign(ctaSlide, style, newPosts.length, newPosts.length + 1, [], canvasFormatHeight).data;
+          }
+          return { platformId: po.platformId, caption: po.caption ?? "", hashtags: po.hashtags ?? [], ctaSlide, ctaSlideDesign };
+        });
+        setPlatformOutputs(newPlatformOutputs);
+        setActivePlatformTab(newPlatformOutputs[0].platformId);
+      }
+
       setStep(2);
     } catch { setGenError("Network error — please try again."); }
     finally { setGenerating(false); }
@@ -461,7 +536,7 @@ export function BulkContentDesigner() {
 
   async function handleExportZip() {
     setExportingZip(true);
-    try { await exportAllAsZip(posts, postDesigns, batchLabel); }
+    try { await exportAllAsZip(posts, postDesigns, batchLabel, platformOutputs); }
     finally { setExportingZip(false); }
   }
 
@@ -720,92 +795,176 @@ export function BulkContentDesigner() {
                 </div>
               </div>
 
-              {/* CTA Settings */}
-              <div className={`rounded-2xl border p-6 space-y-4 ${cardCls}`}>
+              {/* CTA Settings — multi-platform + AI strategy */}
+              <div className={`rounded-2xl border p-6 space-y-5 ${cardCls}`}>
+                {/* Header */}
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center">
                     <Megaphone className="w-4 h-4 text-orange-500" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">CTA Settings</p>
-                    <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>A platform-optimised CTA slide is auto-appended to every carousel</p>
+                    <p className="text-sm font-semibold">Publishing Platforms & CTA</p>
+                    <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>Select where you&apos;re posting — AI will craft a unique CTA slide per platform</p>
                   </div>
                 </div>
 
-                {/* Platform */}
+                {/* Platform multi-select grid */}
                 <div>
-                  <label className="block text-xs font-semibold mb-2">Publishing platform</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {([
-                      { value: "instagram", label: "Instagram", sub: "Link in Bio" },
-                      { value: "tiktok-link", label: "TikTok", sub: "Has link" },
-                      { value: "tiktok-nolink", label: "TikTok", sub: "No link" },
-                    ] as { value: Platform; label: string; sub: string }[]).map((p) => (
+                  <label className="block text-xs font-semibold mb-2.5">Publishing platforms <span className="font-normal opacity-60">(select all that apply)</span></label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PLATFORMS.map((p) => {
+                      const active = selectedPlatforms.has(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => togglePlatform(p.id)}
+                          className={`flex items-center gap-2.5 py-2.5 px-3 rounded-xl border-2 text-left transition-all ${
+                            active
+                              ? "border-orange-500 bg-orange-500/10"
+                              : isDark
+                              ? "border-white/10 hover:border-white/25"
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <span className="text-lg leading-none">{p.emoji}</span>
+                          <div className="min-w-0">
+                            <p className={`text-xs font-semibold leading-tight ${active ? "text-orange-500" : ""}`}>{p.label}</p>
+                            <p className={`text-[10px] leading-tight truncate ${active ? "text-orange-400" : isDark ? "text-gray-600" : "text-gray-400"}`}>{p.sub}</p>
+                          </div>
+                          {active && (
+                            <div className="ml-auto w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
+                              <Check className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className={`text-[10px] mt-2 ${isDark ? "text-gray-600" : "text-gray-400"}`}>
+                    {selectedPlatforms.size} platform{selectedPlatforms.size !== 1 ? "s" : ""} selected · Each gets its own CTA slide + caption + hashtags
+                  </p>
+                </div>
+
+                {/* CTA Strategy */}
+                <div>
+                  <label className="block text-xs font-semibold mb-2.5">CTA Strategy</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["ai", "manual"] as CtaStrategy[]).map((s) => (
                       <button
-                        key={p.value}
-                        onClick={() => {
-                          setPlatform(p.value);
-                          if (p.value === "tiktok-nolink" && ctaType === "link-in-bio") setCtaType("comment-keyword");
-                          if (p.value === "tiktok-nolink" && ctaType === "visit-store") setCtaType("comment-keyword");
-                        }}
-                        className={`flex flex-col items-center py-2.5 px-2 rounded-xl border-2 text-xs font-semibold transition-colors ${
-                          platform === p.value ? "border-orange-500 bg-orange-500/10 text-orange-500" : isDark ? "border-white/10 text-gray-400 hover:border-white/30" : "border-gray-200 text-gray-600 hover:border-gray-300"
+                        key={s}
+                        onClick={() => setCtaStrategy(s)}
+                        className={`flex flex-col items-start py-3 px-3.5 rounded-xl border-2 transition-all text-left ${
+                          ctaStrategy === s
+                            ? "border-orange-500 bg-orange-500/10"
+                            : isDark
+                            ? "border-white/10 hover:border-white/25"
+                            : "border-gray-200 hover:border-gray-300"
                         }`}
                       >
-                        <span>{p.label}</span>
-                        <span className={`text-[9px] font-normal mt-0.5 ${platform === p.value ? "text-orange-400" : isDark ? "text-gray-600" : "text-gray-400"}`}>{p.sub}</span>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          {s === "ai" ? <Sparkles className={`w-3.5 h-3.5 ${ctaStrategy === s ? "text-orange-500" : isDark ? "text-gray-400" : "text-gray-500"}`} /> : <Megaphone className={`w-3.5 h-3.5 ${ctaStrategy === s ? "text-orange-500" : isDark ? "text-gray-400" : "text-gray-500"}`} />}
+                          <span className={`text-xs font-bold ${ctaStrategy === s ? "text-orange-500" : ""}`}>
+                            {s === "ai" ? "AI Optimised" : "Manual"}
+                          </span>
+                          {s === "ai" && <span className="text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-semibold">Recommended</span>}
+                        </div>
+                        <p className={`text-[10px] leading-snug ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+                          {s === "ai"
+                            ? "AI picks the best CTA, caption & hashtags per platform automatically"
+                            : "Set a specific CTA type & keyword for each platform individually"}
+                        </p>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* CTA Type */}
-                <div>
-                  <label className="block text-xs font-semibold mb-2">CTA type</label>
-                  <div className="flex flex-wrap gap-2">
-                    {([
-                      { value: "automatic", label: "Automatic" },
-                      ...(platform !== "tiktok-nolink" ? [{ value: "link-in-bio", label: "Link in Bio" }] : []),
-                      { value: "comment-keyword", label: "Comment Keyword" },
-                      ...(platform !== "tiktok-nolink" ? [{ value: "visit-store", label: "Visit Store" }] : []),
-                      { value: "follow-for-more", label: "Follow for More" },
-                      { value: "custom", label: "Custom" },
-                    ] as { value: CtaType; label: string }[]).map((t) => (
-                      <button
-                        key={t.value}
-                        onClick={() => setCtaType(t.value)}
-                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${ctaType === t.value ? "border-orange-500 bg-orange-500/10 text-orange-500" : isDark ? "border-white/10 text-gray-400 hover:border-white/30" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Keyword field (comment-keyword) */}
-                {ctaType === "comment-keyword" && (
-                  <div>
-                    <label className="block text-xs font-semibold mb-1.5">Comment keyword</label>
-                    <input
-                      value={ctaKeyword}
-                      onChange={(e) => setCtaKeyword(e.target.value)}
-                      placeholder="e.g. GUIDE, LINK, FREE"
-                      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
-                    />
-                    <p className={`text-xs mt-1 ${isDark ? "text-gray-600" : "text-gray-400"}`}>e.g. &ldquo;Comment &apos;GUIDE&apos; and I&apos;ll DM you the link&rdquo;</p>
+                {/* AI mode info box */}
+                {ctaStrategy === "ai" && (
+                  <div className={`rounded-xl border p-4 space-y-2.5 ${isDark ? "border-white/10 bg-white/3" : "border-orange-200 bg-orange-50/60"}`}>
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">What AI generates per platform</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      {Array.from(selectedPlatforms).map(pid => {
+                        const pl = PLATFORMS.find(p => p.id === pid)!;
+                        const examples: Record<string, string> = {
+                          "instagram": "\"Tap the link in bio ↗\" + hashtag bundle",
+                          "tiktok-link": "\"Link in bio 🔗\" or short comment trigger",
+                          "tiktok-comment": "\"Comment 'KEYWORD' — I'll DM you instantly\"",
+                          "linkedin": "Professional CTA + industry hashtags",
+                          "pinterest": "\"Save this Pin + link in bio\" CTA",
+                          "facebook": "\"Comment below or visit link in bio\"",
+                          "twitter": "Short punchy CTA, 3–5 hashtags",
+                          "threads": "Conversational reply-bait CTA",
+                        };
+                        return (
+                          <div key={pid} className="flex items-start gap-2">
+                            <span className="text-sm leading-none mt-0.5">{pl.emoji}</span>
+                            <p className={`text-[11px] leading-snug ${isDark ? "text-gray-400" : "text-gray-600"}`}>
+                              <span className="font-semibold">{pl.label}</span> — {examples[pid]}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {/* Custom CTA text */}
-                {ctaType === "custom" && (
-                  <div>
-                    <label className="block text-xs font-semibold mb-1.5">Custom CTA text</label>
-                    <input
-                      value={ctaCustom}
-                      onChange={(e) => setCtaCustom(e.target.value)}
-                      placeholder="e.g. DM me 'START' to join the waitlist"
-                      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
-                    />
+                {/* Manual mode — per-platform accordion */}
+                {ctaStrategy === "manual" && (
+                  <div className="space-y-3">
+                    <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>Configure each platform&apos;s CTA individually:</p>
+                    {Array.from(selectedPlatforms).map((pid) => {
+                      const pl = PLATFORMS.find(p => p.id === pid)!;
+                      const cfg: PlatformCfg = perPlatformCta[pid] ?? { ctaType: "automatic", ctaKeyword: "", ctaCustom: "" };
+                      const update = (patch: Partial<PlatformCfg>) =>
+                        setPerPlatformCta(prev => ({ ...prev, [pid]: { ...cfg, ...patch } }));
+                      const ctaTypes: { value: CtaType; label: string }[] = [
+                        { value: "automatic", label: "Auto" },
+                        ...(pl.hasLink ? [{ value: "link-in-bio" as CtaType, label: "Link in Bio" }] : []),
+                        { value: "comment-keyword", label: "Comment KW" },
+                        ...(pl.hasLink ? [{ value: "visit-store" as CtaType, label: "Visit Store" }] : []),
+                        { value: "follow-for-more", label: "Follow" },
+                        { value: "custom", label: "Custom" },
+                      ];
+                      return (
+                        <div key={pid} className={`rounded-xl border p-3.5 space-y-3 ${isDark ? "border-white/10" : "border-gray-200"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{pl.emoji}</span>
+                            <span className="text-xs font-semibold">{pl.label}</span>
+                            <span className={`text-[10px] ${isDark ? "text-gray-600" : "text-gray-400"}`}>· {pl.sub}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ctaTypes.map(ct => (
+                              <button
+                                key={ct.value}
+                                onClick={() => update({ ctaType: ct.value as CtaType })}
+                                className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-colors ${cfg.ctaType === ct.value ? "border-orange-500 bg-orange-500/10 text-orange-500" : isDark ? "border-white/10 text-gray-400 hover:border-white/30" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                              >
+                                {ct.label}
+                              </button>
+                            ))}
+                          </div>
+                          {cfg.ctaType === "comment-keyword" && (
+                            <input
+                              value={cfg.ctaKeyword}
+                              onChange={(e) => update({ ctaKeyword: e.target.value })}
+                              placeholder="Keyword e.g. GUIDE"
+                              className={`w-full rounded-lg border px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
+                            />
+                          )}
+                          {cfg.ctaType === "custom" && (
+                            <input
+                              value={cfg.ctaCustom}
+                              onChange={(e) => update({ ctaCustom: e.target.value })}
+                              placeholder="e.g. DM me 'START' to join"
+                              className={`w-full rounded-lg border px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-orange-500 ${isDark ? "bg-[#0F0F0F] border-white/10 text-white placeholder-gray-600" : "bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400"}`}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -854,6 +1013,112 @@ export function BulkContentDesigner() {
                 ))}
               </div>
 
+              {/* ── Platform Content Panel ── */}
+              {platformOutputs.length > 0 && (
+                <div className={`rounded-2xl border overflow-hidden ${cardCls}`}>
+                  {/* Header */}
+                  <div className={`px-5 py-4 border-b flex items-center gap-2 ${isDark ? "border-white/10" : "border-gray-100"}`}>
+                    <Sparkles className="w-4 h-4 text-orange-500" />
+                    <p className="text-sm font-semibold">Platform Content</p>
+                    <span className={`text-xs ml-auto ${isDark ? "text-gray-500" : "text-gray-400"}`}>AI-crafted per platform</span>
+                  </div>
+
+                  {/* Platform tabs */}
+                  <div className={`flex gap-1 px-4 pt-3 pb-0 overflow-x-auto border-b ${isDark ? "border-white/10" : "border-gray-100"}`}>
+                    {platformOutputs.map(po => {
+                      const pl = PLATFORMS.find(p => p.id === po.platformId);
+                      const isActive = activePlatformTab === po.platformId;
+                      return (
+                        <button
+                          key={po.platformId}
+                          onClick={() => setActivePlatformTab(po.platformId)}
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap border-b-2 transition-colors -mb-px ${
+                            isActive
+                              ? "border-orange-500 text-orange-500"
+                              : isDark
+                              ? "border-transparent text-gray-500 hover:text-gray-300"
+                              : "border-transparent text-gray-400 hover:text-gray-700"
+                          }`}
+                        >
+                          <span>{pl?.emoji}</span>
+                          <span>{pl?.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Active platform content */}
+                  {platformOutputs.filter(po => po.platformId === activePlatformTab).map(po => {
+                    const pl = PLATFORMS.find(p => p.id === po.platformId);
+                    return (
+                      <div key={po.platformId} className="p-5 space-y-5">
+                        {/* Caption */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className={`text-xs font-semibold ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                              {pl?.emoji} Caption for {pl?.label}
+                            </label>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(po.caption); }}
+                              className={`text-[10px] font-medium px-2 py-1 rounded-lg transition-colors ${isDark ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <div className={`rounded-xl p-3.5 text-sm leading-relaxed whitespace-pre-wrap ${isDark ? "bg-black/30 text-gray-300 border border-white/10" : "bg-gray-50 text-gray-700 border border-gray-200"}`}>
+                            {po.caption}
+                          </div>
+                        </div>
+
+                        {/* Hashtags */}
+                        {po.hashtags.length > 0 && (
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className={`text-xs font-semibold ${isDark ? "text-gray-400" : "text-gray-500"}`}>Hashtags ({po.hashtags.length})</label>
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(po.hashtags.join(" ")); }}
+                                className={`text-[10px] font-medium px-2 py-1 rounded-lg transition-colors ${isDark ? "bg-white/10 hover:bg-white/20 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+                              >
+                                Copy All
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {po.hashtags.map((tag, ti) => (
+                                <span key={ti} className={`text-xs px-2.5 py-1 rounded-full font-medium ${isDark ? "bg-orange-500/20 text-orange-300" : "bg-orange-100 text-orange-700"}`}>
+                                  {tag.startsWith("#") ? tag : `#${tag}`}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* CTA Slide preview */}
+                        {po.ctaSlide && po.ctaSlideDesign && (
+                          <div>
+                            <label className={`text-xs font-semibold block mb-2 ${isDark ? "text-gray-400" : "text-gray-500"}`}>CTA Slide</label>
+                            <div className="flex gap-4 items-start">
+                              <div style={{ width: Math.round(1080 * PREVIEW_SCALE), height: Math.round(canvasFormatHeight * PREVIEW_SCALE), overflow: "hidden", borderRadius: 8, flexShrink: 0 }}>
+                                <SlidePreview data={po.ctaSlideDesign} scale={PREVIEW_SCALE} />
+                              </div>
+                              <div className="flex-1 space-y-1.5 min-w-0">
+                                <div className={`rounded-lg p-2.5 text-xs ${isDark ? "bg-black/30 border border-white/10" : "bg-gray-50 border border-gray-200"}`}>
+                                  <p className={`text-[10px] font-semibold mb-1 ${isDark ? "text-gray-500" : "text-gray-400"}`}>HOOK</p>
+                                  <p className="font-semibold leading-tight">{po.ctaSlide.hook}</p>
+                                </div>
+                                <div className={`rounded-lg p-2.5 text-xs ${isDark ? "bg-black/30 border border-white/10" : "bg-gray-50 border border-gray-200"}`}>
+                                  <p className={`text-[10px] font-semibold mb-1 ${isDark ? "text-gray-500" : "text-gray-400"}`}>CTA</p>
+                                  <p className="leading-snug">{po.ctaSlide.cta}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {posts.length === 0 && (
                 <div className="text-center py-16">
                   <p className={`text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>All posts removed.</p>
@@ -876,7 +1141,7 @@ export function BulkContentDesigner() {
                 </p>
               </div>
               <div className="flex gap-3 justify-center flex-wrap">
-                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setPostDesigns([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); setUrlInput(""); setUrlScraped(null); setUrlScrapeError(null); setPlatform("instagram"); setCtaType("automatic"); setCtaKeyword(""); setCtaCustom(""); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
+                <Button variant="outline" onClick={() => { setStep(1); setPosts([]); setPostDesigns([]); setTopic(""); setSavedCount(0); setBundleId(null); setSelectedProductIds(new Set()); setUrlInput(""); setUrlScraped(null); setUrlScrapeError(null); setPlatformOutputs([]); setPerPlatformCta({}); setSelectedPlatforms(new Set<PlatformId>(["instagram"])); setCtaStrategy("ai"); }} className={isDark ? "border-white/10 text-gray-300 hover:text-white" : ""}>
                   <RefreshCw className="w-4 h-4 mr-2" /> New Batch
                 </Button>
                 {bundleId ? (

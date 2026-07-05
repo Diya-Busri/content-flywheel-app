@@ -4,6 +4,8 @@ import { fetchOpenAIWithRetry } from "@/lib/openai-with-retry";
 
 export const dynamic = "force-dynamic";
 
+// ── Style descriptions ─────────────────────────────────────────────────────────
+
 const STYLE_DESCRIPTIONS: Record<string, string> = {
   "minimal-luxury": "elegant, premium, aspirational — short punchy hooks, clean high-value insights",
   "dark-aesthetic": "bold, edgy, raw — intense hooks, unfiltered truths, strong attitude",
@@ -13,23 +15,82 @@ const STYLE_DESCRIPTIONS: Record<string, string> = {
   "modern-business": "professional, confident, authoritative — business insights, metrics, results-focused",
 };
 
-type ProductInput = {
-  title: string;
-  format: string;
-  niche?: string;
-  description?: string;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type ProductInput = { title: string; format: string; niche?: string; description?: string };
+type CtaType = "automatic" | "link-in-bio" | "comment-keyword" | "visit-store" | "follow-for-more" | "custom";
+type PlatformCfg = { ctaType: CtaType; ctaKeyword: string; ctaCustom: string };
+
+// ── Per-platform details ───────────────────────────────────────────────────────
+
+const PLATFORM_DETAILS: Record<string, {
+  label: string;
+  hasLink: boolean;
+  captionStyle: string;
+  hashtagCount: string;
+  ctaExample: string;
+}> = {
+  instagram: {
+    label: "Instagram",
+    hasLink: true,
+    captionStyle: "1–3 short punchy sentences (max 150 chars). Hook first, then the payoff. Emojis OK but not overdone.",
+    hashtagCount: "20–25 hashtags mixing broad, mid-tier, and niche",
+    ctaExample: "Tap the link in bio to grab yours 🔗",
+  },
+  "tiktok-link": {
+    label: "TikTok (Link in Bio)",
+    hasLink: true,
+    captionStyle: "Ultra-short, conversational, 1–2 sentences max. TikTok slang OK. No formal language.",
+    hashtagCount: "5–8 trending hashtags, max 3 niche ones",
+    ctaExample: "Link in bio 👆 go check it out rn",
+  },
+  "tiktok-comment": {
+    label: "TikTok (Comment Keyword)",
+    hasLink: false,
+    captionStyle: "Ultra-short caption with strong comment bait. Must ask viewers to comment a keyword to get the resource.",
+    hashtagCount: "5–8 trending hashtags",
+    ctaExample: "Comment 'GUIDE' below and I'll DM you the link instantly 💬",
+  },
+  linkedin: {
+    label: "LinkedIn",
+    hasLink: true,
+    captionStyle: "Professional and value-first. 2–3 sentences, no fluff. Opens with an insight or stat. No casual slang.",
+    hashtagCount: "3–5 professional industry hashtags",
+    ctaExample: "Full breakdown in the link below — worth 5 minutes of your time.",
+  },
+  pinterest: {
+    label: "Pinterest",
+    hasLink: true,
+    captionStyle: "Descriptive and SEO-rich. 2–3 sentences describing what the pin delivers. Keyword-rich, benefit-focused.",
+    hashtagCount: "10–15 SEO-focused keywords as hashtags",
+    ctaExample: "Save this pin + tap the link to get the full resource 📌",
+  },
+  facebook: {
+    label: "Facebook",
+    hasLink: true,
+    captionStyle: "Warm and community-driven. 2–3 sentences. Can ask a question to spark comments. Conversational tone.",
+    hashtagCount: "3–5 hashtags maximum",
+    ctaExample: "Drop a comment below or visit the link in bio to learn more 👇",
+  },
+  twitter: {
+    label: "X (Twitter)",
+    hasLink: true,
+    captionStyle: "Sharp and opinionated. Max 240 chars including spaces. Bold statement or contrarian take. Link at end.",
+    hashtagCount: "2–3 hashtags inline, not at the end",
+    ctaExample: "Full thread in the link ↓",
+  },
+  threads: {
+    label: "Threads",
+    hasLink: true,
+    captionStyle: "Conversational and reply-bait. 1–2 punchy sentences. End with a question or opinion to drive replies.",
+    hashtagCount: "3–5 hashtags or none",
+    ctaExample: "What do you think? Drop your take below 👇 (link in bio for the full thing)",
+  },
 };
 
-type Platform = "instagram" | "tiktok-link" | "tiktok-nolink";
-type CtaType = "automatic" | "link-in-bio" | "comment-keyword" | "visit-store" | "follow-for-more" | "custom";
+// ── Content prompt builders ────────────────────────────────────────────────────
 
-function buildTopicPrompt(
-  topic: string,
-  count: number,
-  styleDesc: string,
-  niche?: string,
-  tone?: string
-): string {
+function buildTopicPrompt(topic: string, count: number, styleDesc: string, niche?: string, tone?: string): string {
   const narrativeHint =
     count >= 6
       ? `Arrange the posts as a carousel narrative arc:
@@ -62,19 +123,10 @@ Rules:
 - Keep hooks under 12 words and highly specific`;
 }
 
-function buildProductsPrompt(
-  products: ProductInput[],
-  count: number,
-  styleDesc: string,
-  tone?: string
-): string {
+function buildProductsPrompt(products: ProductInput[], count: number, styleDesc: string, tone?: string): string {
   const productList = products
-    .map(
-      (p, i) =>
-        `${i + 1}. "${p.title}" (${p.format}${p.niche ? ` · ${p.niche}` : ""}${p.description ? ` · ${p.description.slice(0, 120)}` : ""})`
-    )
+    .map((p, i) => `${i + 1}. "${p.title}" (${p.format}${p.niche ? ` · ${p.niche}` : ""}${p.description ? ` · ${p.description.slice(0, 120)}` : ""})`)
     .join("\n");
-
   const perProduct = Math.ceil(count / products.length);
 
   return `You are a viral social media content strategist specialising in digital product promotion.
@@ -89,8 +141,8 @@ Spread the posts evenly across all products (roughly ${perProduct} posts per pro
 Each post must promote the specific product and drive sales/interest.
 
 Return a JSON object with a "posts" array. Each element must have EXACTLY these fields:
-- hook: A scroll-stopping opening line (5–12 words, ALL CAPS, no hashtags). Use a specific number, relatable situation, or surprising truth. E.g. "I WAS £200 OVERDRAWN EVERY MONTH UNTIL THIS". NEVER generic phrases like "TAKE CONTROL" or "UNLOCK YOUR POTENTIAL"
-- mainText: Sell the product — highlight the transformation, outcome, or key benefit (30–60 words, 2–3 sentences, no bullet points, no hashtags). Write naturally like a real person. NEVER mention the product name inside mainText.
+- hook: A scroll-stopping opening line (5–12 words, ALL CAPS, no hashtags). E.g. "I WAS £200 OVERDRAWN EVERY MONTH UNTIL THIS". NEVER generic phrases.
+- mainText: Sell the product — highlight the transformation, outcome, or key benefit (30–60 words, 2–3 sentences, no bullet points, no hashtags). Write naturally. NEVER mention the product name inside mainText.
 - cta: Slide nudge (3–8 words, e.g. "Swipe to see →" or "Keep reading ↓")
 - bgTheme: One of exactly: "dark", "light", "cream", "sage", "navy", "gradient-warm", "gradient-cool"
 - productTitle: The exact product title this post is for (from the list above)
@@ -100,68 +152,101 @@ Rules:
 - NEVER write the product name inside mainText
 - Write mainText as if a real creator is speaking — conversational, specific, human
 - Vary the angle for each post (problem-agitate-solve, social proof, curiosity, aspiration, urgency)
-- No filler phrases like "Imagine a life where" or "Say goodbye to"
-- Hooks must be scroll-stopping and specific`;
+- No filler phrases like "Imagine a life where" or "Say goodbye to"`;
 }
 
-function resolveCtaAction(
-  platform: Platform,
-  ctaType: CtaType,
-  ctaKeyword: string,
-  ctaCustom: string
-): string {
-  if (ctaType === "custom" && ctaCustom) return `The CTA action (use this verbatim or a very close variation): "${ctaCustom}"`;
-  if (ctaType === "follow-for-more") return `CTA action: Ask people to follow for more tips on this topic. E.g. "Follow so you never miss a post like this" or "Hit follow for more."`;
-  if (ctaType === "visit-store") return `CTA action: Direct people to visit the store in bio. E.g. "Shop the link in bio 🛍️" or "Visit our store — link in bio".`;
-  if (ctaType === "comment-keyword") {
-    const kw = ctaKeyword || "GUIDE";
-    return `CTA action: Ask people to comment the keyword "${kw}" to receive the link/resource. E.g. "Comment '${kw}' below and I'll DM you the link instantly."`;
-  }
-  // automatic or link-in-bio
-  if (platform === "tiktok-nolink") {
-    const kw = ctaKeyword || "LINK";
-    return `CTA action: This is TikTok without a link in bio. Ask people to comment a keyword to get the resource. E.g. "Comment '${kw}' below and I'll send you the link."`;
-  }
-  return `CTA action: Direct people to the link in bio. E.g. "Tap the link in bio ↗" or "Link in bio — grab yours now."`;
-}
+// ── CTA prompt builders ────────────────────────────────────────────────────────
 
-function buildCtaPrompt(
+function buildAiPlatformPrompt(
+  platformId: string,
   topic: string,
-  platform: Platform,
-  ctaType: CtaType,
-  ctaKeyword: string,
-  ctaCustom: string,
   styleDesc: string,
   tone?: string
 ): string {
-  const platformLabel = {
-    instagram: "Instagram",
-    "tiktok-link": "TikTok (with link in bio enabled)",
-    "tiktok-nolink": "TikTok (no link in bio — comment-only strategy)",
-  }[platform];
-
-  const ctaAction = resolveCtaAction(platform, ctaType, ctaKeyword, ctaCustom);
-
-  return `You are a social media CTA copywriter specialised in ${platformLabel}.
+  const pd = PLATFORM_DETAILS[platformId] ?? PLATFORM_DETAILS.instagram;
+  return `You are a social media CTA copywriter specialised in ${pd.label}.
 
 The carousel was about: "${topic}"
 Style/Aesthetic: ${styleDesc}
 Tone: ${tone ?? "Inspirational"}
 
-Generate ONE powerful closing CTA slide for this carousel.
-${ctaAction}
+Generate:
+1. ONE powerful closing CTA slide for this carousel
+2. A platform-optimised caption
+3. Platform-appropriate hashtags
+
+Caption style: ${pd.captionStyle}
+Hashtags: ${pd.hashtagCount}
+CTA example: ${pd.ctaExample}
 
 Return a JSON object with EXACTLY these fields:
-- hook: A short punchy headline (4–8 words, ALL CAPS or Title Case). This is the main focal text on the slide. Make it feel like a natural conclusion. E.g. "READY TO GET STARTED?" or "Don't Let This Slide By"
-- mainText: 1–2 supporting sentences (15–35 words) that reinforce the carousel's value and set up the call to action. Warm, human, direct.
-- cta: The specific call to action text (5–15 words). This is what the viewer should DO — crystal-clear and platform-specific.
-- bgTheme: One of: "dark", "gradient-warm", "gradient-cool" (pick one that creates urgency or energy)
+- ctaSlide: object with fields:
+  - hook: Short punchy headline (4–8 words, ALL CAPS or Title Case). Natural conclusion. E.g. "READY TO GET STARTED?"
+  - mainText: 1–2 supporting sentences (15–35 words) bridging carousel to action. Warm, human, direct.
+  - cta: The specific call to action text (5–15 words). Crystal-clear and platform-specific for ${pd.label}.
+  - bgTheme: One of: "dark", "gradient-warm", "gradient-cool"
+- caption: string — platform-optimised caption following the style above
+- hashtags: string[] — array of hashtag strings (with # prefix) following count guidance above
 
 Important:
-- The hook should feel like a natural conclusion to the carousel
-- The mainText bridges the carousel content to the action
-- The cta must match the platform strategy described above`;
+- ctaSlide.hook should feel like a natural conclusion to the carousel
+- ctaSlide.cta must match ${pd.label} best practices (example: ${pd.ctaExample})
+- caption must be optimised for ${pd.label} engagement and algorithm
+- Do NOT include hashtags inside the caption — they go in the hashtags array only`;
 }
+
+function buildManualPlatformPrompt(
+  platformId: string,
+  topic: string,
+  styleDesc: string,
+  cfg: PlatformCfg,
+  tone?: string
+): string {
+  const pd = PLATFORM_DETAILS[platformId] ?? PLATFORM_DETAILS.instagram;
+
+  let ctaAction = "";
+  if (cfg.ctaType === "custom" && cfg.ctaCustom) {
+    ctaAction = `The CTA action (use this verbatim or a very close variation): "${cfg.ctaCustom}"`;
+  } else if (cfg.ctaType === "follow-for-more") {
+    ctaAction = `CTA action: Ask people to follow for more tips. E.g. "Follow so you never miss a post like this"`;
+  } else if (cfg.ctaType === "visit-store") {
+    ctaAction = `CTA action: Direct people to visit the store in bio. E.g. "Shop the link in bio 🛍️"`;
+  } else if (cfg.ctaType === "comment-keyword") {
+    const kw = cfg.ctaKeyword || "GUIDE";
+    ctaAction = `CTA action: Ask people to comment the keyword "${kw}" to receive the link. E.g. "Comment '${kw}' below and I'll DM you the link instantly."`;
+  } else if (!pd.hasLink) {
+    const kw = cfg.ctaKeyword || "LINK";
+    ctaAction = `CTA action: No link in bio. Ask people to comment a keyword. E.g. "Comment '${kw}' below and I'll send you the link."`;
+  } else {
+    ctaAction = `CTA action: Direct people to the link in bio. E.g. "${pd.ctaExample}"`;
+  }
+
+  return `You are a social media CTA copywriter specialised in ${pd.label}.
+
+The carousel was about: "${topic}"
+Style/Aesthetic: ${styleDesc}
+Tone: ${tone ?? "Inspirational"}
+
+Generate:
+1. ONE powerful closing CTA slide
+2. A platform-optimised caption
+3. Platform-appropriate hashtags
+
+${ctaAction}
+Caption style: ${pd.captionStyle}
+Hashtags: ${pd.hashtagCount}
+
+Return a JSON object with EXACTLY these fields:
+- ctaSlide: object with fields:
+  - hook: Short punchy headline (4–8 words, ALL CAPS or Title Case). Natural conclusion.
+  - mainText: 1–2 supporting sentences (15–35 words). Warm, human, direct.
+  - cta: The specific call to action text (5–15 words). Crystal-clear for ${pd.label}.
+  - bgTheme: One of: "dark", "gradient-warm", "gradient-cool"
+- caption: string — platform-optimised caption
+- hashtags: string[] — array of hashtag strings (with # prefix)`;
+}
+
+// ── POST handler ───────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
   const { userId } = await auth();
@@ -170,19 +255,17 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "AI not configured" }, { status: 503 });
 
-  const body = await request
-    .json()
-    .catch(() => ({})) as {
+  const body = await request.json().catch(() => ({})) as {
     topic?: string;
     count?: number;
     style?: string;
     niche?: string;
     tone?: string;
     products?: ProductInput[];
-    platform?: Platform;
-    ctaType?: CtaType;
-    ctaKeyword?: string;
-    ctaCustom?: string;
+    // New multi-platform fields
+    platforms?: string[];
+    ctaStrategy?: "ai" | "manual";
+    perPlatformCta?: Record<string, PlatformCfg>;
   };
 
   const count = Math.min(Math.max(Number(body.count) || 10, 5), 30);
@@ -190,40 +273,33 @@ export async function POST(request: Request) {
   const styleDesc = STYLE_DESCRIPTIONS[style] ?? "engaging and professional";
   const niche = typeof body.niche === "string" ? body.niche.trim() : undefined;
   const tone = typeof body.tone === "string" ? body.tone : undefined;
-  const products =
-    Array.isArray(body.products) && body.products.length > 0 ? body.products : null;
+  const products = Array.isArray(body.products) && body.products.length > 0 ? body.products : null;
   const topic = typeof body.topic === "string" ? body.topic.trim() : "";
-  const platform: Platform = (body.platform as Platform) ?? "instagram";
-  const ctaType: CtaType = (body.ctaType as CtaType) ?? "automatic";
-  const ctaKeyword = typeof body.ctaKeyword === "string" ? body.ctaKeyword.trim() : "";
-  const ctaCustom = typeof body.ctaCustom === "string" ? body.ctaCustom.trim() : "";
+  const platforms = Array.isArray(body.platforms) && body.platforms.length > 0 ? body.platforms : ["instagram"];
+  const ctaStrategy = body.ctaStrategy === "manual" ? "manual" : "ai";
+  const perPlatformCta: Record<string, PlatformCfg> = body.perPlatformCta ?? {};
 
   if (!products && !topic)
     return NextResponse.json({ error: "topic or products required" }, { status: 400 });
 
+  const topicForCta = products ? products.map((p) => p.title).join(", ") : topic;
   const contentPrompt = products
     ? buildProductsPrompt(products, count, styleDesc, tone)
     : buildTopicPrompt(topic, count, styleDesc, niche, tone);
 
-  const topicForCta = products ? products.map((p) => p.title).join(", ") : topic;
-  const ctaPrompt = buildCtaPrompt(
-    topicForCta,
-    platform,
-    ctaType,
-    ctaKeyword,
-    ctaCustom,
-    styleDesc,
-    tone
-  );
+  // Build per-platform CTA prompts
+  const platformPrompts = platforms.map((pid) => {
+    if (ctaStrategy === "manual" && perPlatformCta[pid]) {
+      return buildManualPlatformPrompt(pid, topicForCta, styleDesc, perPlatformCta[pid], tone);
+    }
+    return buildAiPlatformPrompt(pid, topicForCta, styleDesc, tone);
+  });
 
-  // Fire both AI calls in parallel
-  const [contentRes, ctaRes] = await Promise.all([
+  // Fire all AI calls in parallel: 1 content + N platform CTA calls
+  const allPromises = [
     fetchOpenAIWithRetry("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: contentPrompt }],
@@ -232,36 +308,31 @@ export async function POST(request: Request) {
         max_tokens: 6000,
       }),
     }),
-    fetchOpenAIWithRetry("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: ctaPrompt }],
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 600,
-      }),
-    }),
-  ]);
+    ...platformPrompts.map((prompt) =>
+      fetchOpenAIWithRetry("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 900,
+        }),
+      })
+    ),
+  ];
+
+  const [contentRes, ...platformReses] = await Promise.all(allPromises);
 
   if (!contentRes.ok) {
     const err = await contentRes.text();
-    return NextResponse.json(
-      { error: "AI request failed", details: err.slice(0, 200) },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: "AI request failed", details: err.slice(0, 200) }, { status: 502 });
   }
 
-  const contentData = (await contentRes.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
+  const contentData = (await contentRes.json()) as { choices?: { message?: { content?: string } }[] };
   const contentText = contentData.choices?.[0]?.message?.content;
-  if (!contentText)
-    return NextResponse.json({ error: "No AI response" }, { status: 502 });
+  if (!contentText) return NextResponse.json({ error: "No AI response" }, { status: 502 });
 
   let posts: unknown[] = [];
   try {
@@ -271,23 +342,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
   }
 
-  // Parse CTA slide — fail gracefully if it errors
-  let ctaPost: Record<string, unknown> | null = null;
-  if (ctaRes.ok) {
-    try {
-      const ctaData = (await ctaRes.json()) as {
-        choices?: { message?: { content?: string } }[];
-      };
-      const ctaText = ctaData.choices?.[0]?.message?.content;
-      if (ctaText) {
-        ctaPost = JSON.parse(ctaText) as Record<string, unknown>;
-        ctaPost.isCta = true;
+  // Parse per-platform outputs — fail gracefully per platform
+  const platformOutputs: Array<{
+    platformId: string;
+    caption: string;
+    hashtags: string[];
+    ctaSlide: Record<string, unknown> | null;
+  }> = [];
+
+  for (let i = 0; i < platforms.length; i++) {
+    const pid = platforms[i];
+    const res = platformReses[i];
+    let caption = "";
+    let hashtags: string[] = [];
+    let ctaSlide: Record<string, unknown> | null = null;
+
+    if (res && res.ok) {
+      try {
+        const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+        const text = data.choices?.[0]?.message?.content;
+        if (text) {
+          const parsed = JSON.parse(text) as {
+            ctaSlide?: Record<string, unknown>;
+            caption?: string;
+            hashtags?: string[];
+          };
+          ctaSlide = parsed.ctaSlide ? { ...parsed.ctaSlide, isCta: true } : null;
+          caption = typeof parsed.caption === "string" ? parsed.caption : "";
+          hashtags = Array.isArray(parsed.hashtags) ? parsed.hashtags.filter((h): h is string => typeof h === "string") : [];
+        }
+      } catch {
+        // Platform CTA failed — include platform with empty values
       }
-    } catch {
-      // CTA generation failed — carousel is still usable without it
     }
+
+    platformOutputs.push({ platformId: pid, caption, hashtags, ctaSlide });
   }
 
-  const allPosts = ctaPost ? [...posts, ctaPost] : posts;
-  return NextResponse.json({ posts: allPosts });
+  return NextResponse.json({ posts, platformOutputs });
 }
