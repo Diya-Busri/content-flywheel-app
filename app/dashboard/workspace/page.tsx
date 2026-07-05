@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Plus, Check, GripVertical, X, ChevronDown, Bookmark, BookmarkCheck,
   Calendar, Tag, StickyNote, Target, ListTodo, ChevronLeft, ChevronRight,
@@ -1147,6 +1147,7 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
       const parsed = n ? (JSON.parse(n) as Note[]) : [];
       // Check for note_from_research prefill (from Research tab)
       let prefillNote: Note | null = null;
+      let openId: string | null = null;
       try {
         const raw = sessionStorage.getItem("note_from_research");
         if (raw) {
@@ -1155,8 +1156,22 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
           sessionStorage.removeItem("note_from_research");
         }
       } catch {}
+      // Check for cf_open_note (from Global Search — open a specific note)
+      if (!prefillNote) {
+        try {
+          const target = sessionStorage.getItem("cf_open_note");
+          if (target) { openId = target; sessionStorage.removeItem("cf_open_note"); }
+        } catch {}
+      }
       const all = prefillNote ? [prefillNote, ...parsed] : parsed;
-      if (all.length > 0) { setNotes(all); setActiveId(all[0].id); }
+      if (all.length > 0) {
+        setNotes(all);
+        if (openId && all.some(note => note.id === openId)) {
+          setActiveId(openId);
+        } else {
+          setActiveId(all[0].id);
+        }
+      }
     } catch {}
   }, []);
 
@@ -2858,6 +2873,233 @@ function ExperimentsTab() {
 // GLOBAL KNOWLEDGE BASE SEARCH
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── GlobalWorkspaceSearch ───────────────────────────────────────────────────
+
+interface WorkspaceSearchResult {
+  id: string;
+  type: "note" | "task" | "goal" | "product";
+  title: string;
+  preview?: string;
+  badge?: string;
+  onClick: () => void;
+}
+
+const SEARCH_TYPE_META: Record<
+  WorkspaceSearchResult["type"],
+  { label: string; icon: React.ComponentType<{ className?: string }>; color: string }
+> = {
+  note:    { label: "Notes",    icon: StickyNote, color: "text-amber-500" },
+  task:    { label: "Tasks",    icon: ListTodo,   color: "text-blue-500" },
+  goal:    { label: "Goals",    icon: Target,     color: "text-green-500" },
+  product: { label: "Products", icon: Package,    color: "text-purple-500" },
+};
+
+function GlobalWorkspaceSearch({
+  onClose,
+  onTabChange,
+}: {
+  onClose: () => void;
+  onTabChange: (tab: WorkspaceTab) => void;
+}) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+  const [products, setProducts] = useState<{ id: string; title: string; status: string }[]>([]);
+
+  // Load local data once on mount (component mounts fresh each time modal opens)
+  const [localNotes] = useState<Note[]>(() => {
+    try { return JSON.parse(localStorage.getItem("cf_notes") ?? "[]") as Note[]; } catch { return []; }
+  });
+  const [localTodos] = useState<Todo[]>(() => {
+    try { return JSON.parse(localStorage.getItem("cf_todos") ?? "[]") as Todo[]; } catch { return []; }
+  });
+  const [localGoals] = useState<Goal[]>(() => {
+    try { return JSON.parse(localStorage.getItem("cf_goals") ?? "[]") as Goal[]; } catch { return []; }
+  });
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    fetch("/api/products")
+      .then(r => r.ok ? r.json() : { products: [] })
+      .then((data: { products?: { id: string; title: string; status: string }[] }) =>
+        setProducts(data.products ?? []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const q = query.trim().toLowerCase();
+
+  const results: WorkspaceSearchResult[] = useMemo(() => {
+    const res: WorkspaceSearchResult[] = [];
+
+    // Notes — search title + body
+    localNotes
+      .filter(n => !q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
+      .slice(0, 5)
+      .forEach(n => {
+        const bodyPreview = n.body.replace(/[#*`>\[\]_]/g, "").trim().slice(0, 80);
+        res.push({
+          id: n.id, type: "note",
+          title: n.title || "Untitled Note",
+          preview: bodyPreview || undefined,
+          badge: n.tag,
+          onClick: () => {
+            try { sessionStorage.setItem("cf_open_note", n.id); } catch {}
+            onTabChange("notes");
+            onClose();
+          },
+        });
+      });
+
+    // Tasks — active only, search text
+    localTodos
+      .filter(t => !t.completed && (!q || t.text.toLowerCase().includes(q)))
+      .slice(0, 5)
+      .forEach(t => res.push({
+        id: t.id, type: "task",
+        title: t.text,
+        badge: t.priority,
+        onClick: () => { onTabChange("todos"); onClose(); },
+      }));
+
+    // Goals
+    localGoals
+      .filter(g => !q || g.label.toLowerCase().includes(q))
+      .slice(0, 3)
+      .forEach(g => res.push({
+        id: g.id, type: "goal",
+        title: g.label,
+        preview: `${g.current} / ${g.target} ${g.unit}`,
+        onClick: () => { onTabChange("goals"); onClose(); },
+      }));
+
+    // Products
+    products
+      .filter(p => !q || p.title.toLowerCase().includes(q))
+      .slice(0, 4)
+      .forEach(p => res.push({
+        id: p.id, type: "product",
+        title: p.title,
+        badge: p.status,
+        onClick: () => { router.push("/dashboard/library"); onClose(); },
+      }));
+
+    return res;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, localNotes, localTodos, localGoals, products]);
+
+  // Group by type in a fixed display order
+  const typeOrder: WorkspaceSearchResult["type"][] = ["note", "task", "goal", "product"];
+  const groups = results.reduce<Partial<Record<WorkspaceSearchResult["type"], WorkspaceSearchResult[]>>>(
+    (acc, r) => { (acc[r.type] ??= []).push(r); return acc; },
+    {}
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl bg-background border border-border rounded-2xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Search bar */}
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search notes, tasks, goals, products…"
+            className="flex-1 text-sm bg-transparent focus:outline-none text-foreground placeholder:text-muted-foreground"
+          />
+          <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground">Esc</kbd>
+        </div>
+
+        {/* Results */}
+        <div className="max-h-[62vh] overflow-y-auto">
+          {results.length === 0 ? (
+            <div className="py-12 text-center">
+              <Search className="w-8 h-8 text-muted-foreground/20 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">
+                {q ? `No results for "${query}"` : "Start typing to search your workspace…"}
+              </p>
+              {!q && (localNotes.length + localTodos.length + localGoals.length === 0) && (
+                <p className="text-xs text-muted-foreground/60 mt-1">Add notes, tasks, and goals to get started</p>
+              )}
+            </div>
+          ) : (
+            <div className="p-2 space-y-2">
+              {typeOrder
+                .filter(type => groups[type] && groups[type]!.length > 0)
+                .map(type => {
+                  const meta = SEARCH_TYPE_META[type];
+                  const Icon = meta.icon;
+                  const items = groups[type]!;
+                  return (
+                    <div key={type}>
+                      {/* Section header */}
+                      <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5">
+                        <Icon className={cn("w-3 h-3", meta.color)} />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                          {meta.label}
+                        </span>
+                        <span className="ml-auto text-[10px] text-muted-foreground">{items.length}</span>
+                      </div>
+
+                      {/* Items */}
+                      <div className="space-y-0.5">
+                        {items.map(result => (
+                          <button
+                            key={result.id}
+                            onClick={result.onClick}
+                            className="w-full flex items-start gap-3 px-3 py-2.5 rounded-xl hover:bg-accent transition-colors text-left group"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground group-hover:text-orange-500 transition-colors truncate">
+                                {result.title}
+                              </p>
+                              {result.preview && (
+                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                  {result.preview}
+                                </p>
+                              )}
+                            </div>
+                            {result.badge && (
+                              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0 capitalize mt-0.5">
+                                {result.badge}
+                              </span>
+                            )}
+                            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-orange-400 shrink-0 mt-0.5 transition-colors" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border px-4 py-2 flex items-center gap-4 text-[10px] text-muted-foreground/50">
+          <span>↵ Open</span>
+          <span>Esc Close</span>
+          <span className="ml-auto">{results.length} result{results.length !== 1 ? "s" : ""}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── GlobalKBSearch ───────────────────────────────────────────────────────────
+
 interface GlobalKBSearchProps {
   onClose: () => void;
   onTabChange: (tab: WorkspaceTab) => void;
@@ -3013,7 +3255,8 @@ function GlobalKBSearch({ onClose, onTabChange }: GlobalKBSearchProps) {
 export default function WorkspacePage() {
   const isAdmin = useWorkspaceAdmin();
   const [tab, setTab] = useState<WorkspaceTab>("dashboard");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);    // Global workspace search (all users)
+  const [kbSearchOpen, setKbSearchOpen] = useState(false); // KB search (admins only)
 
   const tabDesc: Record<WorkspaceTab, string> = {
     dashboard:            "Your execution hub — tasks, goals, projects and AI recommendations",
@@ -3030,23 +3273,29 @@ export default function WorkspacePage() {
     "experiments":        "Hypotheses, active tests, and documented results",
   };
 
-  // Cmd+K / Ctrl+K to open search
+  // Cmd+K / Ctrl+K — global workspace search for all users
   useEffect(() => {
-    if (!isAdmin) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(v => !v); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isAdmin]);
+  }, []);
 
   return (
     <div className="p-6 max-w-none">
-      {/* Global KB Search modal */}
-      {searchOpen && isAdmin && (
-        <GlobalKBSearch
+      {/* Global Workspace Search — all users */}
+      {searchOpen && (
+        <GlobalWorkspaceSearch
           onClose={() => setSearchOpen(false)}
           onTabChange={t => { setTab(t); setSearchOpen(false); }}
+        />
+      )}
+      {/* Knowledge Base Search — admins only */}
+      {kbSearchOpen && isAdmin && (
+        <GlobalKBSearch
+          onClose={() => setKbSearchOpen(false)}
+          onTabChange={t => { setTab(t); setKbSearchOpen(false); }}
         />
       )}
 
@@ -3058,16 +3307,25 @@ export default function WorkspacePage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[tab]}</p>
         </div>
-        {isAdmin && (
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-all bg-background shrink-0"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-all bg-background"
           >
             <Search className="w-3.5 h-3.5" />
-            Search knowledge base
+            Search workspace
             <kbd className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-muted">⌘K</kbd>
           </button>
-        )}
+          {isAdmin && (
+            <button
+              onClick={() => setKbSearchOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-all bg-background"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Knowledge Base
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tab nav */}
