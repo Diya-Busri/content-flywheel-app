@@ -193,9 +193,9 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
         <FeatureShowcase />
       </div>
 
-      {/* ─── WHAT YOU GET + REVIEWS ─── */}
+      {/* ─── WHAT YOU GET + BETA TRUST ─── */}
       <div className="border-t border-white/[0.05]">
-        <StatsAndProof reviews={reviews} />
+        <StatsAndProof />
       </div>
 
       {/* ─── PRICING ─── */}

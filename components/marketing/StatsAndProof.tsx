@@ -3,8 +3,8 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import {
-  Sparkles, Store, Megaphone, Mail, Users, Star,
-  ShieldCheck, CreditCard, Repeat, Package,
+  Sparkles, Store, Megaphone, Mail,
+  ShieldCheck, CreditCard, Repeat, Package, ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -103,36 +103,36 @@ const VALUE_CARDS = [
   },
 ];
 
-/* ─── Real review card ─── */
-function ReviewCard({ review, delay }: {
-  review: { text: string; name: string; rating?: number };
-  delay: number;
-}) {
-  const rating = review.rating ?? 5;
-  return (
-    <FadeUp delay={delay} className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 hover:border-white/20 transition-colors">
-      <div className="flex gap-0.5 mb-4">
-        {[...Array(Math.min(5, Math.max(1, rating)))].map((_, i) => (
-          <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-        ))}
-      </div>
-      <p className="text-sm text-white/65 leading-relaxed mb-5">&ldquo;{review.text}&rdquo;</p>
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-[11px] font-bold text-orange-400">
-          {review.name.slice(0, 2).toUpperCase()}
-        </div>
-        <p className="text-sm font-bold text-white">{review.name}</p>
-      </div>
-    </FadeUp>
-  );
-}
+/* ─── Beta trust cards ─── */
+const BETA_CARDS = [
+  {
+    emoji: "🚀",
+    title: "Early Access",
+    desc: "Join before public launch and help shape the product. Your feedback directly influences what gets built next.",
+    border: "border-orange-500/20",
+    bg: "bg-orange-500/[0.04]",
+    glow: "hover:border-orange-500/40",
+  },
+  {
+    emoji: "💬",
+    title: "Direct Founder Feedback",
+    desc: "Every piece of feedback is reviewed personally. If something doesn't work, we want to know — and we'll fix it.",
+    border: "border-blue-500/20",
+    bg: "bg-blue-500/[0.04]",
+    glow: "hover:border-blue-500/40",
+  },
+  {
+    emoji: "⚡",
+    title: "Weekly Improvements",
+    desc: "New features, fixes and improvements are shipped regularly throughout the beta. The product improves every week.",
+    border: "border-purple-500/20",
+    bg: "bg-purple-500/[0.04]",
+    glow: "hover:border-purple-500/40",
+  },
+];
 
 /* ─── Main export ─── */
-export function StatsAndProof({
-  reviews = [],
-}: {
-  reviews?: { text: string; name: string; rating?: number }[];
-}) {
+export function StatsAndProof() {
   return (
     <>
       {/* ─── Value proposition grid ─── */}
@@ -172,53 +172,60 @@ export function StatsAndProof({
         </div>
       </section>
 
-      {/* ─── Reviews — real only, or honest beta callout ─── */}
-      {reviews.length > 0 ? (
-        <section className="py-24 lg:py-32 border-t border-white/[0.05]">
-          <div className="max-w-7xl mx-auto px-6">
-            <FadeUp className="text-center mb-16">
-              <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">From our users</p>
-              <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-                What creators are{" "}
-                <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-                  saying
-                </span>
-              </h2>
-            </FadeUp>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {reviews.map((r, i) => (
-                <ReviewCard key={`${r.name}-${i}`} review={r} delay={i * 0.07} />
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section className="py-24 lg:py-32 border-t border-white/[0.05]">
-          <div className="max-w-3xl mx-auto px-6">
-            <FadeUp>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-10 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-orange-500/15 border border-orange-500/20 flex items-center justify-center mx-auto mb-6">
-                  <Sparkles className="w-7 h-7 text-orange-400" />
-                </div>
-                <h3 className="text-2xl font-extrabold text-white mb-3">We&apos;re in early access</h3>
-                <p className="text-white/50 leading-relaxed max-w-md mx-auto mb-2">
-                  Content Flywheel is a new product. We&apos;re building it in public and improving it every week based on real feedback.
-                </p>
-                <p className="text-white/40 text-sm leading-relaxed max-w-md mx-auto mb-8">
-                  The 7-day free trial means you can test every feature yourself — no commitment required — and decide if it&apos;s right for you.
-                </p>
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center gap-2 rounded-full bg-orange-500 hover:bg-orange-400 px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition-colors"
+      {/* ─── Beta trust section ─── */}
+      <section className="py-24 lg:py-32 border-t border-white/[0.05] bg-white/[0.01]">
+        <div className="max-w-5xl mx-auto px-6">
+
+          {/* Heading */}
+          <FadeUp className="text-center mb-14">
+            <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">Beta programme</p>
+            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+              Built with our{" "}
+              <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
+                first creators
+              </span>
+            </h2>
+            <p className="mt-5 text-lg text-white/45 max-w-2xl mx-auto leading-relaxed">
+              Content Flywheel is currently in beta. We&apos;re working closely with our first creators to improve every part of the platform based on real feedback.
+            </p>
+          </FadeUp>
+
+          {/* Three cards */}
+          <div className="grid sm:grid-cols-3 gap-5 mb-14">
+            {BETA_CARDS.map((card, i) => (
+              <FadeUp key={card.title} delay={i * 0.1}>
+                <motion.div
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.2 }}
+                  className={`relative rounded-2xl border ${card.border} ${card.bg} ${card.glow} p-7 h-full transition-colors overflow-hidden`}
                 >
-                  Start your free trial
-                </Link>
-                <p className="mt-3 text-xs text-white/20">No credit card required</p>
-              </div>
-            </FadeUp>
+                  {/* Subtle top glow line */}
+                  <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+                  <div className="text-3xl mb-5 select-none">{card.emoji}</div>
+                  <h3 className="text-base font-bold text-white mb-2">{card.title}</h3>
+                  <p className="text-sm text-white/45 leading-relaxed">{card.desc}</p>
+                </motion.div>
+              </FadeUp>
+            ))}
           </div>
-        </section>
-      )}
+
+          {/* CTA */}
+          <FadeUp delay={0.3} className="text-center">
+            <Link
+              href="/signup"
+              className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-9 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/25 transition hover:shadow-xl hover:shadow-orange-500/35 hover:scale-105"
+            >
+              Start your free 7-day trial
+              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </Link>
+            <p className="mt-3 text-sm text-white/25">
+              Become one of the first creators using Content Flywheel.
+            </p>
+          </FadeUp>
+
+        </div>
+      </section>
     </>
   );
 }
