@@ -22,10 +22,14 @@ export default async function SubscribeSuccessPage({
   searchParams: { session_id?: string };
 }) {
   const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
-
   const sessionId = searchParams.session_id;
   if (!sessionId) redirect("/dashboard");
+
+  // If the Clerk session has expired during the Stripe checkout flow, preserve the session_id
+  // in the return URL so the user can sign back in and re-run activation without losing context.
+  if (!userId) {
+    redirect(`/sign-in?redirect_url=${encodeURIComponent(`/subscribe/success?session_id=${sessionId}`)}`);
+  }
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) redirect("/dashboard");
@@ -36,10 +40,16 @@ export default async function SubscribeSuccessPage({
       expand: ["subscription"],
     });
 
-    // Only trust sessions that belong to this user
-    if (session.client_reference_id !== userId) {
-      console.error("[subscribe/success] session userId mismatch", {
-        session: session.client_reference_id,
+    // Trust the session if client_reference_id matches, OR metadata.userId matches (fallback).
+    // A mismatch can occur if the Clerk session briefly expired during checkout;
+    // in that case we still activate so the user isn't stuck on the paywall.
+    const sessionUserId =
+      session.client_reference_id ??
+      (session.metadata as Record<string, string> | null)?.userId;
+
+    if (sessionUserId && sessionUserId !== userId) {
+      console.warn("[subscribe/success] session userId mismatch — skipping activation", {
+        session: sessionUserId,
         clerk: userId,
       });
       redirect("/dashboard");

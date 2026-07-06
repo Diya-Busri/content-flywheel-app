@@ -9,9 +9,9 @@ import HeroSection from "@/components/marketing/HeroSection";
 import { LandingAICoach } from "@/components/marketing/LandingAICoach";
 
 export const metadata: Metadata = {
-  title: "Content Flywheel — Create, Sell & Market Digital Products with AI",
+  title: "Content Flywheel — Create & Market Digital Products with AI",
   description:
-    "Build digital products with AI, sell from your own store, and grow your audience — all from one platform. No third-party platforms needed.",
+    "Build ebooks, planners and templates with AI. Create promotional videos and plan your content strategy — all from one platform.",
 };
 
 async function getPublicReviews(): Promise<{ text: string; name: string; rating?: number }[]> {
@@ -45,120 +45,43 @@ export default async function HomePage() {
       <LandingAnimations reviews={reviews} />
       <LandingAICoach />
 
-      {/* Enhanced footer */}
-      <footer className="border-t border-white/10 bg-[#080808]">
-        <div className="mx-auto max-w-7xl px-6 py-16">
-          <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-5">
-            {/* Brand column */}
-            <div className="lg:col-span-2">
-              <span className="text-xl font-extrabold text-white">
+      {/* Static footer — server rendered */}
+      <footer className="border-t border-white/10 bg-black">
+        <div className="mx-auto max-w-6xl px-6 py-14">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="col-span-1 sm:col-span-2 lg:col-span-1">
+              <span className="text-lg font-extrabold text-white">
                 Content<span className="text-orange-500">Flywheel</span>
               </span>
               <p className="mt-3 text-sm text-white/40 max-w-xs leading-relaxed">
-                The all-in-one platform for creators who want to build, sell, and market digital products with AI — without the faff of five separate tools.
+                The all-in-one platform for creators who want to build and market digital products without the faff.
               </p>
-              {/* Social links */}
-              <div className="flex items-center gap-3 mt-6">
-                {[
-                  { label: "Twitter / X", href: "https://twitter.com/contentflywheel", icon: "𝕏" },
-                  { label: "TikTok", href: "https://tiktok.com/@contentflywheel", icon: "T" },
-                  { label: "Instagram", href: "https://instagram.com/contentflywheel", icon: "IG" },
-                ].map((s) => (
-                  <a
-                    key={s.label}
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={s.label}
-                    className="w-9 h-9 rounded-xl border border-white/10 bg-white/[0.04] flex items-center justify-center text-xs font-bold text-white/40 hover:text-white hover:border-white/20 hover:bg-white/[0.08] transition-all"
-                  >
-                    {s.icon}
-                  </a>
-                ))}
-              </div>
             </div>
-
-            {/* Product links */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-5">Product</h4>
-              <ul className="space-y-3 text-sm">
-                {[
-                  ["Features", "/#features"],
-                  ["How it Works", "/#journey"],
-                  ["Pricing", "/pricing"],
-                  ["Marketplace", "/marketplace"],
-                  ["Blog", "/blog/faceless-creator"],
-                ].map(([label, href]) => (
-                  <li key={label}>
-                    <Link href={href} className="text-white/45 hover:text-white transition-colors">
-                      {label}
-                    </Link>
-                  </li>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-4">Product</h4>
+              <ul className="space-y-2.5 text-sm">
+                {[["Features", "/#features"], ["How it Works", "/#how-it-works"], ["Pricing", "/pricing"]].map(([label, href]) => (
+                  <li key={label}><Link href={href} className="text-white/50 hover:text-white transition-colors">{label}</Link></li>
                 ))}
               </ul>
             </div>
-
-            {/* Support links */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-5">Support</h4>
-              <ul className="space-y-3 text-sm">
-                {[
-                  ["FAQ", "/#faq"],
-                  ["Contact Us", "mailto:contentflywheel@gmail.com"],
-                  ["Selling Guide", "/dashboard/digital-products/selling-guide"],
-                  ["Affiliate Programme", "/dashboard/affiliates"],
-                ].map(([label, href]) => (
-                  <li key={label}>
-                    <Link href={href} className="text-white/45 hover:text-white transition-colors">
-                      {label}
-                    </Link>
-                  </li>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-4">Legal</h4>
+              <ul className="space-y-2.5 text-sm">
+                {[["Terms", "/terms"], ["Privacy", "/privacy"], ["Refund Policy", "/refund-policy"]].map(([label, href]) => (
+                  <li key={label}><Link href={href} className="text-white/50 hover:text-white transition-colors">{label}</Link></li>
                 ))}
               </ul>
             </div>
-
-            {/* Legal + CTA */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-5">Legal</h4>
-              <ul className="space-y-3 text-sm">
-                {[
-                  ["Terms & Conditions", "/terms"],
-                  ["Privacy Policy", "/privacy"],
-                  ["Refund Policy", "/refund-policy"],
-                  ["Cookie Policy", "/privacy#cookies"],
-                ].map(([label, href]) => (
-                  <li key={label}>
-                    <Link href={href} className="text-white/45 hover:text-white transition-colors">
-                      {label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA */}
-              <div className="mt-8">
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-orange-500/20"
-                >
-                  Start free →
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom bar */}
-          <div className="mt-16 border-t border-white/[0.07] pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-white/20">
-              © 2026 Content Flywheel. All rights reserved.
-            </p>
-            <div className="flex items-center gap-4 text-xs text-white/20">
-              <span>Made for creators, by creators</span>
-              <span>·</span>
-              <a href="mailto:contentflywheel@gmail.com" className="hover:text-white/50 transition-colors">
+              <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-4">Contact</h4>
+              <a href="mailto:contentflywheel@gmail.com" className="text-sm text-orange-400 hover:text-orange-300 transition-colors">
                 contentflywheel@gmail.com
               </a>
             </div>
+          </div>
+          <div className="mt-12 border-t border-white/10 pt-8 text-center text-sm text-white/20">
+            © 2026 Content Flywheel. All rights reserved.
           </div>
         </div>
       </footer>

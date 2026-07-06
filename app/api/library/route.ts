@@ -8,7 +8,7 @@ import { productsTable } from "@/db/schema/products-schema";
 import { scriptsTable, videosTable } from "@/db/schema/library-schema";
 import { productViewsTable } from "@/db/schema/product-views-schema";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
-import { eq, desc, and, isNull, isNotNull, inArray, count, sql } from "drizzle-orm";
+import { eq, desc, and, isNull, isNotNull, inArray, count } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,6 @@ import { getLibraryCached, setLibraryCache } from "@/lib/library-cache";
 const LibrarySearchSchema = z.object({
   type: z.enum(["all", "product", "products", "video", "script", "scripts", "timeline", "bundles"]).optional().default("all"),
   deleted: z.enum(["true", "false"]).optional(),
-  archived: z.enum(["true", "false"]).optional(),
 });
 
 type LibraryItem = {
@@ -34,7 +33,6 @@ type LibraryItem = {
   bundleId?: string | null;
   platform?: string;
   deletedAt?: string;
-  archivedAt?: string | null;
   /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge. */
   designSource?: "ai" | "brand" | null;
   /** True when product has a completed avatar promo video. */
@@ -47,10 +45,6 @@ type LibraryItem = {
   hasThumbnail?: boolean;
   /** 0–100 completion score: content + thumbnail + mockup + marketing + video = 20pts each. */
   completionScore?: number;
-  /** Product niche (e.g. "Content Creation", "Finance"). */
-  niche?: string;
-  /** Short product description from marketing assets (for Video Guide auto-fill). */
-  productDescription?: string;
   /** True when product is published natively on Content Flywheel. */
   isNativePublished?: boolean;
   /** Native price in pence (GBP). */
@@ -77,10 +71,9 @@ export async function GET(request: NextRequest) {
     if (paramsErr) return paramsErr;
     const typeFilter = params.type ?? "all";
     const showDeleted = params.deleted === "true";
-    const showArchived = params.archived === "true";
 
     // Return cached result immediately if still fresh
-    const cacheKey = `${userId}:${typeFilter}:${showDeleted}:${showArchived}`;
+    const cacheKey = `${userId}:${typeFilter}:${showDeleted}`;
     const cached = getLibraryCached(cacheKey);
     if (cached) {
       return NextResponse.json(cached, {
@@ -88,15 +81,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    let products: { id: string; title: string; status: string; format: string; niche: string; bundleId: string | null; createdAt: Date | null; deletedAt: Date | null; archivedAt: Date | null; marketingAssets: { coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null }[] = [];
+    let products: { id: string; title: string; status: string; format: string; bundleId: string | null; createdAt: Date | null; deletedAt: Date | null; marketingAssets: { coverThumbnailUrl?: string | null; thumbnailUrl?: string | null } | null }[] = [];
     let scripts: { id: string; title: string; status: string; createdAt: Date | null; videoId: string | null; productId: string | null; platform: string; deletedAt: Date | null }[] = [];
     let videos: { id: string; title: string; thumbnailUrl: string | null; status: string; createdAt: Date | null; productId: string | null; scriptId: string | null; deletedAt: Date | null; metadata: Record<string, unknown> | null; platforms: string[] }[] = [];
 
     const productWhere = showDeleted
       ? and(eq(productsTable.userId, userId), isNotNull(productsTable.deletedAt))
-      : showArchived
-        ? and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt), isNotNull(productsTable.archivedAt))
-        : and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt), isNull(productsTable.archivedAt));
+      : and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt));
     const scriptWhere = showDeleted
       ? and(eq(scriptsTable.userId, userId), isNotNull(scriptsTable.deletedAt))
       : and(eq(scriptsTable.userId, userId), isNull(scriptsTable.deletedAt));
@@ -117,12 +108,10 @@ export async function GET(request: NextRequest) {
             title: productsTable.title,
             status: productsTable.status,
             format: productsTable.format,
-            niche: productsTable.niche,
             bundleId: productsTable.bundleId,
             designSource: productsTable.designSource,
             createdAt: productsTable.createdAt,
             deletedAt: productsTable.deletedAt,
-            archivedAt: productsTable.archivedAt,
             marketingAssets: productsTable.marketingAssets,
           })
           .from(productsTable)
@@ -211,8 +200,6 @@ export async function GET(request: NextRequest) {
         status: (p as { status?: string }).status ?? "draft",
         createdAt: (p.createdAt as Date)?.toISOString?.() ?? String(p.createdAt),
         format: p.format,
-        niche: p.niche,
-        productDescription: ma?.productDescription?.trim() || undefined,
         bundleId: p.bundleId ?? undefined,
         designSource: row.designSource ?? undefined,
         hasPromoVideo,
@@ -224,7 +211,6 @@ export async function GET(request: NextRequest) {
         nativePrice: ma?.nativePrice ?? undefined,
         ...(isNativePublished && { pageViews: viewCountMap[p.id] ?? 0, orderCount: orderCountMap[p.id] ?? 0 }),
         ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
-        archivedAt: p.archivedAt ? ((p.archivedAt as Date)?.toISOString?.() ?? String(p.archivedAt)) : null,
       };
     });
 

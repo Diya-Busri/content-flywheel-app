@@ -793,18 +793,9 @@ export default function LibraryFlow() {
           </span>
         )}
       </div>
-      <p className="text-gray-600 dark:text-gray-400 mb-4">
+      <p className="text-gray-600 dark:text-gray-400 mb-8">
         Your digital products, video guides, and scripts in one place
       </p>
-
-      {items.some(i => i.type === "product" && i.status === "generating") && (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-          <span className="mt-0.5 shrink-0 text-base leading-none">⏳</span>
-          <span>
-            Products usually take <strong>2–4 minutes</strong> to generate. If a product appears stuck after that, press the <strong>retry button</strong> on its card to restart.
-          </span>
-        </div>
-      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 mb-6">

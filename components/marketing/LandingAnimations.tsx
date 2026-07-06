@@ -4,7 +4,8 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, Check, X, Sparkles,
+  ArrowRight, Check, Package, Video, Calendar, Rocket, X,
+  Sparkles, BarChart3,
 } from "lucide-react";
 import {
   Accordion,
@@ -12,9 +13,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { ProductJourney } from "./ProductJourney";
-import { FeatureShowcase } from "./FeatureShowcase";
-import { StatsAndProof } from "./StatsAndProof";
 
 /* ─── helpers ─── */
 function FadeUp({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -33,6 +31,54 @@ function FadeUp({ children, delay = 0, className = "" }: { children: React.React
   );
 }
 
+/* ─── 4 core outcome cards ─── */
+const OUTCOMES = [
+  {
+    icon: Package,
+    step: "01",
+    title: "Create Your Product",
+    desc: "Describe your idea. AI writes a complete ebook, planner, guide, or template — formatted, designed, and ready to sell in minutes.",
+    detail: "No writing skills needed. Pick a topic and the platform does the rest.",
+    color: "from-blue-500/10 to-blue-600/5",
+    border: "hover:border-blue-500/30",
+    iconBg: "bg-blue-500/10 border-blue-500/20",
+    iconColor: "text-blue-400",
+  },
+  {
+    icon: Video,
+    step: "02",
+    title: "Create Promo Videos",
+    desc: "Turn your product into short-form promo videos, hooks, captions, and content ideas — ready for TikTok, Instagram, and YouTube.",
+    detail: "Content that sells while you sleep.",
+    color: "from-orange-500/10 to-orange-600/5",
+    border: "hover:border-orange-500/30",
+    iconBg: "bg-orange-500/10 border-orange-500/20",
+    iconColor: "text-orange-400",
+  },
+  {
+    icon: Calendar,
+    step: "03",
+    title: "Build Your Audience",
+    desc: "Grow your email list and stay in front of your audience. Send campaigns, collect subscribers, and keep people coming back.",
+    detail: "Stay consistent without the mental load.",
+    color: "from-violet-500/10 to-violet-600/5",
+    border: "hover:border-violet-500/30",
+    iconBg: "bg-violet-500/10 border-violet-500/20",
+    iconColor: "text-violet-400",
+  },
+  {
+    icon: Rocket,
+    step: "04",
+    title: "Drive Sales",
+    desc: "List your product on Gumroad, Etsy, or Payhip — then use your Content Flywheel content to drive a steady stream of buyers.",
+    detail: "From product to first sale in one afternoon.",
+    color: "from-emerald-500/10 to-emerald-600/5",
+    border: "hover:border-emerald-500/30",
+    iconBg: "bg-emerald-500/10 border-emerald-500/20",
+    iconColor: "text-emerald-400",
+  },
+];
+
 /* ─── traditional stack ─── */
 const OLD_STACK = [
   { tool: "ChatGPT", cost: "~£20/mo", purpose: "Write your product" },
@@ -44,16 +90,14 @@ const OLD_STACK = [
 
 /* ─── main export ─── */
 export function LandingAnimations({ reviews }: { reviews: { text: string; name: string; rating?: number }[] }) {
-  void reviews; // reviews available for future use
-
   return (
     <main>
 
-      {/* ─── TRUST BAR ─── */}
+      {/* ─── BETA TRUST BAR ─── */}
       <section className="border-y border-white/5 bg-white/[0.02] py-8">
         <div className="max-w-5xl mx-auto px-6">
           <FadeUp>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-12 text-center">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-10 text-center">
               {[
                 { label: "Now in Beta", sub: "Early access open" },
                 { label: "Free Trial", sub: "No card required" },
@@ -70,21 +114,115 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
         </div>
       </section>
 
-      {/* ─── PRODUCT JOURNEY (animated flow) ─── */}
-      <ProductJourney />
+      {/* ─── 4 OUTCOMES ─── */}
+      <section id="features" className="py-28 lg:py-36">
+        <div className="max-w-7xl mx-auto px-6">
+          <FadeUp className="text-center mb-16">
+            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">How it works</p>
+            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+              One platform.{" "}
+              <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
+                Four steps.
+              </span>
+            </h2>
+            <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">
+              Content Flywheel guides you through the full journey — from idea to income.
+            </p>
+          </FadeUp>
 
-      {/* ─── FEATURE SHOWCASE (8 features with UI mockups) ─── */}
-      <div className="border-t border-white/[0.05]">
-        <FeatureShowcase />
-      </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {OUTCOMES.map((o, i) => {
+              const Icon = o.icon;
+              return (
+                <FadeUp key={o.title} delay={i * 0.08}>
+                  <motion.div
+                    whileHover={{ y: -6 }}
+                    transition={{ type: "spring", stiffness: 300 }}
+                    className={`group relative h-full p-6 bg-gradient-to-br ${o.color} border border-white/[0.06] ${o.border} rounded-2xl transition-colors cursor-default`}
+                  >
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${o.iconBg}`}>
+                        <Icon className={`h-5 w-5 ${o.iconColor}`} />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/30">
+                        Step {o.step}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-white mb-2"
+                      dangerouslySetInnerHTML={{ __html: o.title }}
+                    />
+                    <p className="text-white/40 text-sm leading-relaxed mb-3">{o.desc}</p>
+                    <p className="text-xs text-white/25 italic">{o.detail}</p>
+                  </motion.div>
+                </FadeUp>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-      {/* ─── STATS + TESTIMONIALS ─── */}
-      <div className="border-t border-white/[0.05]">
-        <StatsAndProof />
-      </div>
+      {/* ─── HOW IT WORKS ─── */}
+      <section id="how-it-works" className="py-28 bg-white/[0.02] border-y border-white/5">
+        <div className="max-w-5xl mx-auto px-6">
+          <FadeUp className="text-center mb-16">
+            <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">The journey</p>
+            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+              Idea → Product → Content → Sales
+            </h2>
+            <p className="mt-4 text-white/40 text-lg">No design skills. No technical setup. No third-party tools.</p>
+          </FadeUp>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                step: "01",
+                emoji: "📦",
+                title: "Create Product",
+                desc: "Generate ebooks, guides, planners, templates, and digital products in minutes. Describe your idea — AI does the writing, formatting, and design.",
+              },
+              {
+                step: "02",
+                emoji: "🎬",
+                title: "Create Content",
+                desc: "Turn your product into promo videos, captions, hooks, and content ideas. Build a content library that promotes your product around the clock.",
+              },
+              {
+                step: "03",
+                emoji: "🚀",
+                title: "Drive Sales",
+                desc: "List on Gumroad, Etsy, or Payhip — then let your Content Flywheel videos, captions, and email campaigns bring buyers to you consistently.",
+              },
+            ].map((s, i) => (
+              <FadeUp key={s.step} delay={i * 0.12}>
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="relative text-center bg-white/[0.03] border border-white/[0.07] hover:border-orange-500/30 rounded-2xl p-8 transition-colors"
+                >
+                  <div className="text-4xl mb-4">{s.emoji}</div>
+                  <div className="inline-block px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold mb-4">
+                    Step {s.step}
+                  </div>
+                  <h3 className="text-lg font-bold text-white mb-2">{s.title}</h3>
+                  <p className="text-white/40 text-sm leading-relaxed">{s.desc}</p>
+                  {i < 2 && (
+                    <motion.div
+                      initial={{ scaleX: 0 }}
+                      whileInView={{ scaleX: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.8, delay: 0.3 }}
+                      style={{ originX: 0 }}
+                      className="hidden md:block absolute top-1/2 -right-3 w-6 h-px bg-gradient-to-r from-orange-500/50 to-transparent"
+                    />
+                  )}
+                </motion.div>
+              </FadeUp>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ─── COMPARISON ─── */}
-      <section className="py-28 lg:py-36 bg-white/[0.02] border-y border-white/[0.05]">
+      <section className="py-28 lg:py-36">
         <div className="max-w-5xl mx-auto px-6">
           <FadeUp className="text-center mb-16">
             <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">Why Content Flywheel</p>
@@ -163,14 +301,11 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
       </section>
 
       {/* ─── FOUNDER SECTION ─── */}
-      <section className="py-28 bg-[#0a0a0a] border-b border-white/5">
+      <section className="py-28 bg-white/[0.02] border-y border-white/5">
         <div className="max-w-3xl mx-auto px-6">
           <FadeUp>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-10">
-              <div className="flex items-center gap-2 mb-6">
-                <Sparkles className="w-4 h-4 text-orange-400" />
-                <p className="text-xs font-semibold uppercase tracking-widest text-orange-500">Why we built this</p>
-              </div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-6">Why we built this</p>
               <blockquote className="text-lg sm:text-xl text-white/70 leading-relaxed">
                 &ldquo;I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email — and none of them talked to each other.
                 <br /><br />
@@ -240,51 +375,19 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
       <section id="faq" className="py-28 bg-white/[0.02] border-y border-white/5">
         <div className="max-w-3xl mx-auto px-6">
           <FadeUp className="text-center mb-16">
-            <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">Got questions?</p>
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">FAQs</h2>
           </FadeUp>
           <FadeUp delay={0.1}>
             <Accordion type="single" collapsible className="w-full space-y-3">
               {[
-                {
-                  value: "what",
-                  q: "What kind of digital products can I create?",
-                  a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and AI generates the full product including a cover.",
-                },
-                {
-                  value: "who",
-                  q: "Who is Content Flywheel for?",
-                  a: "Creators, coaches, consultants, and anyone who wants to sell digital products. If you have knowledge worth packaging, this platform builds it for you — no tech skills needed.",
-                },
-                {
-                  value: "sell",
-                  q: "How do I sell products and get paid?",
-                  a: "You get a branded store at yourname.contentflywheel.co.uk. Payments go through Stripe directly to your bank — we charge no per-sale fees.",
-                },
-                {
-                  value: "fees",
-                  q: "Are there any per-sale fees?",
-                  a: "No. Content Flywheel charges a flat monthly subscription. There are no per-sale fees from us — whatever you earn from your products is yours.",
-                },
-                {
-                  value: "email",
-                  q: "Is email marketing included?",
-                  a: "Yes. Collect subscribers and send email campaigns directly from Content Flywheel — no Mailchimp required.",
-                },
-                {
-                  value: "cancel",
-                  q: "Can I cancel anytime?",
-                  a: "Yes. Cancel from your dashboard settings at any time. Your subscription stays active until the end of the billing period.",
-                },
-                {
-                  value: "trial",
-                  q: "Is there a free trial?",
-                  a: "Yes — you can sign up and start creating products immediately without a credit card. The trial gives you access to the core tools so you can see the value before subscribing.",
-                },
+                { value: "what", q: "What kind of digital products can I create?", a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and AI generates the full product including a cover." },
+                { value: "who", q: "Who is Content Flywheel for?", a: "Creators, coaches, consultants, and anyone who wants to sell digital products. If you have knowledge worth packaging, this platform builds it for you — no tech skills needed." },
+                { value: "sell", q: "How do I sell products and get paid?", a: "List your product on Gumroad, Etsy, Payhip, or any platform you choose — Content Flywheel creates the content that drives buyers there. You own your storefront and payments directly." },
+                { value: "fees", q: "Are there any per-sale fees?", a: "No. Content Flywheel charges a flat monthly subscription. There are no per-sale fees from us — whatever you earn from your products is yours." },
+                { value: "email", q: "Is email marketing included?", a: "Yes. Collect subscribers and send email campaigns directly from Content Flywheel — no Mailchimp required." },
+                { value: "cancel", q: "Can I cancel anytime?", a: "Yes. Cancel from your dashboard settings at any time. Your subscription stays active until the end of the billing period." },
               ].map((item) => (
-                <AccordionItem
-                  key={item.value}
-                  value={item.value}
+                <AccordionItem key={item.value} value={item.value}
                   className="bg-white/[0.03] border border-white/[0.07] rounded-xl px-6 data-[state=open]:border-orange-500/30 transition-colors"
                 >
                   <AccordionTrigger className="text-left text-white hover:text-orange-400 hover:no-underline font-semibold py-5 text-sm">
@@ -328,13 +431,10 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                     </span>
                   </h2>
                   <p className="mt-5 text-lg text-white/40 max-w-lg mx-auto">
-                    Type your idea. AI builds your product. Publish your store. Start earning.
+                    Content Flywheel helps you create, market, and sell digital products using AI.
                   </p>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="mt-8 inline-block">
-                    <Link
-                      href="/signup"
-                      className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-10 py-4 text-base font-bold text-white shadow-2xl shadow-orange-500/30 transition-colors"
-                    >
+                    <Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-10 py-4 text-base font-bold text-white shadow-2xl shadow-orange-500/30 transition-colors">
                       Start for free <ArrowRight className="h-5 w-5" />
                     </Link>
                   </motion.div>

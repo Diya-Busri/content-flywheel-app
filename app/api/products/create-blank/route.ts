@@ -21,9 +21,6 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const title = (typeof body.title === "string" ? body.title.trim() : "") || "Untitled Product";
-    const niche = typeof body.niche === "string" ? body.niche.trim() : "";
-    const format = typeof body.format === "string" ? body.format.trim() : "ebook";
-    const description = typeof body.description === "string" ? body.description.trim() : "";
     const pageCount = Math.min(Math.max(parseInt(body.pageCount ?? "5") || 5, 1), 50);
 
     const sections = Array.from({ length: pageCount }, (_, i) => ({
@@ -44,8 +41,8 @@ export async function POST(request: Request) {
       .values({
         userId,
         title,
-        niche,
-        format,
+        niche: "",
+        format: "ebook",
         content: { sections },
         designSettings,
         placedElements: [],

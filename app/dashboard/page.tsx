@@ -12,7 +12,6 @@ import { productsTable } from "@/db/schema/products-schema";
 import { emailContactsTable, emailCampaignsTable } from "@/db/schema/email-marketing-schema";
 import { goalsTable } from "@/db/schema/goals-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
-import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, desc, isNull, and, count, gte, sql } from "drizzle-orm";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
@@ -86,28 +85,6 @@ type ChecklistData = {
   hasThumbnail: boolean;
   hasPromoVideo: boolean;
 };
-
-/**
- * Resolve the canonical public store URL for this user.
- * Matches the logic in StoreClient.tsx:
- *   1. If store_settings has a customDomain → https://{customDomain}
- *   2. Otherwise → {baseUrl}/c/{userId}
- */
-async function getActiveStoreUrl(userId: string): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://contentflywheel.co.uk";
-  const fallback = `${baseUrl}/c/${userId}`;
-  try {
-    const [row] = await db
-      .select({ customDomain: storeSettingsTable.customDomain })
-      .from(storeSettingsTable)
-      .where(eq(storeSettingsTable.userId, userId))
-      .limit(1);
-    const domain = row?.customDomain?.trim();
-    return domain ? `https://${domain}` : fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 async function getVideosThisWeek(userId: string): Promise<number> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -334,7 +311,7 @@ async function getVideoStats(userId: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   const { userId } = await auth();
-  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow, revenue, todayStats, storeUrl] = userId
+  const [videoStats, incompleteProducts, checklist, videosThisWeek, emailSubscribers, activeGoals, campaignsSent, profileRow, revenue, todayStats] = userId
     ? await Promise.all([
         getVideoStats(userId),
         getIncompleteProducts(userId),
@@ -346,16 +323,17 @@ export default async function DashboardPage() {
         db.select({ videoCredits: profilesTable.videoCredits }).from(profilesTable).where(eq(profilesTable.userId, userId)).limit(1).then(r => r[0] ?? null).catch(() => null),
         getActualRevenue(userId),
         getTodayStats(userId),
-        getActiveStoreUrl(userId),
       ])
     : [
         { digitalProductsCount: 0, tiktokShopCount: 0, totalLibraryVideos: 0, recent: [] as RecentVideoItem[] },
         [] as IncompleteProduct[],
         { hasBrandVoice: false, hasProduct: false, hasThumbnail: false, hasPromoVideo: false },
-        0, 0, 0, 0, null, { totalCents: 0, totalOrders: 0 }, { todayCents: 0, todayOrders: 0, todaySubscribers: 0 }, "",
+        0, 0, 0, 0, null, { totalCents: 0, totalOrders: 0 }, { todayCents: 0, todayOrders: 0, todaySubscribers: 0 },
       ];
 
   const videoCredits = (profileRow as { videoCredits?: number | null } | null)?.videoCredits ?? 0;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://contentflywheel.co.uk";
+  const storeUrl = userId ? `${baseUrl}/c/${userId}` : "";
   const { totalCents, totalOrders } = revenue as { totalCents: number; totalOrders: number };
   const revenueGBP = (totalCents / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const { todayCents, todayOrders, todaySubscribers } = todayStats as { todayCents: number; todayOrders: number; todaySubscribers: number };

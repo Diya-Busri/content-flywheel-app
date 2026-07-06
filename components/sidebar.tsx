@@ -20,7 +20,6 @@ import { useState, useEffect } from "react";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { useSidebar } from "@/components/sidebar-context";
 import { HelpPanel, HelpButton } from "@/components/help/HelpPanel";
-import { AdminToolbar } from "@/components/dev/AdminToolbar";
 
 interface SidebarProps {
   profile: SelectProfile | null;
@@ -182,7 +181,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
               {item.icon}
             </div>
             <span className="ml-3 text-sm font-medium hidden md:block flex-1 min-w-0 truncate">
-              {item.label}
+              {item.emoji} {item.label}
             </span>
             {item.badge && (
               <span className={`hidden md:inline-flex shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${active ? "bg-white/20 text-white" : "bg-orange-500 text-white"}`}>
@@ -211,7 +210,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       <Link key={item.href} href={item.href} onClick={() => setMobileNavOpen(false)} className="block">
         <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${active ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
           {item.icon}
-          <span className="text-sm font-medium">{item.label}</span>
+          <span className="text-sm font-medium">{item.emoji} {item.label}</span>
         </div>
       </Link>
     );
@@ -275,9 +274,6 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
             <PanelLeftClose size={18} />
           </motion.button>
         </div>
-
-        {/* Admin Toolbar — Test Wizard, Restore, and future admin tools */}
-        <AdminToolbar isAdmin={isAdmin} />
 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 relative z-10 overflow-y-auto min-h-0">

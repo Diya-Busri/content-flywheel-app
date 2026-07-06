@@ -187,7 +187,10 @@ async function handleCheckoutSession(event: Stripe.Event) {
     });
 
     const productId = subscription.items.data[0].price.product as string;
-    await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId);
+    // manageSubscriptionStatusChange reads product metadata — gracefully skip if it fails
+    // (e.g. product missing "membership" metadata). The updateProfile below is the safety net.
+    await manageSubscriptionStatusChange(subscription.id, subscription.customer as string, productId)
+      .catch((e: unknown) => console.warn("[webhook] manageSubscriptionStatusChange skipped:", e));
     
     // Record promo code usage if one was applied
     const promoCode = checkoutSession.metadata?.promoCode;
@@ -209,23 +212,32 @@ async function handleCheckoutSession(event: Stripe.Event) {
       }
     }
 
-    // Reset usage credits on new subscription
+    // Activate subscription and reset usage credits.
+    // This is a safety net: subscribe/success sets membership immediately when the user
+    // returns from Stripe, but if that page was skipped (session expiry, etc.) the webhook
+    // ensures the profile is still activated. membership + status are set here explicitly
+    // so the user is never stuck on the paywall even if manageSubscriptionStatusChange
+    // above threw due to missing Stripe product metadata.
     if (checkoutSession.client_reference_id) {
       try {
         const billingCycleStart = new Date(subscription.current_period_start * 1000);
         const billingCycleEnd = new Date(subscription.current_period_end * 1000);
+        const subStatus = subscription.status === "trialing" ? "trialing" : "active";
 
         await updateProfile(checkoutSession.client_reference_id, {
+          membership: "pro",
           usageCredits: DEFAULT_USAGE_CREDITS,
           usedCredits: 0,
-          status: "active",
+          status: subStatus,
           billingCycleStart,
-          billingCycleEnd
+          billingCycleEnd,
+          stripeCustomerId: checkoutSession.customer as string,
+          stripeSubscriptionId: subscription.id,
         });
 
-        console.log(`Reset usage credits to ${DEFAULT_USAGE_CREDITS} for user ${checkoutSession.client_reference_id}`);
+        console.log(`[webhook] Activated subscription for user ${checkoutSession.client_reference_id} (status: ${subStatus})`);
       } catch (error) {
-        console.error(`Error updating usage credits: ${error}`);
+        console.error(`Error activating subscription via webhook: ${error}`);
       }
     }
 

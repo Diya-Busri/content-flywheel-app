@@ -26,7 +26,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const { userId } = await auth();
 
   if (!userId) {
-    return redirect("/sign-in");
+    return redirect("/login");
   }
 
   let profile: Awaited<ReturnType<typeof getProfileByUserId>> = null;

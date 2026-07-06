@@ -38,9 +38,6 @@ export const profilesTable = pgTable("profiles", {
   stripeConnectAccountId: text("stripe_connect_account_id"),
   stripeConnectOnboardingComplete: boolean("stripe_connect_onboarding_complete").default(false),
   stripeConnectChargesEnabled: boolean("stripe_connect_charges_enabled").default(false),
-  // Creator marketplace moderation (admin-only)
-  hiddenFromMarketplace: boolean("hidden_from_marketplace").notNull().default(false),
-  deletedAt: timestamp("deleted_at"),
   // Activity tracking
   lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

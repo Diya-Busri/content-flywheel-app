@@ -47,8 +47,6 @@ import {
   Trash2,
   Pause,
   Sparkles,
-  Check,
-  Settings2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -70,26 +68,6 @@ import {
 import { AiStorySceneVoiceover } from "@/components/ai-story/AiStorySceneVoiceover";
 import { AiStoryAnimateSceneBlock } from "@/components/ai-story/AiStoryAnimateSceneBlock";
 import { NoVideoCreditsError } from "@/lib/ai-story-animate-client";
-
-/** Publishing Kit — platform-specific publishing assets for a completed video. */
-export type PublishingKit = {
-  instagramCaption: string;
-  tiktokCaption: string;
-  youtubeShortsDescription: string;
-  facebookCaption: string;
-  linkedinPost: string;
-  ctaSuggestions: string[];
-  hashtagSets: {
-    instagram: string[];
-    tiktok: string[];
-    youtube: string[];
-    general: string[];
-  };
-  seoTitle: string;
-  youtubeKeywords: string[];
-};
-
-const PUBLISHING_KIT_KEY = "videoGuidePublishingKit";
 
 /** Social Media Kit shape (matches API response). */
 export type SocialMediaKit = {
@@ -464,22 +442,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
   const [stability, setStability] = useState(0.5);
   const [similarity, setSimilarity] = useState(0.75);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-
-  // ── Voice Settings step ──────────────────────────────────────────────────
-  type SpeakingStyle = "Professional" | "Friendly" | "Energetic" | "Calm" | "Storytelling";
-  const SPEAKING_STYLES: { label: SpeakingStyle; stability: number; similarity: number; description: string }[] = [
-    { label: "Professional", stability: 0.5,  similarity: 0.75, description: "Clear & authoritative" },
-    { label: "Friendly",     stability: 0.4,  similarity: 0.70, description: "Warm & approachable" },
-    { label: "Energetic",    stability: 0.3,  similarity: 0.60, description: "Upbeat & punchy" },
-    { label: "Calm",         stability: 0.70, similarity: 0.85, description: "Slow & reassuring" },
-    { label: "Storytelling", stability: 0.45, similarity: 0.80, description: "Engaging narrative" },
-  ];
-  const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>("Professional");
-  const [rememberVoiceDefault, setRememberVoiceDefault] = useState(true);
-  /** True once user has explicitly chosen a voice (or already had one saved). */
-  const [voiceSettingsConfirmed, setVoiceSettingsConfirmed] = useState<boolean>(
-    () => !!(preferredVoiceId && preferredVoiceId.trim())
-  );
   const [fullVoiceoverUrl, setFullVoiceoverUrl] = useState<string | null>(() => guide.timelineVoiceoverUrl?.trim() || null);
   const [perSceneUrls, setPerSceneUrls] = useState<(string | null)[]>(() => {
     const urls = guide.timelineSceneVoiceoverUrls;
@@ -586,23 +548,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
     return null;
   });
   const [socialKitLoading, setSocialKitLoading] = useState(false);
-
-  // ── Publishing Kit state ─────────────────────────────────────────────────
-  const [publishingKit, setPublishingKit] = useState<PublishingKit | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = sessionStorage.getItem(PUBLISHING_KIT_KEY);
-      if (raw) return JSON.parse(raw) as PublishingKit;
-    } catch {}
-    return null;
-  });
-  const [publishingKitLoading, setPublishingKitLoading] = useState(false);
-  const [publishingKitSectionLoading, setPublishingKitSectionLoading] = useState<string | null>(null);
-  /** User edits override generated values. Keys match PublishingKit field names. */
-  const [publishingKitEdits, setPublishingKitEdits] = useState<Record<string, string>>({});
-  /** Collapsed section keys in the Publishing Kit accordion. */
-  const [collapsedPKSections, setCollapsedPKSections] = useState<Set<string>>(new Set());
-
   /** User-entered product name when guide has none (shown in "What is your product called?" block). */
   const [userProductName, setUserProductName] = useState("");
   const [productNameInput, setProductNameInput] = useState("");
@@ -894,84 +839,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
       setSocialKitLoading(false);
     }
   }, [libraryScriptId, displayScript, effectiveProductName, guide, toast]);
-
-  // ── Publishing Kit handlers ──────────────────────────────────────────────
-  const buildPublishingKitForm = useCallback(() => {
-    const form = new FormData();
-    if (libraryScriptId) form.append("libraryScriptId", libraryScriptId);
-    form.append("scriptHook", displayScript.hook ?? "");
-    form.append("scriptBody", displayScript.body ?? "");
-    form.append("scriptCta", displayScript.cta ?? "");
-    form.append("productName", (effectiveProductName && cleanProductTitle(effectiveProductName)) || effectiveProductName || "Product");
-    form.append("productDescription", (guide as { productDescription?: string }).productDescription ?? "");
-    return form;
-  }, [libraryScriptId, displayScript, effectiveProductName, guide]);
-
-  const handleGeneratePublishingKit = useCallback(async () => {
-    setPublishingKitLoading(true);
-    try {
-      const form = buildPublishingKitForm();
-      const res = await fetch("/api/video-guide/publishing-kit", { method: "POST", body: form });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to generate Publishing Kit");
-      const kit = (data as { kit?: PublishingKit }).kit;
-      if (kit) {
-        setPublishingKit(kit);
-        setPublishingKitEdits({});
-        try { sessionStorage.setItem(PUBLISHING_KIT_KEY, JSON.stringify(kit)); } catch {}
-        toast({ title: "Publishing Kit ready", description: "All publishing assets generated." });
-      }
-    } catch (e) {
-      toast({ title: "Failed to generate Publishing Kit", description: e instanceof Error ? e.message : "Please try again", variant: "destructive" });
-    } finally {
-      setPublishingKitLoading(false);
-    }
-  }, [buildPublishingKitForm, toast]);
-
-  const handleRegeneratePublishingSection = useCallback(async (sectionKey: string) => {
-    setPublishingKitSectionLoading(sectionKey);
-    try {
-      const form = buildPublishingKitForm();
-      form.append("section", sectionKey);
-      const res = await fetch("/api/video-guide/publishing-kit", { method: "POST", body: form });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to regenerate section");
-      const { section, value } = data as { section: string; value: unknown };
-      if (section && value !== undefined) {
-        setPublishingKit((prev) => {
-          if (!prev) return prev;
-          if (section === "hashtagSets") return { ...prev, hashtagSets: value as PublishingKit["hashtagSets"] };
-          if (section === "ctaSuggestions" || section === "youtubeKeywords") return { ...prev, [section]: value as string[] };
-          return { ...prev, [section]: value as string };
-        });
-        // Clear any manual edit for this section so regenerated value shows
-        setPublishingKitEdits((prev) => { const next = { ...prev }; delete next[section]; return next; });
-        toast({ title: "Section updated" });
-      }
-    } catch (e) {
-      toast({ title: "Failed to regenerate section", description: e instanceof Error ? e.message : "Please try again", variant: "destructive" });
-    } finally {
-      setPublishingKitSectionLoading(null);
-    }
-  }, [buildPublishingKitForm, toast]);
-
-  const publishingKitToText = useCallback((kit: PublishingKit, edits: Record<string, string>): string => {
-    const get = (key: string, fallback: string) => edits[key] ?? fallback;
-    const lines: string[] = [];
-    lines.push("=== SEO TITLE ===\n" + get("seoTitle", kit.seoTitle));
-    lines.push("\n=== INSTAGRAM CAPTION ===\n" + get("instagramCaption", kit.instagramCaption));
-    lines.push("\n=== TIKTOK CAPTION ===\n" + get("tiktokCaption", kit.tiktokCaption));
-    lines.push("\n=== YOUTUBE SHORTS DESCRIPTION ===\n" + get("youtubeShortsDescription", kit.youtubeShortsDescription));
-    lines.push("\n=== FACEBOOK CAPTION ===\n" + get("facebookCaption", kit.facebookCaption));
-    lines.push("\n=== LINKEDIN POST ===\n" + get("linkedinPost", kit.linkedinPost));
-    lines.push("\n=== CTA SUGGESTIONS ===\n" + kit.ctaSuggestions.join("\n"));
-    lines.push("\n=== HASHTAGS — INSTAGRAM ===\n" + kit.hashtagSets.instagram.join(" "));
-    lines.push("\n=== HASHTAGS — TIKTOK ===\n" + kit.hashtagSets.tiktok.join(" "));
-    lines.push("\n=== HASHTAGS — YOUTUBE ===\n" + kit.hashtagSets.youtube.join(" "));
-    lines.push("\n=== HASHTAGS — GENERAL ===\n" + kit.hashtagSets.general.join(" "));
-    lines.push("\n=== YOUTUBE KEYWORDS ===\n" + kit.youtubeKeywords.join(", "));
-    return lines.join("\n");
-  }, []);
 
   const socialKitToText = useCallback((kit: SocialMediaKit): string => {
     const lines: string[] = [];
@@ -1961,11 +1828,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
    * Skips steps that are already done.
    */
   const handleGenerateEverything = useCallback(async () => {
-    if (!voiceSettingsConfirmed) {
-      toast({ title: "Choose your voice first", description: "Set up voice settings before building the video." });
-      setActiveTab("voice-settings");
-      return;
-    }
     if (scenes.length === 0) {
       toast({ title: "No scenes", description: "Add a scene breakdown first.", variant: "destructive" });
       return;
@@ -2555,14 +2417,13 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           const hasImages = Object.keys(guideSceneImageUrls).length > 0;
           const hasVoiceover = !!(fullVoiceoverUrl || perSceneUrls.some(Boolean));
           const hasVideoFile = autoGeneratePhase === null && autoGeneratingAll === false && hasImages && hasVoiceover;
-          const hasPublishingKit = !!publishingKit;
-          const steps: { done: boolean; label: string; tab: "script" | "voice-settings" | "voiceover" | "scenes" | "publishing-kit" | "export" }[] = [
-            { done: true,                   label: "Script",         tab: "script" },
-            { done: voiceSettingsConfirmed, label: "Voice",          tab: "voice-settings" },
-            { done: hasVoiceover,           label: "Voiceover",      tab: "voiceover" },
-            { done: hasImages,              label: "Scenes",         tab: "scenes" },
-            { done: hasPublishingKit,       label: "Publishing Kit", tab: "publishing-kit" },
-            { done: hasVideoFile,           label: "Export",         tab: "export" },
+          const hasSocialKit = !!socialKit;
+          const steps: { done: boolean; label: string; tab: "script" | "scenes" | "voiceover" | "export" | "social-kit" }[] = [
+            { done: true,          label: "Script",    tab: "script" },
+            { done: hasImages,     label: "Images",    tab: "scenes" },
+            { done: hasVoiceover,  label: "Voiceover", tab: "voiceover" },
+            { done: hasVideoFile,  label: "Export",    tab: "export" },
+            { done: hasSocialKit,  label: "Social Kit",tab: "social-kit" },
           ];
           const doneCount = steps.filter((s) => s.done).length;
           const nextStep = steps.find((s) => !s.done);
@@ -3384,21 +3245,15 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
           <div className="flex justify-end mb-8">
             <Button
               className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6"
-              onClick={() => setActiveTab("voice-settings")}
+              onClick={() => setActiveTab("scenes")}
             >
-              Continue to Voice Settings →
+              Continue to Images →
             </Button>
           </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="hidden">
-            <TabsTrigger value="voice-settings" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Voice Settings
-            </TabsTrigger>
-            <TabsTrigger value="publishing-kit" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
-              Publishing Kit
-            </TabsTrigger>
             <TabsTrigger value="scenes" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs">
               Your Video Plan
               {guide.videoFormat?.aspectRatio && (
@@ -3426,159 +3281,6 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               Voiceover
             </TabsTrigger>
           </TabsList>
-
-          {/* ─────────────────────────── VOICE SETTINGS TAB ─────────────────────────── */}
-          <TabsContent value="voice-settings" className="mt-6 space-y-6">
-            <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
-              <CardHeader>
-                <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
-                  <Settings2 className="w-4 h-4 text-orange-500" />
-                  Voice Settings
-                </CardTitle>
-                <CardDescription className="text-gray-600 dark:text-muted-foreground">
-                  Choose the voice, style, and speed for your video. These settings are used for all voiceovers — including &ldquo;Build My Video&rdquo;.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-8">
-
-                {/* ── 1. Voice picker ── */}
-                <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Choose a voice</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    {ELEVENLABS_VOICES.map((v) => {
-                      const selected = voiceId === v.voiceId;
-                      const loading = previewingVoiceId === v.voiceId;
-                      return (
-                        <div
-                          key={v.voiceId}
-                          onClick={() => setVoiceId(v.voiceId)}
-                          className={`rounded-lg border-2 p-3 flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                            selected
-                              ? "border-orange-500 bg-orange-500/10 text-foreground"
-                              : "border-gray-200 dark:border-border bg-gray-100 dark:bg-background hover:border-gray-300 dark:hover:border-[#3A3A3A]"
-                          }`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {selected && <Check className="w-3.5 h-3.5 text-orange-500 shrink-0" />}
-                              <span className="block font-medium text-sm">{v.name}</span>
-                            </div>
-                            <span className="block text-xs text-gray-500 dark:text-muted-foreground mt-0.5">{v.description}</span>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground shrink-0 h-8 w-8 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePreviewVoice(v.voiceId);
-                            }}
-                            disabled={loading}
-                            title="Preview voice"
-                          >
-                            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* ── 2. Speaking style ── */}
-                <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Speaking style</p>
-                  <div className="flex flex-wrap gap-2">
-                    {SPEAKING_STYLES.map((style) => {
-                      const active = speakingStyle === style.label;
-                      return (
-                        <button
-                          key={style.label}
-                          type="button"
-                          onClick={() => {
-                            setSpeakingStyle(style.label);
-                            setStability(style.stability);
-                            setSimilarity(style.similarity);
-                          }}
-                          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                            active
-                              ? "bg-orange-500 border-orange-500 text-white"
-                              : "border-gray-200 dark:border-border bg-white dark:bg-background text-gray-600 dark:text-muted-foreground hover:border-orange-400 hover:text-orange-500"
-                          }`}
-                        >
-                          {style.label}
-                          <span className={`block text-xs font-normal mt-0.5 ${active ? "text-orange-100" : "text-gray-400 dark:text-gray-500"}`}>
-                            {style.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* ── 3. Speaking speed ── */}
-                <div>
-                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-3">Speaking speed</p>
-                  <div className="max-w-xs space-y-2">
-                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-muted-foreground">
-                      <span>Speed</span>
-                      <span className="font-medium text-foreground">{playbackSpeed.toFixed(1)}×</span>
-                    </div>
-                    <Slider
-                      value={[playbackSpeed]}
-                      onValueChange={([v]) => setPlaybackSpeed(v)}
-                      min={0.5}
-                      max={2}
-                      step={0.1}
-                    />
-                    <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
-                      <span>0.5× Slow</span>
-                      <span>2.0× Fast</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── 4. Remember as default ── */}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRememberVoiceDefault((v) => !v)}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
-                      rememberVoiceDefault
-                        ? "bg-orange-500 border-orange-500"
-                        : "border-gray-300 dark:border-border bg-white dark:bg-background"
-                    }`}
-                  >
-                    {rememberVoiceDefault && <Check className="w-3 h-3 text-white" />}
-                  </button>
-                  <span className="text-sm text-gray-600 dark:text-muted-foreground">
-                    Remember this as my default voice for future videos
-                  </span>
-                </div>
-
-                {/* ── 5. Confirm button ── */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-border">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("script")}
-                    className="text-sm text-gray-500 dark:text-muted-foreground hover:text-gray-700 dark:hover:text-gray-300"
-                  >
-                    ← Back to Script
-                  </button>
-                  <Button
-                    className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 gap-2"
-                    onClick={() => {
-                      if (rememberVoiceDefault) setDefaultVoiceId(voiceId);
-                      setVoiceSettingsConfirmed(true);
-                      setActiveTab("voiceover");
-                    }}
-                  >
-                    <Check className="w-4 h-4" />
-                    Confirm &amp; Continue to Scenes →
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="scenes" className="mt-6 space-y-4">
             {onScenesRegenerated && (
@@ -4542,11 +4244,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             )}
             {/* scenes step nav */}
             <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
-              <Button variant="outline" onClick={() => setActiveTab("voiceover")}>
-                ← Back to Voiceover
+              <Button variant="outline" onClick={() => setActiveTab("script")}>
+                ← Back to Script
               </Button>
-              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("publishing-kit")}>
-                Continue to Publishing Kit →
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("voiceover")}>
+                Continue to Voiceover →
               </Button>
             </div>
           </TabsContent>
@@ -4642,215 +4344,221 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
               </Card>
             )}
             {/* export step nav */}
-            <div className="flex justify-start pt-4 mt-4 border-t border-gray-100 dark:border-border">
-              <Button variant="outline" onClick={() => setActiveTab("publishing-kit")}>
-                ← Back to Publishing Kit
+            <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
+              <Button variant="outline" onClick={() => setActiveTab("voiceover")}>
+                ← Back to Voiceover
+              </Button>
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("social-kit")}>
+                Continue to Social Kit →
               </Button>
             </div>
           </TabsContent>
 
-          {/* ─────────────────────────── PUBLISHING KIT TAB ─────────────────────────── */}
-          <TabsContent value="publishing-kit" className="mt-6 space-y-4">
-            {!publishingKit ? (
-              /* ── Empty state ── */
-              <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
-                <CardContent className="pt-8 pb-8">
-                  <div className="flex flex-col items-center text-center max-w-md mx-auto">
-                    <div className="w-16 h-16 rounded-full bg-orange-500/15 flex items-center justify-center mb-4">
-                      <Share2 className="w-8 h-8 text-orange-500" />
+          <TabsContent value="social-kit" className="mt-6 space-y-4" id="social-media-kit-section">
+            {!socialKit ? (
+              (true) ? (
+                <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
+                  <CardContent className="pt-6 pb-6">
+                    <div className="flex flex-col items-center text-center max-w-md mx-auto">
+                      <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
+                        <Share2 className="w-8 h-8 text-green-500" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">Generate your Social Media Kit</h3>
+                      <p className="text-gray-600 dark:text-muted-foreground text-sm mb-6">
+                        Get TikTok titles, Instagram captions, YouTube Shorts descriptions, hashtags, and best posting times — all tailored to your script.
+                      </p>
+                      <Button
+                        className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                        onClick={handleSocialKitGenerateWithoutProof}
+                        disabled={socialKitLoading}
+                      >
+                        {socialKitLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Share2 className="w-4 h-4" />
+                        )}
+                        {socialKitLoading ? "Generating your Social Media Kit..." : "Generate Social Media Kit"}
+                      </Button>
                     </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Generate your Publishing Kit</h3>
-                    <p className="text-gray-600 dark:text-muted-foreground text-sm mb-2">
-                      Everything you need to publish this video — ready to paste directly into each platform.
-                    </p>
-                    <ul className="text-gray-500 dark:text-muted-foreground text-xs text-left mb-6 space-y-1">
-                      {["Instagram Caption", "TikTok Caption", "YouTube Shorts Description", "Facebook Caption", "LinkedIn Post", "CTA Suggestions", "Hashtag Sets (per platform)", "SEO-Friendly Title", "YouTube Keywords / Tags"].map((item) => (
-                        <li key={item} className="flex items-center gap-2">
-                          <Check className="w-3 h-3 text-orange-500 shrink-0" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                    <Button
-                      className="bg-orange-500 hover:bg-orange-600 text-white gap-2"
-                      onClick={handleGeneratePublishingKit}
-                      disabled={publishingKitLoading}
-                    >
-                      {publishingKitLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      {publishingKitLoading ? "Generating Publishing Kit…" : "Generate Publishing Kit"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
+                  <CardContent className="pt-6 pb-6">
+                    <div className="flex flex-col items-center text-center max-w-md mx-auto">
+                      <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
+                        <Lock className="w-8 h-8 text-amber-500" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">Upload proof to unlock</h3>
+                      <p className="text-gray-600 dark:text-muted-foreground text-sm mb-2">
+                        Upload a screenshot or video preview to unlock your Social Media Kit
+                      </p>
+                      <p className="text-gray-500 dark:text-muted-foreground text-xs mb-6">
+                        We want to make sure you&apos;ve created your video before optimizing your social media presence. Or use the <strong>Video Timeline</strong> first to get access without proof.
+                      </p>
+                      <label className="w-full block">
+                        <input
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.webp,.mp4,.mov,image/png,image/jpeg,image/webp,video/mp4,video/quicktime"
+                          className="sr-only"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            setSocialKitProofFile(f ?? null);
+                          }}
+                        />
+                        <div
+                          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors bg-gray-100 dark:bg-background ${
+                            socialKitProofFile ? "border-orange-500/50" : "border-gray-200 dark:border-border hover:border-orange-500/50"
+                          }`}
+                          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const f = e.dataTransfer.files?.[0];
+                            if (f && (/\.(png|jpe?g|webp|mp4|mov)$/i.test(f.name) || f.type.startsWith("image/") || f.type.startsWith("video/"))) {
+                              setSocialKitProofFile(f);
+                            }
+                          }}
+                        >
+                          <Upload className="w-10 h-10 mx-auto text-gray-500 dark:text-muted-foreground mb-2" />
+                          <p className="text-sm text-gray-600 dark:text-muted-foreground">
+                            {socialKitProofFile ? socialKitProofFile.name : "Drag and drop or click to upload"}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-muted-foreground mt-1">PNG, JPG, MP4 or MOV</p>
+                        </div>
+                      </label>
+                      <Button
+                        className="mt-4 bg-orange-500 hover:bg-orange-600 text-white gap-2"
+                        onClick={handleSocialKitUploadProof}
+                        disabled={!socialKitProofFile || socialKitLoading}
+                      >
+                        {socialKitLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                        {socialKitLoading ? "Generating your Social Media Kit..." : "Upload Proof"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
             ) : (
-              /* ── Kit loaded ── */
-              <div className="space-y-4">
-                {/* Top action bar */}
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="space-y-6">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted gap-1.5"
-                    onClick={() => copyToClipboard(publishingKitToText(publishingKit, publishingKitEdits), "Publishing Kit")}
+                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted"
+                    onClick={() => {
+                      copyToClipboard(socialKitToText(socialKit), "Social Media Kit");
+                    }}
                   >
-                    <Copy className="w-3.5 h-3.5" />
+                    <Copy className="w-3.5 h-3.5 mr-1.5" />
                     Copy All
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted gap-1.5"
+                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted"
                     onClick={() => {
-                      const blob = new Blob([publishingKitToText(publishingKit, publishingKitEdits)], { type: "text/plain" });
+                      const blob = new Blob([socialKitToText(socialKit)], { type: "text/plain" });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
-                      a.href = url; a.download = "publishing-kit.txt"; a.click();
+                      a.href = url;
+                      a.download = "social-media-kit.txt";
+                      a.click();
                       URL.revokeObjectURL(url);
-                      toast({ title: "Downloaded", description: "Publishing Kit saved as .txt" });
+                      toast({ title: "Downloaded", description: "Social Media Kit saved as .txt" });
                     }}
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    Download (.txt)
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground hover:bg-gray-200 dark:hover:bg-muted gap-1.5 ml-auto"
-                    onClick={handleGeneratePublishingKit}
-                    disabled={publishingKitLoading}
-                  >
-                    {publishingKitLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Regenerate All
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                    Download Social Media Kit (.txt)
                   </Button>
                 </div>
 
-                {/* ── Section cards ── */}
-                {(
-                  [
-                    { key: "seoTitle",                 label: "SEO-Friendly Title",          isText: true,  optional: false },
-                    { key: "instagramCaption",          label: "Instagram Caption",            isText: true,  optional: false },
-                    { key: "tiktokCaption",             label: "TikTok Caption",              isText: true,  optional: false },
-                    { key: "youtubeShortsDescription",  label: "YouTube Shorts Description",   isText: true,  optional: false },
-                    { key: "facebookCaption",           label: "Facebook Caption",             isText: true,  optional: true  },
-                    { key: "linkedinPost",              label: "LinkedIn Post",                isText: true,  optional: true  },
-                    { key: "ctaSuggestions",            label: "CTA Suggestions",             isList: true,  optional: false },
-                    { key: "hashtagSets",               label: "Hashtag Sets",                isHashtags: true, optional: false },
-                    { key: "youtubeKeywords",           label: "YouTube Keywords / Tags",     isList: true,  optional: false },
-                  ] as { key: string; label: string; isText?: boolean; isList?: boolean; isHashtags?: boolean; optional?: boolean }[]
-                ).map((section) => {
-                  const collapsed = collapsedPKSections.has(section.key);
-                  const isSectionLoading = publishingKitSectionLoading === section.key;
-                  const toggleCollapse = () => setCollapsedPKSections((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(section.key)) next.delete(section.key); else next.add(section.key);
-                    return next;
-                  });
-
-                  let displayValue = "";
-                  let listValue: string[] = [];
-                  if (section.isText) {
-                    displayValue = publishingKitEdits[section.key] ?? (publishingKit[section.key as keyof PublishingKit] as string) ?? "";
-                  } else if (section.isList) {
-                    listValue = (publishingKit[section.key as keyof PublishingKit] as string[]) ?? [];
-                    displayValue = publishingKitEdits[section.key] ?? listValue.join("\n");
-                  }
-
-                  const hashtagSets = section.isHashtags ? publishingKit.hashtagSets : null;
-
-                  return (
-                    <Card key={section.key} className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card overflow-hidden">
-                      {/* Section header — always visible */}
-                      <button
-                        type="button"
-                        onClick={toggleCollapse}
-                        className="w-full flex items-center justify-between gap-2 px-5 py-3.5 text-left hover:bg-gray-100 dark:hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-foreground">{section.label}</span>
-                          {section.optional && <span className="text-xs text-gray-400 dark:text-gray-500">(optional)</span>}
-                          {isSectionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />}
+                {[
+                  {
+                    key: "tiktok",
+                    title: "TikTok",
+                    icon: Share2,
+                    content: [
+                      { label: "Title variations", value: socialKit.tiktok.titleVariations?.join("\n") },
+                      { label: "Description variations", value: socialKit.tiktok.descriptionVariations?.join("\n\n") },
+                      { label: "Hashtags", value: socialKit.tiktok.hashtags?.join(" ") },
+                      { label: "Best posting times", value: socialKit.tiktok.bestPostingTimes },
+                      { label: "Suggested sounds", value: socialKit.tiktok.suggestedSounds?.join(", ") },
+                    ],
+                  },
+                  {
+                    key: "instagram",
+                    title: "Instagram Reels",
+                    icon: Share2,
+                    content: [
+                      { label: "Caption variations", value: socialKit.instagramReels.captionVariations?.join("\n\n") },
+                      { label: "Hashtags", value: socialKit.instagramReels.hashtags?.join(" ") },
+                      { label: "Story sequence", value: socialKit.instagramReels.storySequenceSuggestions?.join("\n• ") },
+                      { label: "Best posting times", value: socialKit.instagramReels.bestPostingTimes },
+                    ],
+                  },
+                  {
+                    key: "youtube",
+                    title: "YouTube Shorts",
+                    icon: Share2,
+                    content: [
+                      { label: "Title variations", value: socialKit.youtubeShorts.titleVariations?.join("\n") },
+                      { label: "Description", value: socialKit.youtubeShorts.descriptionWithKeywords },
+                      { label: "Tags", value: socialKit.youtubeShorts.tagsList?.join(", ") },
+                      { label: "Thumbnail text", value: socialKit.youtubeShorts.thumbnailTextSuggestions?.join(" | ") },
+                    ],
+                  },
+                  {
+                    key: "general",
+                    title: "General",
+                    icon: Share2,
+                    content: [
+                      { label: "Cross-posting schedule", value: socialKit.general.crossPostingSchedule },
+                      { label: "Engagement prompts", value: socialKit.general.engagementPrompts?.join("\n• ") },
+                      { label: "Pin comment suggestions", value: socialKit.general.pinCommentSuggestions?.join("\n• ") },
+                    ],
+                  },
+                ].map((section) => (
+                  <Card key={section.key} className="border-gray-200 dark:border-border bg-gray-50 dark:bg-card">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
+                        <section.icon className="w-4 h-4 text-orange-500" />
+                        {section.title}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {section.content.map((item, i) => (
+                        <div key={i}>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-orange-500 font-medium text-xs uppercase tracking-wide">{item.label}</p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-gray-600 dark:text-muted-foreground hover:text-foreground shrink-0"
+                              onClick={() => copyToClipboard(item.value ?? "", item.label)}
+                            >
+                              <Copy className="w-3 h-3 mr-1" />
+                              Copy
+                            </Button>
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-muted-foreground whitespace-pre-wrap">{item.value || "—"}</p>
                         </div>
-                        <ChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${collapsed ? "" : "rotate-90"}`} />
-                      </button>
-
-                      {/* Section body — collapsible */}
-                      {!collapsed && (
-                        <div className="px-5 pb-5 space-y-3 border-t border-gray-100 dark:border-border pt-4">
-                          {section.isHashtags && hashtagSets ? (
-                            /* Hashtag sets — 4 groups */
-                            <div className="space-y-4">
-                              {(["instagram", "tiktok", "youtube", "general"] as const).map((platform) => (
-                                <div key={platform}>
-                                  <p className="text-orange-500 font-medium text-xs uppercase tracking-wide mb-1.5 capitalize">{platform}</p>
-                                  <div className="flex flex-wrap gap-1.5 mb-1">
-                                    {hashtagSets[platform].map((tag, ti) => (
-                                      <span key={ti} className="text-xs bg-orange-500/10 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full font-mono">{tag.startsWith("#") ? tag : `#${tag}`}</span>
-                                    ))}
-                                  </div>
-                                  <div className="flex gap-2 mt-1">
-                                    <Button variant="ghost" size="sm" className="h-7 text-xs text-gray-500 dark:text-muted-foreground hover:text-foreground gap-1"
-                                      onClick={() => copyToClipboard(hashtagSets[platform].map((t) => t.startsWith("#") ? t : `#${t}`).join(" "), `${platform} hashtags`)}>
-                                      <Copy className="w-3 h-3" />Copy
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
-                              <Button variant="outline" size="sm"
-                                className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground gap-1.5 text-xs mt-2"
-                                onClick={() => handleRegeneratePublishingSection("hashtagSets")}
-                                disabled={isSectionLoading}>
-                                {isSectionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                                Regenerate Hashtags
-                              </Button>
-                            </div>
-                          ) : (
-                            /* Text or list field */
-                            <>
-                              <textarea
-                                className="w-full min-h-[80px] text-sm text-foreground bg-white dark:bg-background border border-gray-200 dark:border-border rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-orange-500/50 placeholder-gray-400"
-                                value={displayValue}
-                                onChange={(e) => setPublishingKitEdits((prev) => ({ ...prev, [section.key]: e.target.value }))}
-                                rows={section.key === "youtubeShortsDescription" || section.key === "linkedinPost" ? 5 : section.isList ? 5 : 3}
-                                placeholder={section.isList ? "One item per line…" : "Edit this field…"}
-                              />
-                              <div className="flex flex-wrap gap-2">
-                                <Button variant="outline" size="sm"
-                                  className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground gap-1.5 text-xs"
-                                  onClick={() => copyToClipboard(displayValue, section.label)}>
-                                  <Copy className="w-3 h-3" />Copy
-                                </Button>
-                                <Button variant="outline" size="sm"
-                                  className="border-gray-200 dark:border-border text-gray-600 dark:text-muted-foreground gap-1.5 text-xs"
-                                  onClick={() => handleRegeneratePublishingSection(section.key)}
-                                  disabled={isSectionLoading}>
-                                  {isSectionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                                  Regenerate
-                                </Button>
-                                {publishingKitEdits[section.key] !== undefined && (
-                                  <button type="button"
-                                    className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 underline"
-                                    onClick={() => setPublishingKitEdits((prev) => { const n = { ...prev }; delete n[section.key]; return n; })}>
-                                    Reset to generated
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })}
+                      ))}
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
-
-            {/* Publishing Kit step nav */}
+            {/* social-kit step nav */}
             <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
-              <Button variant="outline" onClick={() => setActiveTab("scenes")}>
-                ← Back to Scenes
+              <Button variant="outline" onClick={() => setActiveTab("export")}>
+                ← Back to Export
               </Button>
-              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("export")}>
-                Continue to Export →
+              <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6" onClick={() => setActiveTab("script")}>
+                ✓ Done — Back to Start
               </Button>
             </div>
           </TabsContent>
@@ -5063,11 +4771,11 @@ export default function VideoCreationGuide({ guide, scriptTitle, preferredVoiceI
             </Card>
             {/* voiceover step nav */}
             <div className="flex justify-between pt-4 mt-4 border-t border-gray-100 dark:border-border">
-              <Button variant="outline" onClick={() => setActiveTab("voice-settings")}>
-                ← Back to Voice Settings
+              <Button variant="outline" onClick={() => setActiveTab("scenes")}>
+                ← Back to Images
               </Button>
-              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("scenes")}>
-                Continue to Scenes →
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6" onClick={() => setActiveTab("export")}>
+                Continue to Export →
               </Button>
             </div>
           </TabsContent>

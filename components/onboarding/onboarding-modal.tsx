@@ -51,30 +51,7 @@ const TONES = [
   { id: "educational", label: "Educational", emoji: "🎓" },
 ];
 
-const PLATFORMS = [
-  { id: "tiktok", label: "TikTok", emoji: "📱" },
-  { id: "youtube", label: "YouTube", emoji: "🎬" },
-  { id: "instagram", label: "Instagram", emoji: "📸" },
-  { id: "linkedin", label: "LinkedIn", emoji: "💼" },
-  { id: "twitter", label: "Twitter / X", emoji: "🐦" },
-  { id: "facebook", label: "Facebook", emoji: "👥" },
-];
-
-const FREQUENCIES = [
-  { id: "daily", label: "Daily" },
-  { id: "few_times_week", label: "Few times a week" },
-  { id: "weekly", label: "Weekly" },
-  { id: "less", label: "Less often" },
-];
-
-const AUDIENCE_SIZES = [
-  { id: "just_starting", label: "Just starting out", sub: "0 followers" },
-  { id: "small", label: "Small but growing", sub: "Under 1,000" },
-  { id: "growing", label: "Growing audience", sub: "1k – 10k" },
-  { id: "established", label: "Established", sub: "10k+" },
-];
-
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 type ProductIdea = { name: string; description: string; format: string };
 
@@ -82,24 +59,11 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
-
-  // Step 1
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
-
-  // Step 2: Brand
   const [brandName, setBrandName] = useState("");
   const [niche, setNiche] = useState("");
-  const [targetAudience, setTargetAudience] = useState("");
   const [tone, setTone] = useState("friendly");
   const [saving, setSaving] = useState(false);
-
-  // Step 3: Platform & habits
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
-  const [postingFrequency, setPostingFrequency] = useState<string | null>(null);
-  const [audienceSize, setAudienceSize] = useState<string | null>(null);
-  const [savingHabits, setSavingHabits] = useState(false);
-
-  // Step 4
   const [productIdea, setProductIdea] = useState<ProductIdea | null>(null);
   const [generatingIdea, setGeneratingIdea] = useState(false);
 
@@ -109,6 +73,7 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
   const progressPct = (step / TOTAL_STEPS) * 100;
   const goal = GOALS.find((g) => g.id === selectedGoal);
 
+  /** Generate a product idea in the background after step 2 */
   async function generateProductIdea(userNiche: string) {
     if (!userNiche.trim()) return;
     setGeneratingIdea(true);
@@ -126,8 +91,15 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
     setGeneratingIdea(false);
   }
 
+  const handleNext = () => {
+    onStepComplete?.(step);
+    if (step >= TOTAL_STEPS) { onComplete(); return; }
+    setStep((s) => s + 1);
+  };
+
   const handleGoalSelect = (id: string) => {
     setSelectedGoal(id);
+    // Save use case non-blocking
     fetch("/api/user-features", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -140,14 +112,14 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
   const handleSaveBrand = async () => {
     setSaving(true);
     try {
-      if (brandName.trim() || niche.trim() || targetAudience.trim()) {
+      if (brandName.trim() || niche.trim()) {
         await fetch("/api/brand-voice", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             brandName: brandName.trim() || null,
             tone,
-            targetAudience: targetAudience.trim() || niche.trim() || null,
+            targetAudience: niche.trim() || null,
             writingStyle: null,
             examplePhrases: null,
           }),
@@ -155,39 +127,15 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
       }
     } catch { /* non-blocking */ }
     setSaving(false);
-    onStepComplete?.(2);
-    setStep(3);
-  };
-
-  const handleSaveHabits = async () => {
-    setSavingHabits(true);
-    try {
-      await fetch("/api/brand-voice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          platformFocus: selectedPlatforms.join(",") || null,
-          postingFrequency: postingFrequency || null,
-          audienceSize: audienceSize || null,
-        }),
-      });
-    } catch { /* non-blocking */ }
-    setSavingHabits(false);
-    // Kick off product idea generation in background
+    // Fire product idea generation in background (non-blocking)
     if (niche.trim()) generateProductIdea(niche.trim());
-    onStepComplete?.(3);
-    setStep(4);
+    setStep(3);
+    onStepComplete?.(2);
   };
 
   const handleLaunch = () => {
     onComplete();
     if (goal?.href) router.push(goal.href);
-  };
-
-  const togglePlatform = (id: string) => {
-    setSelectedPlatforms((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    );
   };
 
   return (
@@ -214,7 +162,7 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
 
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-6">
 
-        {/* Step 1: Goal */}
+        {/* Step 1: What do you want to do? */}
         {step === 1 && (
           <div className="max-w-lg w-full">
             <div className="text-center mb-8">
@@ -245,6 +193,13 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => { onComplete(); }}
+              className="w-full mt-4 text-white/30 hover:text-white/50 text-xs transition-colors"
+            >
+              Skip setup — explore everything
+            </button>
           </div>
         )}
 
@@ -256,10 +211,10 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
                 <span className="text-2xl">{goal?.emoji ?? "✦"}</span>
               </div>
               <h2 className="text-2xl font-bold text-white mb-2">
-                Tell us about your brand
+                Quick — tell us about your brand
               </h2>
               <p className="text-white/40 text-sm">
-                Makes every AI output sound like you. All fields optional.
+                Makes every AI output sound like you. Skip if you want.
               </p>
             </div>
 
@@ -281,21 +236,9 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
                   Your niche
                 </Label>
                 <Input
-                  placeholder="e.g. personal finance, fitness, travel"
+                  placeholder="e.g. personal finance for beginners"
                   value={niche}
                   onChange={(e) => setNiche(e.target.value)}
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-orange-500"
-                />
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium text-white/70 mb-1 block">
-                  Who is your content for?
-                </Label>
-                <Input
-                  placeholder="e.g. beginners in their 20s who want to save money"
-                  value={targetAudience}
-                  onChange={(e) => setTargetAudience(e.target.value)}
                   className="bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-orange-500"
                 />
               </div>
@@ -324,131 +267,31 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="flex gap-3 mt-6">
               <Button
                 onClick={handleSaveBrand}
                 disabled={saving}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold"
               >
                 {saving ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
                 ) : (
-                  <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>
+                  <>Save & continue <ArrowRight className="ml-2 h-4 w-4" /></>
                 )}
               </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Platform & posting habits */}
-        {step === 3 && (
-          <div className="max-w-md w-full">
-            <div className="text-center mb-8">
-              <div className="w-14 h-14 rounded-2xl bg-orange-500/20 flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">📊</span>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">
-                Your content habits
-              </h2>
-              <p className="text-white/40 text-sm">
-                Helps us personalise your tools and suggestions.
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              {/* Platform focus */}
-              <div>
-                <Label className="text-sm font-medium text-white/70 mb-2 block">
-                  Which platforms do you post on? <span className="text-white/30">(pick all that apply)</span>
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {PLATFORMS.map((p) => {
-                    const selected = selectedPlatforms.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => togglePlatform(p.id)}
-                        className={`p-2.5 rounded-lg border text-xs font-medium transition-all flex flex-col items-center gap-1.5 ${
-                          selected
-                            ? "border-orange-500 bg-orange-500/20 text-orange-400"
-                            : "border-white/10 bg-white/5 text-white/50 hover:border-white/20"
-                        }`}
-                      >
-                        <span className="text-lg">{p.emoji}</span>
-                        <span>{p.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Posting frequency */}
-              <div>
-                <Label className="text-sm font-medium text-white/70 mb-2 block">
-                  How often do you want to post?
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {FREQUENCIES.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setPostingFrequency(f.id)}
-                      className={`p-2.5 rounded-lg border text-xs font-medium transition-all text-left ${
-                        postingFrequency === f.id
-                          ? "border-orange-500 bg-orange-500/20 text-orange-400"
-                          : "border-white/10 bg-white/5 text-white/50 hover:border-white/20"
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Audience size */}
-              <div>
-                <Label className="text-sm font-medium text-white/70 mb-2 block">
-                  What&apos;s your current audience size?
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {AUDIENCE_SIZES.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => setAudienceSize(a.id)}
-                      className={`p-2.5 rounded-lg border text-xs font-medium transition-all text-left ${
-                        audienceSize === a.id
-                          ? "border-orange-500 bg-orange-500/20 text-orange-400"
-                          : "border-white/10 bg-white/5 text-white/50 hover:border-white/20"
-                      }`}
-                    >
-                      <span className="block font-semibold text-[11px]">{a.label}</span>
-                      <span className="text-white/30 font-normal">{a.sub}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6">
               <Button
-                onClick={handleSaveHabits}
-                disabled={savingHabits}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+                variant="ghost"
+                onClick={() => { setStep(3); onStepComplete?.(2); }}
+                className="text-white/30 hover:text-white/50"
               >
-                {savingHabits ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
-                ) : (
-                  <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>
-                )}
+                Skip
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Launch */}
-        {step === 4 && (
+        {/* Step 3: Launch + personalised product idea */}
+        {step === 3 && (
           <div className="max-w-md w-full">
             <div className="text-center mb-6">
               <div className="w-16 h-16 rounded-2xl bg-orange-500/20 flex items-center justify-center mx-auto mb-4 text-3xl">
@@ -505,7 +348,7 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
               </div>
             ) : null}
 
-            {/* Fallback: selected goal card */}
+            {/* Fallback / other goal */}
             {goal && goal.id !== "digital_products" && (
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4 flex items-center gap-3">
                 <span className="text-2xl shrink-0">{goal.emoji}</span>
@@ -517,13 +360,19 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
               </div>
             )}
 
+            <Button
+              onClick={handleLaunch}
+              variant="outline"
+              className="w-full border-white/10 text-white/60 hover:text-white hover:bg-white/5 text-sm"
+            >
+              {goal && goal.id !== "digital_products" ? `Go to ${goal.title}` : "Explore the dashboard"}
+            </Button>
             <button
               type="button"
-              onClick={handleLaunch}
-              className="w-full bg-white/10 hover:bg-white/15 text-white/70 hover:text-white border border-white/10 rounded-lg py-2.5 px-4 text-sm font-medium transition-all"
+              onClick={onComplete}
+              className="mt-3 w-full text-white/20 hover:text-white/40 text-xs transition-colors"
             >
-              {goal && goal.id !== "digital_products" ? `Go to ${goal.title}` : "Explore the dashboard"}{" "}
-              <ArrowRight className="inline ml-1.5 h-3.5 w-3.5" />
+              Skip — go to dashboard
             </button>
           </div>
         )}

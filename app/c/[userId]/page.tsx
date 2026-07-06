@@ -145,7 +145,7 @@ export default async function CreatorProfilePage({
       fontFamily: pageFontFamily }}>
       <style>{`
         .cf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
-        .cf-avatar-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 12px; margin-bottom: 12px; }
+        .cf-avatar-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 16px; margin-bottom: 16px; }
         @media (max-width: 420px) {
           .cf-grid-2 { grid-template-columns: 1fr; }
           .cf-avatar-row { align-items: flex-start; }
@@ -166,7 +166,7 @@ export default async function CreatorProfilePage({
       </div>
 
       {/* ── Content ── */}
-      <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 24px 56px" }}>
+      <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 24px 96px" }}>
 
         {/* Avatar — sits below banner with a gap */}
         <div className="cf-avatar-row">
@@ -222,7 +222,7 @@ export default async function CreatorProfilePage({
 
         {/* Stats row */}
         {(publishedProducts.length > 0 || activeBundles.length > 0) && (
-          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "24px" }}>
             {publishedProducts.length > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                 <span style={{ fontSize: "15px", fontWeight: "800", color: t.text }}>{publishedProducts.length}</span>
@@ -240,7 +240,7 @@ export default async function CreatorProfilePage({
 
         {/* Social links */}
         {showSocial && (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "32px", flexWrap: "wrap" }}>
             {Object.entries(socialLinks).filter(([, v]) => v).map(([platform, url]) => (
               <a key={platform} href={url.startsWith("http") ? url : `https://${url}`} target="_blank" rel="noopener noreferrer"
                 style={{
@@ -257,11 +257,11 @@ export default async function CreatorProfilePage({
           </div>
         )}
 
-        {!showSocial && <div style={{ marginBottom: bio ? "20px" : "14px" }} />}
+        {!showSocial && <div style={{ marginBottom: bio ? "32px" : "24px" }} />}
 
         {/* ── Products ── */}
         {publishedProducts.length > 0 && (
-          <section style={{ marginBottom: "24px" }}>
+          <section style={{ marginBottom: "40px" }}>
             <p style={{ margin: "0 0 16px", fontSize: "11px", fontWeight: "700", color: t.mutedText, textTransform: "uppercase", letterSpacing: "0.12em" }}>
               Products
             </p>
@@ -314,7 +314,7 @@ export default async function CreatorProfilePage({
               </div>
 
             ) : layout === "featured" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {/* Featured first product */}
                 {publishedProducts[0] && (() => {
                   const p = publishedProducts[0];
@@ -329,7 +329,7 @@ export default async function CreatorProfilePage({
                       style={{ display: "block", background: t.card, borderRadius: "20px", overflow: "hidden", textDecoration: "none", border: `1px solid ${t.cardBorder}`, boxShadow: `0 8px 40px ${accent}15` }}>
                       {coverImg ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={coverImg} alt={p.title} style={{ width: "100%", height: "200px", objectFit: "cover", display: "block" }} />
+                        <img src={coverImg} alt={p.title} style={{ width: "100%", height: "240px", objectFit: "cover", display: "block" }} />
                       ) : (
                         <div style={{
                           height: "200px",
@@ -443,7 +443,7 @@ export default async function CreatorProfilePage({
 
         {/* ── Bundles ── */}
         {activeBundles.length > 0 && (
-          <section style={{ marginBottom: "24px" }}>
+          <section style={{ marginBottom: "40px" }}>
             <p style={{ margin: "0 0 16px", fontSize: "11px", fontWeight: "700", color: t.mutedText, textTransform: "uppercase", letterSpacing: "0.12em" }}>
               Bundles
             </p>
@@ -496,7 +496,7 @@ export default async function CreatorProfilePage({
             gap: "24px", flexWrap: "wrap",
             padding: "20px 24px",
             background: t.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-            borderRadius: "16px", marginBottom: "24px",
+            borderRadius: "16px", marginBottom: "40px",
             border: `1px solid ${t.cardBorder}`,
           }}>
             {[
@@ -519,7 +519,7 @@ export default async function CreatorProfilePage({
           border: `1px solid ${accent}28`,
           borderRadius: "20px",
           padding: "28px 28px",
-          marginBottom: "24px",
+          marginBottom: "40px",
           textAlign: "center",
         }}>
           <p style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: "800", color: t.text, letterSpacing: "-0.4px" }}>Stay in the loop</p>
@@ -540,7 +540,7 @@ export default async function CreatorProfilePage({
         </div>
 
         {/* ── Browse marketplace ── */}
-        <div style={{ textAlign: "center", marginBottom: "20px" }}>
+        <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <a href="/marketplace" style={{
             display: "inline-flex", alignItems: "center", gap: "6px",
             fontSize: "13px", fontWeight: "600", color: t.subText,

@@ -26,7 +26,6 @@ import {
 import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users, Sliders } from "lucide-react";
 import { USE_CASES } from "@/lib/use-cases";
 import { useToast } from "@/components/ui/use-toast";
-import { useOnboarding } from "@/components/onboarding/onboarding-provider";
 import {
   saveProfileAction,
   deleteAccountAction,
@@ -53,7 +52,6 @@ export default function SettingsContent({
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const { refetch: refetchOnboarding } = useOnboarding();
   const [displayName, setDisplayName] = useState(settings?.displayName ?? "");
   const [profileSaving, setProfileSaving] = useState(false);
 
@@ -212,14 +210,6 @@ export default function SettingsContent({
         throw new Error("Failed to save");
       }
       toast({ title: "Saved", description: "Brand profile updated." });
-      // Mark the onboarding step as done and refresh the checklist immediately
-      fetch("/api/onboarding", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ steps: { brandProfile: true } }),
-      })
-        .then(() => refetchOnboarding())
-        .catch(() => {});
     } catch (e) {
       toast({
         title: "Error",

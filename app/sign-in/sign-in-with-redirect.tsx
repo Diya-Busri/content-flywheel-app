@@ -42,6 +42,7 @@ export function SignInWithRedirect() {
 
       <div ref={wrapperRef} className="flex flex-col items-center gap-3">
         <SignIn
+          path="/sign-in"
           appearance={{
             elements: {
               formButtonPrimary: "bg-orange-500 hover:bg-orange-600",
