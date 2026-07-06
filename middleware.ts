@@ -65,6 +65,8 @@ const isPublicRoute = createRouteMatcher([
   "/unsubscribed",
   "/c(.*)",
   "/products(.*)",
+  /** Public marketplace — browsable + purchasable without a creator account */
+  "/marketplace(.*)",
   /** All API routes (nested paths included); individual routes still enforce auth inside handlers. */
   "/api(.*)",
 ]);

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import { Search, ShoppingBag, Sparkles, X, TrendingUp, Star, MoreVertical, Eye, EyeOff, Archive, Trash2, Star as StarIcon, Pin, PinOff, Edit3, ExternalLink, RotateCcw, Shield, AlertTriangle, Loader2, Check } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -837,6 +838,7 @@ function CreatorCard({
 }
 
 export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boolean }) {
+  const { isSignedIn } = useAuth();
   const [data, setData]           = useState<ApiResponse | null>(null);
   const [loading, setLoading]     = useState(true);
   const [q, setQ]                 = useState("");
@@ -1196,13 +1198,22 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
             <img src="/logo.png" alt="Content Flywheel" style={{ height: "44px", objectFit: "contain" }} />
           </a>
           {wishlist.size > 0 && (
-            <Link
-              href="/dashboard/wishlist"
-              title={`${wishlist.size} saved`}
-              style={{ position: "absolute", right: 0, background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}
-            >
-              ❤️ {wishlist.size} saved
-            </Link>
+            isSignedIn ? (
+              <Link
+                href="/dashboard/wishlist"
+                title={`${wishlist.size} saved`}
+                style={{ position: "absolute", right: 0, background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}
+              >
+                ❤️ {wishlist.size} saved
+              </Link>
+            ) : (
+              <span
+                title="Sign in to keep your wishlist across devices"
+                style={{ position: "absolute", right: 0, background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700 }}
+              >
+                ❤️ {wishlist.size} saved
+              </span>
+            )
           )}
         </div>
 
