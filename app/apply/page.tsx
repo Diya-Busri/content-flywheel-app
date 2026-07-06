@@ -114,6 +114,18 @@ function ApplyForm() {
     }
   };
 
+  // True only when every field contains a valid value — gates the submit button
+  const canSubmit =
+    name.trim().length >= 2 &&
+    validateEmail(email.trim()) &&
+    platform !== "" &&
+    (() => {
+      const raw = followerCount.replace(/,/g, "").trim();
+      return raw !== "" && !isNaN(parseInt(raw, 10)) && parseInt(raw, 10) >= 0;
+    })() &&
+    niche.trim() !== "" &&
+    goal !== "";
+
   const fieldClass = (field: keyof FieldErrors, base: string) =>
     `${base} ${touched[field] && errors[field] ? "border-red-500/70 focus:border-red-500" : "border-[#2A2A2A] focus:border-orange-500"}`;
 
@@ -275,8 +287,8 @@ function ApplyForm() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors text-base mt-2"
+              disabled={loading || !canSubmit}
+              className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-all text-base mt-2"
             >
               {loading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Reviewing your application…</>
