@@ -227,10 +227,21 @@ async function handleCheckoutSession(event: Stripe.Event) {
       }
     }
 
-    // NOTE: Subscription video credits are NOT awarded at checkout/trial start.
-    // They are awarded in handlePaymentSuccess when the first real payment is charged
-    // (billing_reason === "subscription_create") and on each renewal ("subscription_cycle").
-    // This ensures free-trial users always start with exactly the signup credits (100).
+    // Award subscription video credits immediately on checkout (including free trials).
+    // Idempotency key = checkout session ID → Stripe webhook retries cannot double-grant.
+    // At renewal, handlePaymentSuccess adds another batch (billing_reason=subscription_cycle).
+    // Intentional credit flow:
+    //   Signup:           +100 (Clerk webhook)
+    //   Trial activation: +200 (monthly) or +300 (annual) via this block
+    //   Each renewal:     +200 / +300 via handlePaymentSuccess
+    const interval = (subscription.items.data[0]?.price?.recurring?.interval ?? "month") as "month" | "year";
+    const planLabel = interval === "year" ? "Annual plan — trial activation" : "Monthly plan — trial activation";
+    await addSubscriptionVideoCredits(
+      checkoutSession.customer as string,
+      interval,
+      planLabel,
+      `stripe:checkout:${checkoutSession.id}`
+    ).catch((e) => console.error("[sub-credits] Failed to add trial activation credits:", e));
   }
 }
 
@@ -257,23 +268,16 @@ async function handlePaymentSuccess(event: Stripe.Event) {
 
       console.log(`Reset usage credits to ${DEFAULT_USAGE_CREDITS} for Stripe customer ${customerId}`);
 
-      // Award subscription video credits on first real payment and on each renewal.
-      // "subscription_create" = trial ended / first charge; "subscription_cycle" = renewal.
-      // We do NOT award on checkout (trial start) — that way trial users keep their 100
-      // signup credits and only receive subscription credits when they actually pay.
-      // Invoice ID is the idempotency key — safe against Stripe webhook retries.
-      const isFirstPaymentOrRenewal =
-        invoice.billing_reason === "subscription_create" ||
-        invoice.billing_reason === "subscription_cycle";
-
-      if (isFirstPaymentOrRenewal) {
+      // Award subscription video credits on each billing renewal only.
+      // Trial activation credits are granted at checkout (handleCheckoutSession above).
+      // billing_reason "subscription_cycle" = a new billing period started.
+      // Invoice ID is the idempotency key — Stripe webhook retries cannot double-grant.
+      const isRenewal = invoice.billing_reason === "subscription_cycle";
+      if (isRenewal) {
         const interval = (subscription.items.data[0]?.price?.recurring?.interval ?? "month") as "month" | "year";
-        const isRenewal = invoice.billing_reason === "subscription_cycle";
-        const planLabel = interval === "year"
-          ? (isRenewal ? "Annual plan renewal" : "Annual plan — first payment")
-          : (isRenewal ? "Monthly plan renewal" : "Monthly plan — first payment");
+        const planLabel = interval === "year" ? "Annual plan renewal" : "Monthly plan renewal";
         await addSubscriptionVideoCredits(customerId, interval, planLabel, `stripe:invoice:${invoice.id}`)
-          .catch((e) => console.error("[sub-credits] Failed to add subscription credits:", e));
+          .catch((e) => console.error("[sub-credits] Failed to add renewal credits:", e));
       }
     } catch (error) {
       console.error(`Error processing payment success: ${error}`);
