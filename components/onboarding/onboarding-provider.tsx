@@ -45,7 +45,6 @@ export function OnboardingProvider({
   const pathname = usePathname();
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [steps, setSteps] = useState<OnboardingSteps | null>(null);
-  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Read localStorage once on mount — returning users who already dismissed the modal
@@ -57,19 +56,11 @@ export function OnboardingProvider({
 
   const fetchOnboarding = useCallback(async () => {
     try {
-      // Fetch onboarding status + user's selected features in parallel
-      const [onboardingRes, featuresRes] = await Promise.all([
-        fetch("/api/onboarding"),
-        fetch("/api/user-features"),
-      ]);
+      const onboardingRes = await fetch("/api/onboarding");
       const onboardingData = await onboardingRes.json();
-      const featuresData = await featuresRes.json();
       if (onboardingRes.ok) {
         setOnboardingCompleted(onboardingData.onboardingCompleted === true);
         setSteps(onboardingData.onboardingSteps ?? {});
-      }
-      if (featuresRes.ok) {
-        setEnabledFeatures(featuresData.enabledFeatures ?? null);
       }
     } catch {
       setOnboardingCompleted(false);
@@ -107,15 +98,6 @@ export function OnboardingProvider({
     if (markDashboardSeen && !steps.createAccount) updates.createAccount = true;
     if (markDashboardSeen && !steps.exploreDashboard) updates.exploreDashboard = true;
     if (hasProduct && !steps.firstProduct) updates.firstProduct = true;
-    // If user didn't select "digital_products" during onboarding, auto-complete firstProduct
-    // so it doesn't block overall completion and isn't shown in the checklist
-    if (
-      enabledFeatures !== null &&
-      !enabledFeatures.includes("digital_products") &&
-      !steps.firstProduct
-    ) {
-      updates.firstProduct = true;
-    }
     if (Object.keys(updates).length === 0) return;
     const next = { ...steps, ...updates };
     setSteps(next);
@@ -124,7 +106,7 @@ export function OnboardingProvider({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ steps: next }),
     }).catch(() => {});
-  }, [loading, markDashboardSeen, hasProduct, onboardingCompleted, steps, enabledFeatures]);
+  }, [loading, markDashboardSeen, hasProduct, onboardingCompleted, steps]);
 
   const handleModalComplete = useCallback(() => {
     try {
@@ -181,7 +163,7 @@ export function OnboardingProvider({
       {children}
       {!loading && !onboardingCompleted && !showModal && (
         <div className="fixed bottom-6 right-6 z-40 w-80 max-w-[calc(100vw-3rem)]">
-          <OnboardingChecklist steps={steps} enabledFeatures={enabledFeatures} onStepsChange={fetchOnboarding} />
+          <OnboardingChecklist steps={steps} onStepsChange={fetchOnboarding} />
         </div>
       )}
     </OnboardingContext.Provider>

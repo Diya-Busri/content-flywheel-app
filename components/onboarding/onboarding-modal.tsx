@@ -128,11 +128,6 @@ export function OnboardingModal({ show, onComplete, onStepComplete }: Onboarding
 
   const handleGoalSelect = (id: string) => {
     setSelectedGoal(id);
-    fetch("/api/user-features", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabledFeatures: [id] }),
-    }).catch(() => {});
     onStepComplete?.(step);
     setStep(2);
   };
