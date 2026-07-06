@@ -75,7 +75,6 @@
     "@supabase/supabase-js": "^2.93.3",
     "@tiptap/extension-character-count": "^3.27.1",
     "@tiptap/extension-color": "^3.27.1",
-    "@tiptap/extension-font-family": "^3.27.1",
     "@tiptap/extension-highlight": "^3.27.1",
     "@tiptap/extension-link": "^3.0.0",
     "@tiptap/extension-mention": "^3.27.1",

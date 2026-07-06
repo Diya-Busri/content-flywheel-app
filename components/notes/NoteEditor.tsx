@@ -16,7 +16,36 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { Extension, type RawCommands } from "@tiptap/core";
-import { FontFamily } from "@tiptap/extension-font-family";
+
+// Custom FontFamily extension — avoids @tiptap/extension-font-family peer-dep conflict
+const FontFamily = Extension.create({
+  name: "fontFamily",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["textStyle"],
+        attributes: {
+          fontFamily: {
+            default: null,
+            parseHTML: (element: HTMLElement) => element.style.fontFamily || null,
+            renderHTML: (attributes: Record<string, string | null>) => {
+              if (!attributes.fontFamily) return {};
+              return { style: `font-family: ${attributes.fontFamily}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setFontFamily: (fontFamily: string) => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
+        chain().setMark("textStyle", { fontFamily }).run(),
+      unsetFontFamily: () => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
+        chain().setMark("textStyle", { fontFamily: null }).run(),
+    } as unknown as RawCommands;
+  },
+});
 import { Suggestion } from "@tiptap/suggestion";
 import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
