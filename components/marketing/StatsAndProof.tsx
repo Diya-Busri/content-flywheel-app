@@ -4,7 +4,7 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import {
   Sparkles, Store, Megaphone, Mail,
-  ShieldCheck, CreditCard, Repeat, Package, ArrowRight,
+  ShieldCheck, CreditCard, Repeat, Package, ArrowRight, Users,
 } from "lucide-react";
 import Link from "next/link";
 
