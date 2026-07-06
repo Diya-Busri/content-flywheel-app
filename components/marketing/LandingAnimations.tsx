@@ -49,52 +49,18 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
   return (
     <main>
 
-      {/* ─── TRUST BAR ─── */}
-      <section className="border-y border-white/5 bg-white/[0.02] py-8">
-        <div className="max-w-5xl mx-auto px-6">
-          <FadeUp>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-12 text-center">
-              {[
-                { label: "Now in Beta", sub: "Early access open" },
-                { label: "Free Trial", sub: "No card required" },
-                { label: "One Subscription", sub: "Everything included" },
-                { label: "Cancel Anytime", sub: "No lock-in" },
-              ].map((s) => (
-                <div key={s.label} className="flex flex-col items-center gap-0.5">
-                  <p className="text-sm font-bold text-white">{s.label}</p>
-                  <p className="text-xs text-white/30">{s.sub}</p>
-                </div>
-              ))}
-            </div>
-          </FadeUp>
-        </div>
-      </section>
-
-      {/* ─── PRODUCT JOURNEY (animated flow) ─── */}
-      <ProductJourney />
-
-      {/* ─── FEATURE SHOWCASE (8 features with UI mockups) ─── */}
-      <div className="border-t border-white/[0.05]">
-        <FeatureShowcase />
-      </div>
-
-      {/* ─── STATS + TESTIMONIALS ─── */}
-      <div className="border-t border-white/[0.05]">
-        <StatsAndProof />
-      </div>
-
       {/* ─── COMPARISON ─── */}
       <section className="py-28 lg:py-36 bg-white/[0.02] border-y border-white/[0.05]">
         <div className="max-w-5xl mx-auto px-6">
           <FadeUp className="text-center mb-16">
             <p className="text-xs font-semibold uppercase tracking-widest text-orange-500 mb-4">Why Content Flywheel</p>
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-              Stop paying for{" "}
-              <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">five tools</span>
-              {" "}to do one job
+              The tool stack is{" "}
+              <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">costing you £112+/mo</span>
+              {" "}— and none of it talks to itself
             </h2>
             <p className="mt-4 text-white/40 text-lg max-w-xl mx-auto">
-              Most creators stitch together a stack that costs £100+/mo and still doesn&apos;t talk to itself.
+              Most creators stitch together five separate tools. Content Flywheel replaces all of them — one login, one price, everything connected.
             </p>
           </FadeUp>
 
@@ -120,7 +86,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 </ul>
                 <div className="mt-6 pt-6 border-t border-white/10 flex justify-between items-center">
                   <span className="text-xs text-white/20 uppercase tracking-wide">Total</span>
-                  <span className="text-sm font-bold text-white/30">£100+/mo + your time</span>
+                  <span className="text-sm font-bold text-white/30">£112+/mo + 5 browser tabs</span>
                 </div>
               </div>
             </FadeUp>
@@ -174,7 +140,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
               <blockquote className="text-lg sm:text-xl text-white/70 leading-relaxed">
                 &ldquo;I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email — and none of them talked to each other.
                 <br /><br />
-                I built Content Flywheel because creators shouldn&apos;t need a six-tool stack to run a digital product business. One platform should do it all.&rdquo;
+                Creators shouldn&apos;t need a six-tool stack to run a digital product business. One platform should do it all — so I built it.&rdquo;
               </blockquote>
               <div className="mt-8 flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">CF</div>
@@ -187,18 +153,50 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
           </FadeUp>
 
           <FadeUp delay={0.1} className="mt-8 text-center">
-            <p className="text-white/40 text-sm mb-4">
-              We are in early access. Join now and help shape what gets built next.
-            </p>
             <Link
               href="/signup"
               className="inline-flex items-center gap-2 rounded-full bg-orange-500 hover:bg-orange-400 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition-colors"
             >
-              Join the beta <ArrowRight className="h-4 w-4" />
+              Try it free for 7 days <ArrowRight className="h-4 w-4" />
             </Link>
+            <p className="mt-3 text-xs text-white/20">No credit card required</p>
           </FadeUp>
         </div>
       </section>
+
+      {/* ─── TRUST BAR ─── */}
+      <section className="border-y border-white/5 bg-white/[0.02] py-8">
+        <div className="max-w-5xl mx-auto px-6">
+          <FadeUp>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-12 text-center">
+              {[
+                { label: "Now in Beta", sub: "Early access open" },
+                { label: "7-Day Free Trial", sub: "No card required" },
+                { label: "One Subscription", sub: "Everything included" },
+                { label: "Cancel Anytime", sub: "No lock-in" },
+              ].map((s) => (
+                <div key={s.label} className="flex flex-col items-center gap-0.5">
+                  <p className="text-sm font-bold text-white">{s.label}</p>
+                  <p className="text-xs text-white/30">{s.sub}</p>
+                </div>
+              ))}
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
+      {/* ─── PRODUCT JOURNEY (animated flow) ─── */}
+      <ProductJourney />
+
+      {/* ─── FEATURE SHOWCASE (8 features with UI mockups) ─── */}
+      <div className="border-t border-white/[0.05]">
+        <FeatureShowcase />
+      </div>
+
+      {/* ─── STATS + TESTIMONIALS ─── */}
+      <div className="border-t border-white/[0.05]">
+        <StatsAndProof />
+      </div>
 
       {/* ─── PRICING ─── */}
       <section id="pricing-preview" className="py-28 lg:py-36">

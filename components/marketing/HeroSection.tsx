@@ -32,7 +32,7 @@ export default function HeroSection() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" />
             </span>
-            Now in Beta — Built for creators &amp; digital product makers
+            1,200+ creators already in early access
           </motion.div>
 
           {/* Headline */}
@@ -42,11 +42,11 @@ export default function HeroSection() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-balance text-4xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-7xl"
           >
-            Create, Sell &amp; Market{" "}
+            Stop paying for{" "}
             <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-              Digital Products
+              five tools
             </span>{" "}
-            With AI
+            to launch one digital product
           </motion.h1>
 
           {/* Subheadline */}
@@ -56,7 +56,7 @@ export default function HeroSection() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mt-6 text-lg leading-8 text-white/50 sm:text-xl max-w-2xl mx-auto"
           >
-            Type your idea. AI builds your product in 10 seconds. Sell it from your own store, create promo content, and grow your audience — all in one platform.
+            Replace ChatGPT, Canva, Gumroad, Mailchimp and more with one subscription. Create, sell and market digital products — all from one platform.
           </motion.p>
 
           {/* CTAs */}
@@ -71,14 +71,14 @@ export default function HeroSection() {
               className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition hover:shadow-xl hover:shadow-orange-500/40 hover:scale-105"
             >
               <Sparkles className="h-4 w-4" />
-              Start for free
+              Start 7-day free trial
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </Link>
             <Link
-              href="#features"
+              href="#journey"
               className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-8 py-4 text-base font-semibold text-white transition hover:bg-white/10"
             >
-              See all features
+              See how it works
               <span className="text-white/40">↓</span>
             </Link>
           </motion.div>
@@ -89,7 +89,7 @@ export default function HeroSection() {
             transition={{ duration: 0.6, delay: 0.4 }}
             className="mt-5 text-sm text-white/25"
           >
-            No credit card required · Free trial included · Cancel anytime
+            No credit card required · Cancel anytime
           </motion.p>
         </div>
 

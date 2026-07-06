@@ -220,7 +220,7 @@ export function ProductJourney() {
   const titleInView = useInView(titleRef, { once: true, margin: "-60px" });
 
   return (
-    <section className="py-24 lg:py-32 relative overflow-hidden">
+    <section id="journey" className="py-24 lg:py-32 relative overflow-hidden">
       {/* Background glow */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(249,115,22,0.04),transparent_70%)] pointer-events-none" />
 
