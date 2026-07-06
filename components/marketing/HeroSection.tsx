@@ -32,7 +32,7 @@ export default function HeroSection() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" />
             </span>
-            Now in beta · Free to try
+            7-day free trial · No card needed
           </motion.div>
 
           {/* Headline */}
@@ -56,7 +56,7 @@ export default function HeroSection() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mt-6 text-lg leading-8 text-white/50 sm:text-xl max-w-2xl mx-auto"
           >
-            Replace ChatGPT, Canva, Gumroad, Mailchimp and more with one subscription. Create, sell and market digital products — all from one platform.
+            Replace ChatGPT, Canva, Gumroad, Mailchimp and more with one subscription.
           </motion.p>
 
           {/* CTAs */}

@@ -6,8 +6,9 @@ import {
   Sparkles, PenLine, Store, ShoppingBag, BarChart3,
   Megaphone, Mail, Package, Check, Star, TrendingUp,
   Users, Zap, Play, Image as ImageIcon, ArrowRight,
-  ChevronRight, Eye, Heart, ShoppingCart, Send,
+  Eye, Heart, ShoppingCart,
 } from "lucide-react";
+import Link from "next/link";
 
 /* ─── helpers ─── */
 function FadeUp({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -551,7 +552,7 @@ const FEATURES: Feature[] = [
       "Edit any section with one click",
       "50+ product types supported",
     ],
-    cta: "Try AI Generator",
+    cta: "Try it free",
     mockup: <AIProductMockup />,
     reverse: false,
   },
@@ -568,7 +569,7 @@ const FEATURES: Feature[] = [
       "AI-generated mockup images",
       "Export PDF-ready files",
     ],
-    cta: "Open Design Studio",
+    cta: "Try it free",
     mockup: <DesignStudioMockup />,
     reverse: true,
   },
@@ -581,46 +582,12 @@ const FEATURES: Feature[] = [
     subtitle: "Get a beautiful storefront at yourname.contentflywheel.co.uk. Stripe-powered payments, automatic delivery, no listing fees.",
     bullets: [
       "Custom domain support",
-      "Stripe payments — you keep 100%",
+      "Stripe payments — you keep earnings",
       "Automatic PDF delivery on purchase",
       "Discount codes and promo links",
     ],
-    cta: "Build Your Store",
+    cta: "Try it free",
     mockup: <StoreMockup />,
-    reverse: false,
-  },
-  {
-    tag: "Marketplace",
-    icon: ShoppingBag,
-    iconColor: "text-green-400",
-    iconBg: "bg-green-500/15",
-    title: "Get discovered by buyers already here.",
-    subtitle: "List your products on the Content Flywheel Marketplace and reach thousands of buyers without running ads.",
-    bullets: [
-      "2,000+ active buyers",
-      "Creator profiles with follower feeds",
-      "Featured and trending placements",
-      "Wishlist and follow system",
-    ],
-    cta: "Browse Marketplace",
-    mockup: <MarketplaceMockup />,
-    reverse: true,
-  },
-  {
-    tag: "Analytics Dashboard",
-    icon: BarChart3,
-    iconColor: "text-cyan-400",
-    iconBg: "bg-cyan-500/15",
-    title: "Know exactly what's working.",
-    subtitle: "Real-time revenue, product performance, conversion rates, and subscriber growth — all in one dashboard.",
-    bullets: [
-      "Revenue and sales over time",
-      "Top-performing products",
-      "Conversion rate tracking",
-      "Email subscriber analytics",
-    ],
-    cta: "See Analytics",
-    mockup: <AnalyticsMockup />,
     reverse: false,
   },
   {
@@ -636,42 +603,8 @@ const FEATURES: Feature[] = [
       "Bulk generate 30 days of content",
       "Carousel slides for social media",
     ],
-    cta: "Generate Content",
+    cta: "Try it free",
     mockup: <MarketingMockup />,
-    reverse: true,
-  },
-  {
-    tag: "Email Marketing",
-    icon: Mail,
-    iconColor: "text-blue-400",
-    iconBg: "bg-blue-500/15",
-    title: "Build your list. Send campaigns. No extra tools.",
-    subtitle: "Grow your subscriber list, send broadcasts, and set up automated welcome sequences — entirely inside Content Flywheel.",
-    bullets: [
-      "Welcome email sequences",
-      "Broadcast campaigns",
-      "Subscriber growth tracking",
-      "No Mailchimp or Klaviyo needed",
-    ],
-    cta: "Set Up Email",
-    mockup: <EmailMockup />,
-    reverse: false,
-  },
-  {
-    tag: "Product Library",
-    icon: Package,
-    iconColor: "text-orange-400",
-    iconBg: "bg-orange-500/15",
-    title: "Everything in one place.",
-    subtitle: "Your entire digital product business — all products, drafts, sales data, and files — in a single organised library.",
-    bullets: [
-      "All products in one dashboard",
-      "Publish, archive, and duplicate",
-      "Per-product analytics",
-      "Bulk content generation",
-    ],
-    cta: "View Library",
-    mockup: <LibraryMockup />,
     reverse: true,
   },
 ];
@@ -718,10 +651,13 @@ function FeatureRow({ feature, index }: { feature: Feature; index: number }) {
           ))}
         </ul>
 
-        <button className={`inline-flex items-center gap-2 text-sm font-semibold ${feature.iconColor} group`}>
+        <Link
+          href="/signup"
+          className={`inline-flex items-center gap-2 text-sm font-semibold ${feature.iconColor} group hover:opacity-80 transition-opacity`}
+        >
           {feature.cta}
-          <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-        </button>
+          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+        </Link>
       </motion.div>
 
       {/* Mockup side */}
@@ -748,7 +684,7 @@ export function FeatureShowcase() {
         <FadeUp className="text-center mb-20">
           <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">Everything you need</p>
           <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-            Eight tools.{" "}
+            Four core tools.{" "}
             <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
               One subscription.
             </span>
@@ -763,6 +699,32 @@ export function FeatureShowcase() {
             <FeatureRow key={feature.tag} feature={feature} index={index} />
           ))}
         </div>
+
+        {/* Also included — compact grid */}
+        <FadeUp className="mt-24 pt-16 border-t border-white/[0.06]">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-white/30 mb-8">Also included</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { icon: ShoppingBag, color: "text-green-400", bg: "bg-green-500/10", title: "Marketplace", desc: "List products and reach buyers beyond your own audience." },
+              { icon: BarChart3, color: "text-cyan-400", bg: "bg-cyan-500/10", title: "Analytics Dashboard", desc: "Revenue, conversions, and top products in real time." },
+              { icon: Mail, color: "text-blue-400", bg: "bg-blue-500/10", title: "Email Marketing", desc: "Collect subscribers and send campaigns — no Mailchimp needed." },
+              { icon: Package, color: "text-orange-400", bg: "bg-orange-500/10", title: "Product Library", desc: "All your products, drafts, and sales data in one place." },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className="flex items-start gap-3 p-4 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                  <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center shrink-0`}>
+                    <Icon className={`w-4 h-4 ${item.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white/70 mb-0.5">{item.title}</p>
+                    <p className="text-xs text-white/35 leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </FadeUp>
       </div>
     </section>
   );

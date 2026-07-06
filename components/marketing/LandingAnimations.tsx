@@ -77,16 +77,16 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                   {OLD_STACK.map((t) => (
                     <li key={t.tool} className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-sm font-semibold text-white/40">{t.tool}</p>
-                        <p className="text-xs text-white/20">{t.purpose}</p>
+                        <p className="text-sm font-semibold text-white/60">{t.tool}</p>
+                        <p className="text-xs text-white/40">{t.purpose}</p>
                       </div>
-                      <span className="text-xs text-white/20 shrink-0 mt-0.5">{t.cost}</span>
+                      <span className="text-xs text-white/40 shrink-0 mt-0.5">{t.cost}</span>
                     </li>
                   ))}
                 </ul>
                 <div className="mt-6 pt-6 border-t border-white/10 flex justify-between items-center">
-                  <span className="text-xs text-white/20 uppercase tracking-wide">Total</span>
-                  <span className="text-sm font-bold text-white/30">£112+/mo + 5 browser tabs</span>
+                  <span className="text-xs text-white/40 uppercase tracking-wide">Total</span>
+                  <span className="text-sm font-bold text-white/50">£112+/mo + 5 browser tabs</span>
                 </div>
               </div>
             </FadeUp>
@@ -120,13 +120,21 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 </ul>
                 <div className="mt-6 pt-6 border-t border-orange-500/20 flex justify-between items-center">
                   <span className="text-xs text-white/30 uppercase tracking-wide">One subscription</span>
-                  <span className="text-sm font-bold text-orange-400">Everything included</span>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-orange-400">From £19/mo</span>
+                    <p className="text-[10px] text-white/30 mt-0.5">Everything included</p>
+                  </div>
                 </div>
               </motion.div>
             </FadeUp>
           </div>
         </div>
       </section>
+
+      {/* ─── BETA TRUST (early — right after comparison) ─── */}
+      <div className="border-t border-white/[0.05]">
+        <StatsAndProof />
+      </div>
 
       {/* ─── FOUNDER SECTION ─── */}
       <section className="py-28 bg-[#0a0a0a] border-b border-white/5">
@@ -152,15 +160,6 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
             </div>
           </FadeUp>
 
-          <FadeUp delay={0.1} className="mt-8 text-center">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 rounded-full bg-orange-500 hover:bg-orange-400 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition-colors"
-            >
-              Try it free for 7 days <ArrowRight className="h-4 w-4" />
-            </Link>
-            <p className="mt-3 text-xs text-white/20">No credit card required</p>
-          </FadeUp>
         </div>
       </section>
 
@@ -188,14 +187,9 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
       {/* ─── PRODUCT JOURNEY (animated flow) ─── */}
       <ProductJourney />
 
-      {/* ─── FEATURE SHOWCASE (8 features with UI mockups) ─── */}
+      {/* ─── FEATURE SHOWCASE (4 core features) ─── */}
       <div className="border-t border-white/[0.05]">
         <FeatureShowcase />
-      </div>
-
-      {/* ─── WHAT YOU GET + BETA TRUST ─── */}
-      <div className="border-t border-white/[0.05]">
-        <StatsAndProof />
       </div>
 
       {/* ─── PRICING ─── */}
@@ -215,7 +209,12 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                   🎉
                 </motion.div>
                 <h2 className="text-4xl font-extrabold text-white tracking-tight">One plan. Everything included.</h2>
-                <p className="mt-4 text-white/40 text-lg max-w-md mx-auto">No per-sale fees. No hidden charges. No extra tools.</p>
+                <div className="mt-4 flex items-baseline justify-center gap-2">
+                  <span className="text-5xl font-extrabold text-white">£19</span>
+                  <span className="text-xl text-white/40">/mo</span>
+                  <span className="text-sm text-white/30 ml-1">· or £29/mo monthly</span>
+                </div>
+                <p className="mt-3 text-white/40 text-base max-w-md mx-auto">No per-sale fees. No hidden charges. No extra tools.</p>
                 <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
                     <Link href="/pricing" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition-colors">
@@ -248,6 +247,11 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                   value: "what",
                   q: "What kind of digital products can I create?",
                   a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and AI generates the full product including a cover.",
+                },
+                {
+                  value: "credits",
+                  q: "What are video credits, and how many do I get?",
+                  a: "Video credits power AI-generated videos on the platform — things like promo clips and short-form content. Every new account gets 100 free credits on signup, which is enough for roughly 10 standard videos. Subscribers receive a monthly credit top-up, and additional packs are available if you need more.",
                 },
                 {
                   value: "who",
