@@ -619,18 +619,19 @@ function useSaveToResearch() {
 
 // ─── CTA button ───────────────────────────────────────────────────────────────
 
-function CtaButton({ cta, router, onTabChange }: {
+function CtaButton({ cta, router, onTabChange, onCarousel }: {
   cta: string;
   router: ReturnType<typeof useRouter>;
   onTabChange?: (tab: string) => void;
+  onCarousel?: () => void;
 }) {
   const configs: Record<string, { label: string; icon: React.ReactNode; action: () => void }> = {
     "Create Note":        { label: "Turn into Note",    icon: <StickyNote className="w-3 h-3" />,  action: () => onTabChange?.("notes") },
-    "Generate Carousel":  { label: "Generate Carousel", icon: <Layers className="w-3 h-3" />,       action: () => router.push("/dashboard/design-studio") },
+    "Generate Carousel":  { label: "Generate Carousel", icon: <Layers className="w-3 h-3" />,       action: () => onCarousel?.() },
     "Generate Video":     { label: "Generate Video",    icon: <Zap className="w-3 h-3" />,          action: () => router.push("/dashboard/video-guide/new") },
     "Generate Script":    { label: "Generate Script",   icon: <Mic className="w-3 h-3" />,          action: () => router.push("/dashboard/video-guide/new") },
     "Create Product":     { label: "Create This Product", icon: <Package className="w-3 h-3" />,     action: () => router.push("/dashboard/digital-products/create-from-research") },
-    "Open Design Studio": { label: "Design Studio",     icon: <Wand2 className="w-3 h-3" />,        action: () => router.push("/dashboard/design-studio") },
+    "Open Design Studio": { label: "Design Studio",     icon: <Wand2 className="w-3 h-3" />,        action: () => onCarousel?.() },
   };
   const cfg = configs[cta];
   if (!cfg) return null;
@@ -817,12 +818,12 @@ function LaunchRoadmap({ router }: { router: ReturnType<typeof useRouter> }) {
 
 // ─── AI Recommendation Card ───────────────────────────────────────────────────
 
-function AiRecommendationCard({ rec, router }: {
-  rec: AiRecommendation; router: ReturnType<typeof useRouter>;
+function AiRecommendationCard({ rec, router, onCarousel }: {
+  rec: AiRecommendation; router: ReturnType<typeof useRouter>; onCarousel?: () => void;
 }) {
   const ctaMap: Record<string, { label: string; action: () => void }> = {
     "Build Now":            { label: "Create This Product →", action: () => router.push("/dashboard/digital-products/create-from-research") },
-    "Validate First":       { label: "Generate Carousel →", action: () => router.push("/dashboard/design-studio") },
+    "Validate First":       { label: "Generate Carousel →", action: () => onCarousel?.() },
     "Create Content First": { label: "Generate Script →",   action: () => router.push("/dashboard/video-guide/new") },
     "Research More":        { label: "Refine Research",     action: () => {} },
   };
@@ -1533,6 +1534,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   const [copiedKeywords, setCopiedKeywords] = useState(false);
   const [exportCopied, setExportCopied]     = useState(false);
   const [tasksAdded, setTasksAdded]         = useState(false);
+  const [carouselLoading, setCarouselLoading] = useState(false);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1827,6 +1829,27 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     } catch { /* ignore */ }
     router.push("/dashboard/digital-products/create-from-research");
   };
+
+  // Generate carousel from insights → navigate directly to bundle editor
+  const handleCreateCarousel = useCallback(async (insights: string[]) => {
+    if (!report || carouselLoading) return;
+    setCarouselLoading(true);
+    try {
+      const res = await fetch("/api/research/create-carousel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ insights, query, style: "modern-business" }),
+      });
+      if (!res.ok) throw new Error("Failed to create carousel");
+      const { bundleId } = await res.json() as { bundleId: string };
+      router.push(`/dashboard/design-studio/bundle/${bundleId}`);
+    } catch (err) {
+      console.error("[handleCreateCarousel]", err);
+      setError("Carousel generation failed — please try again.");
+    } finally {
+      setCarouselLoading(false);
+    }
+  }, [report, query, carouselLoading, router]);
 
   // Save the full report as a rich Note (TipTap JSON), then switch to Notes tab
   const handleSaveAsNote = useCallback(() => {
@@ -2537,9 +2560,10 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           <Package className="w-3.5 h-3.5" />Build Product
         </button>
         <button
-          onClick={() => router.push("/dashboard/design-studio")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all">
-          <Layers className="w-3.5 h-3.5" />Create Design
+          onClick={() => handleCreateCarousel(report.insights)}
+          disabled={carouselLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all disabled:opacity-60">
+          <Layers className="w-3.5 h-3.5" />{carouselLoading ? "Generating…" : "Create Design"}
         </button>
         <button
           onClick={() => router.push("/dashboard/video-guide/new")}
@@ -2839,8 +2863,8 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                 <p className="text-[13px] text-foreground/90 leading-relaxed flex-1">{stripMd(insight)}</p>
               </div>
               <div className="flex gap-1.5 pl-9">
-                <button onClick={() => router.push("/dashboard/design-studio")} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-orange-500/8 hover:bg-orange-500/15 text-orange-500 border border-orange-500/15 transition-all">
-                  <Layers className="w-2.5 h-2.5" />Carousel
+                <button onClick={() => handleCreateCarousel([insight])} disabled={carouselLoading} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-orange-500/8 hover:bg-orange-500/15 text-orange-500 border border-orange-500/15 transition-all disabled:opacity-60">
+                  <Layers className="w-2.5 h-2.5" />{carouselLoading ? "…" : "Carousel"}
                 </button>
                 <button onClick={() => router.push("/dashboard/video-guide/new")} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-background hover:bg-accent text-muted-foreground border border-border transition-all">
                   <Mic className="w-2.5 h-2.5" />Script
@@ -2850,7 +2874,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           ))}
         </div>
         <QuickActions actions={[
-          { label: "Generate Carousel from All Insights", icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio"), primary: true },
+          { label: carouselLoading ? "Generating…" : "Generate Carousel from All Insights", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights), primary: true },
           { label: "Save Insights",                       icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("insights", `Insights: ${query}`, report.insights.map((ins, n) => `${n + 1}. ${ins}`).join("\n")) },
         ]} />
       </Section>
@@ -2915,8 +2939,8 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
                 <button onClick={() => router.push("/dashboard/video-guide/new")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all">
                   <Mic className="w-3 h-3" />Generate Script
                 </button>
-                <button onClick={() => router.push("/dashboard/design-studio")} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-background hover:bg-accent text-muted-foreground hover:text-foreground border border-border transition-all">
-                  <Layers className="w-3 h-3" />Make Carousel
+                <button onClick={() => handleCreateCarousel([opp.title + ": " + opp.description])} disabled={carouselLoading} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-background hover:bg-accent text-muted-foreground hover:text-foreground border border-border transition-all disabled:opacity-60">
+                  <Layers className="w-3 h-3" />{carouselLoading ? "Generating…" : "Make Carousel"}
                 </button>
                 <button onClick={() => save(`content-${i}`, opp.title, `${opp.description}\n\nFormat: ${opp.format}\nDifficulty: ${opp.difficulty}`)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-background hover:bg-accent text-muted-foreground hover:text-foreground border border-border transition-all">
                   {saved.has(`content-${i}`) ? <Check className="w-3 h-3 text-green-500" /> : <BookmarkPlus className="w-3 h-3" />}
@@ -2927,7 +2951,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           ))}
         </div>
         <QuickActions actions={[
-          { label: "Open Design Studio",    icon: <Wand2 className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio"), primary: true },
+          { label: carouselLoading ? "Generating…" : "Generate Carousel", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights), primary: true },
           { label: "Generate Video Guide",  icon: <Zap className="w-3 h-3" />,         onClick: () => router.push("/dashboard/video-guide/new") },
           { label: "Save All",              icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("content-opps", `Content Opps: ${query}`, report.contentOpportunities.map(o => `${o.title} (${o.format}, ${o.difficulty})\n${o.description}`).join("\n\n")) },
         ]} />
@@ -2970,7 +2994,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
         </div>
         <QuickActions actions={[
           { label: "Create This Product",    icon: <Package className="w-3 h-3" />,      onClick: handleCreateProduct, primary: true },
-          { label: "Generate Carousel",      icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio") },
+          { label: carouselLoading ? "Generating…" : "Generate Carousel", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights) },
           { label: "Save All Ideas",         icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("product-opps", `Product Opps: ${query}`, report.productOpportunities.map(o => `${o.title}\n${o.description}\nType: ${o.type} · ${o.priceRange}`).join("\n\n")) },
         ]} />
       </Section>
@@ -3033,7 +3057,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             ))}
           </div>
           <QuickActions actions={[
-            { label: "Create Positioning Content", icon: <Layers className="w-3 h-3" />,       onClick: () => router.push("/dashboard/design-studio"), primary: true },
+            { label: carouselLoading ? "Generating…" : "Create Positioning Content", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights), primary: true },
             { label: "Save Analysis",              icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("competitors", `Competitor Analysis: ${query}`, report.competitorInsights.map(c => `${c.name}\nStrength: ${c.strength}\nOpportunity: ${c.gap}`).join("\n\n")) },
           ]} />
         </Section>
@@ -3093,7 +3117,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
               <div className="flex-1 space-y-2">
                 <p className="text-[13px] font-semibold text-foreground">{stripMd(step.action)}</p>
                 <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(step.detail)}</p>
-                {step.cta && <CtaButton cta={step.cta} router={router} onTabChange={onTabChange} />}
+                {step.cta && <CtaButton cta={step.cta} router={router} onTabChange={onTabChange} onCarousel={() => handleCreateCarousel(report.insights)} />}
               </div>
             </div>
           ))}
@@ -3106,7 +3130,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
 
       {/* ── AI Recommendation ─────────────────────────────────────────────── */}
       {report.aiRecommendation && (
-        <AiRecommendationCard rec={report.aiRecommendation} router={router} />
+        <AiRecommendationCard rec={report.aiRecommendation} router={router} onCarousel={() => handleCreateCarousel(report.insights)} />
       )}
 
       {/* ── AI Chat Follow-up ──────────────────────────────────────────────── */}
