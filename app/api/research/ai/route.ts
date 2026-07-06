@@ -243,13 +243,15 @@ interface ProviderResult {
 // ─── Analyst definitions ──────────────────────────────────────────────────────
 
 export const RESEARCH_ANALYSTS = [
-  { id: "web",         displayName: "Web Intelligence",       emoji: "🌐", description: "News, blogs, documentation, industry reports" },
-  { id: "community",   displayName: "Community Intelligence", emoji: "💬", description: "Reddit, forums, Discord discussions" },
-  { id: "social",      displayName: "Social Media Analyst",   emoji: "📱", description: "X/Twitter, LinkedIn, TikTok, YouTube trends" },
-  { id: "marketplace", displayName: "Marketplace Analyst",    emoji: "🛒", description: "Gumroad, Etsy, Creative Market, AppSumo" },
-  { id: "seo",         displayName: "SEO Analyst",            emoji: "🔍", description: "Keywords, search volume, content gaps" },
-  { id: "wikipedia",   displayName: "Wikipedia",              emoji: "📖", description: "Encyclopedic background, definitions, related topics" },
-  { id: "hackernews",  displayName: "Hacker News",            emoji: "🔶", description: "Tech community discussions, startup conversations" },
+  { id: "web",         displayName: "Web Intelligence",    emoji: "🌐", description: "Live web context via DuckDuckGo + AI synthesis" },
+  { id: "news",        displayName: "News",                emoji: "📰", description: "Current news articles from Google News RSS" },
+  { id: "community",   displayName: "Community",           emoji: "💬", description: "Reddit discussions and community sentiment" },
+  { id: "hackernews",  displayName: "Hacker News",         emoji: "🔶", description: "Tech community and startup conversations" },
+  { id: "wikipedia",   displayName: "Wikipedia",           emoji: "📖", description: "Encyclopedic background, definitions, related topics" },
+  { id: "academic",    displayName: "Academic Research",   emoji: "🎓", description: "Peer-reviewed papers via Semantic Scholar" },
+  { id: "seo",         displayName: "SEO & Keywords",      emoji: "🔍", description: "Real Google keyword suggestions and search signals" },
+  { id: "social",      displayName: "Social Intelligence", emoji: "📱", description: "Social media trends and platform analysis" },
+  { id: "marketplace", displayName: "Marketplace",         emoji: "🛒", description: "Digital marketplace products and pricing" },
 ] as const;
 
 // ─── Helper: lightweight GPT-4o-mini call ────────────────────────────────────
@@ -320,13 +322,111 @@ async function fetchRedditPosts(query: string): Promise<RedditPost[]> {
   }
 }
 
+// ─── Helper: Google News RSS ──────────────────────────────────────────────────
+
+function parseRSSItems(xml: string): Array<{ title: string; link: string; description: string }> {
+  const items: Array<{ title: string; link: string; description: string }> = [];
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/g;
+  let m: RegExpExecArray | null;
+  while ((m = itemRegex.exec(xml)) !== null) {
+    const item = m[1] ?? "";
+    const grabTag = (tag: string): string => {
+      const r = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, "i");
+      return (item.match(r)?.[1] ?? "").replace(/<[^>]+>/g, "").trim();
+    };
+    const title = grabTag("title");
+    const link  = grabTag("link") || (item.match(/<link[^>]+href="([^"]+)"/)?.[1] ?? "");
+    const desc  = grabTag("description").slice(0, 200);
+    if (title) items.push({ title, link, description: desc });
+  }
+  return items.slice(0, 10);
+}
+
+async function fetchGoogleNewsRSS(
+  query: string,
+): Promise<Array<{ title: string; link: string; description: string }>> {
+  try {
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-GB&gl=GB&ceid=GB:en`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "ContentFlywheel-Research/1.0" },
+      signal:  AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return [];
+    return parseRSSItems(await res.text());
+  } catch { return []; }
+}
+
+// ─── Helper: Google Suggest (autocomplete) ────────────────────────────────────
+
+async function fetchGoogleSuggest(query: string): Promise<string[]> {
+  try {
+    const res = await fetch(
+      `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`,
+      { headers: { "User-Agent": "ContentFlywheel-Research/1.0" }, signal: AbortSignal.timeout(5_000) },
+    );
+    if (!res.ok) return [];
+    const json = await res.json() as [string, string[]];
+    return (json[1] ?? []).slice(0, 15);
+  } catch { return []; }
+}
+
+// ─── Helper: Semantic Scholar (academic papers) ───────────────────────────────
+
+interface S2Paper {
+  paperId: string;
+  title:   string;
+  abstract?: string;
+  year?:   number;
+  url?:    string;
+}
+
+async function fetchSemanticScholar(query: string): Promise<S2Paper[]> {
+  try {
+    const res = await fetch(
+      `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=8&fields=title,abstract,year,url`,
+      { headers: { "User-Agent": "ContentFlywheel-Research/1.0" }, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) return [];
+    const json = await res.json() as { data?: S2Paper[] };
+    return (json.data ?? []).filter(p => !!p.title);
+  } catch { return []; }
+}
+
+// ─── Helper: DuckDuckGo Instant Answer ───────────────────────────────────────
+
+interface DDGResponse {
+  AbstractText:   string;
+  AbstractSource: string;
+  AbstractURL:    string;
+  RelatedTopics:  Array<{ Text?: string; FirstURL?: string }>;
+}
+
+async function fetchDuckDuckGo(query: string): Promise<DDGResponse | null> {
+  try {
+    const res = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1`,
+      { headers: { "User-Agent": "ContentFlywheel-Research/1.0" }, signal: AbortSignal.timeout(7_000) },
+    );
+    if (!res.ok) return null;
+    return await res.json() as DDGResponse;
+  } catch { return null; }
+}
+
 // ─── Analyst runners ──────────────────────────────────────────────────────────
 
 async function runWebAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
+  // Fetch live DuckDuckGo context alongside AI analysis
+  const ddg = await fetchDuckDuckGo(query);
+  const hasLive = !!(ddg?.AbstractText);
+  const ddgCtx  = hasLive
+    ? `\nLive web context (DuckDuckGo): ${ddg!.AbstractText}\nRelated: ${(ddg!.RelatedTopics ?? []).slice(0, 4).map(t => t.Text ?? "").filter(Boolean).join("; ")}`
+    : "";
+
   const data = await aiCall(
     apiKey,
     "You are an expert web research analyst. Return ONLY valid JSON.",
     `Research this topic for a digital creator or founder: "${query}"
+${ddgCtx}
 Analyse recent web content — news articles, industry blogs, expert documentation, market reports.
 Return JSON:
 {
@@ -339,10 +439,22 @@ Return JSON:
 }`,
     700,
   );
-  const summary = typeof data.summary === "string" && data.summary
-    ? data.summary
-    : `Web research gathered for "${query.slice(0, 40)}"`;
-  return { summary, usedFallback: false, data };
+
+  if (hasLive) {
+    data.abstractContext = ddg!.AbstractText;
+    data.abstractSource  = ddg!.AbstractSource;
+    data.ddgLive         = true;
+  }
+
+  const citations: SourceCitation[] = (hasLive && ddg!.AbstractURL)
+    ? [{ title: ddg!.AbstractSource || "Web Reference", url: ddg!.AbstractURL, source: "Web" }]
+    : [];
+
+  const summary = hasLive
+    ? "Live web context retrieved + AI analysis complete"
+    : (typeof data.summary === "string" ? data.summary : `Web research for "${query.slice(0, 40)}"`);
+
+  return { summary, usedFallback: !hasLive, data, citations };
 }
 
 async function runCommunityAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
@@ -456,11 +568,24 @@ Return JSON:
 }
 
 async function runSeoAnalyst(query: string, apiKey: string): Promise<ProviderResult> {
+  // Fetch real Google autocomplete suggestions for multiple query angles
+  const [mainSuggs, howToSuggs, bestSuggs] = await Promise.all([
+    fetchGoogleSuggest(query),
+    fetchGoogleSuggest(`how to ${query}`),
+    fetchGoogleSuggest(`best ${query}`),
+  ]);
+  const allSuggestions = [...new Set([...mainSuggs, ...howToSuggs, ...bestSuggs])];
+  const hasRealData    = allSuggestions.length > 0;
+
+  const suggestCtx = hasRealData
+    ? `\nReal Google autocomplete data (${allSuggestions.length} terms):\n${allSuggestions.slice(0, 20).join("\n")}`
+    : "";
+
   const data = await aiCall(
     apiKey,
     "You are an SEO and search intelligence analyst. Return ONLY valid JSON.",
     `Research keyword and search opportunities for: "${query}"
-
+${suggestCtx}
 Return JSON:
 {
   "primaryKeywords": [
@@ -475,10 +600,17 @@ Return JSON:
 }`,
     750,
   );
-  const summary = typeof data.summary === "string" && data.summary
-    ? data.summary
-    : "SEO analysis complete";
-  return { summary, usedFallback: true, data };
+
+  if (hasRealData) {
+    data.googleSuggestions = allSuggestions.slice(0, 20);
+    data.dataSource        = "google-suggest";
+  }
+
+  const summary = hasRealData
+    ? `${allSuggestions.length} real Google keyword suggestions analysed`
+    : (typeof data.summary === "string" ? data.summary : "SEO analysis complete");
+
+  return { summary, usedFallback: !hasRealData, data };
 }
 
 // ─── Real connector: Wikipedia ───────────────────────────────────────────────
@@ -600,9 +732,74 @@ async function runHackerNewsAnalyst(query: string, _apiKey: string): Promise<Pro
   }
 }
 
-// ─── Update Reddit runner to include citations ─────────────────────────────────
+// ─── Real connector: News (Google News RSS) ───────────────────────────────────
 
-// (fetchRedditPosts already defined above; extend runCommunityAnalyst to add citations)
+async function runNewsAnalyst(query: string, _apiKey: string): Promise<ProviderResult> {
+  const t0       = Date.now();
+  const articles = await fetchGoogleNewsRSS(query);
+  const duration = Date.now() - t0;
+
+  if (!articles.length) {
+    return {
+      summary:      "No news articles found",
+      usedFallback: false,
+      data:         { articles: [], dataSource: "google-news-rss", duration },
+      citations:    [],
+    };
+  }
+
+  return {
+    summary:      `${articles.length} news articles retrieved`,
+    usedFallback: false,
+    data: {
+      articles:     articles.map(a => ({ title: a.title, description: a.description, url: a.link })),
+      articleCount: articles.length,
+      dataSource:   "google-news-rss",
+      duration,
+    },
+    citations: articles
+      .filter(a => a.link)
+      .slice(0, 8)
+      .map(a => ({ title: a.title, url: a.link, source: "News" })),
+  };
+}
+
+// ─── Real connector: Academic Research (Semantic Scholar) ─────────────────────
+
+async function runAcademicAnalyst(query: string, _apiKey: string): Promise<ProviderResult> {
+  const t0     = Date.now();
+  const papers = await fetchSemanticScholar(query);
+  const duration = Date.now() - t0;
+
+  if (!papers.length) {
+    return {
+      summary:      "No academic papers found",
+      usedFallback: false,
+      data:         { papers: [], dataSource: "semantic-scholar", duration },
+      citations:    [],
+    };
+  }
+
+  return {
+    summary:      `${papers.length} academic papers found`,
+    usedFallback: false,
+    data: {
+      papers: papers.map(p => ({
+        title:    p.title,
+        year:     p.year,
+        abstract: (p.abstract ?? "").slice(0, 300),
+        url:      p.url ?? "",
+      })),
+      recentPapers: papers.filter(p => p.year && p.year >= 2022).length,
+      dataSource:   "semantic-scholar",
+      duration,
+    },
+    citations: papers
+      .filter(p => p.url)
+      .slice(0, 6)
+      .map(p => ({ title: p.title, url: p.url!, source: "Semantic Scholar" })),
+  };
+}
 
 // ─── Synthesis: combines all provider data → existing report format ───────────
 
@@ -685,12 +882,14 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
 
       const analystRunners: Array<[string, (q: string, k: string) => Promise<ProviderResult>]> = [
         ["web",         runWebAnalyst],
+        ["news",        runNewsAnalyst],
         ["community",   runCommunityAnalyst],
+        ["hackernews",  runHackerNewsAnalyst],
+        ["wikipedia",   runWikipediaAnalyst],
+        ["academic",    runAcademicAnalyst],
+        ["seo",         runSeoAnalyst],
         ["social",      runSocialAnalyst],
         ["marketplace", runMarketplaceAnalyst],
-        ["seo",         runSeoAnalyst],
-        ["wikipedia",   runWikipediaAnalyst],
-        ["hackernews",  runHackerNewsAnalyst],
       ];
 
       await Promise.allSettled(
