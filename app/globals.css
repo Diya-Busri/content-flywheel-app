@@ -389,6 +389,24 @@
 .note-editor-content {
   line-height: 1.85;
 }
+/* Ensure inline marks render correctly even with Tailwind preflight resets */
+.note-editor-content strong,
+.note-editor-content b {
+  font-weight: 700;
+}
+.note-editor-content em,
+.note-editor-content i {
+  font-style: italic;
+}
+.note-editor-content u {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.note-editor-content s,
+.note-editor-content del,
+.note-editor-content strike {
+  text-decoration: line-through;
+}
 .note-editor-content > * + * {
   margin-top: 0.5rem;
 }

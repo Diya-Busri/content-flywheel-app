@@ -15,7 +15,8 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
-import { Extension } from "@tiptap/core";
+import { Extension, type RawCommands } from "@tiptap/core";
+import { FontFamily } from "@tiptap/extension-font-family";
 import { Suggestion } from "@tiptap/suggestion";
 import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
@@ -38,31 +39,7 @@ import {
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FontFamily extension — inline, no external package needed
-// (avoids @tiptap/extension-font-family which peer-depends on the uninstalled
-//  @tiptap/extension-text-style@3.27.1 and breaks Vercel builds)
-// ─────────────────────────────────────────────────────────────────────────────
-const FontFamily = Extension.create({
-  name: "fontFamily",
-  addGlobalAttributes() {
-    return [{
-      types: ["textStyle"],
-      attributes: {
-        fontFamily: {
-          default: null,
-          parseHTML: (element: HTMLElement) => element.style.fontFamily?.replace(/['"]+/g, "") || null,
-          renderHTML: (attributes: Record<string, unknown>) => {
-            if (!attributes.fontFamily) return {};
-            return { style: `font-family: ${attributes.fontFamily}` };
-          },
-        },
-      },
-    }];
-  },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FontSize extension (adds fontSize attr to TextStyle globalAttributes)
+// FontSize extension — adds fontSize to TextStyle globalAttributes + commands
 // ─────────────────────────────────────────────────────────────────────────────
 const FontSize = Extension.create({
   name: "fontSize",
@@ -80,6 +57,14 @@ const FontSize = Extension.create({
         },
       },
     }];
+  },
+  addCommands() {
+    return {
+      setFontSize: (fontSize: string) => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
+        chain().setMark("textStyle", { fontSize }).run(),
+      unsetFontSize: () => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
+        chain().setMark("textStyle", { fontSize: null }).run(),
+    } as unknown as RawCommands;
   },
 });
 
@@ -141,6 +126,20 @@ const TextAlignExtension = Extension.create({
         },
       },
     ];
+  },
+  addCommands() {
+    return {
+      setTextAlign: (align: string) => ({ editor, chain }: { editor: { state: { selection: { $from: { parent: { type: { name: string } } } } } }; chain: () => { updateAttributes: (type: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) => {
+        const nodeType = (editor.state.selection.$from.parent as { type: { name: string } }).type.name;
+        if (nodeType === "paragraph" || nodeType === "heading") {
+          return chain().updateAttributes(nodeType, { textAlign: align }).run();
+        }
+        // Fallback: try both
+        chain().updateAttributes("paragraph", { textAlign: align }).run();
+        chain().updateAttributes("heading", { textAlign: align }).run();
+        return true;
+      },
+    } as unknown as RawCommands;
   },
 });
 
@@ -420,13 +419,14 @@ const HIGHLIGHT_COLORS = [
 
 function ColorPicker({ editor, onClose }: { editor: Editor; onClose: () => void }) {
   return (
-    <div className="p-3 w-52 space-y-3" onClick={e => e.stopPropagation()}>
+    <div className="p-3 w-52 space-y-3" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
       <div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Text Color</p>
         <div className="flex flex-wrap gap-1.5">
           {TEXT_COLORS.map(c => (
             <button key={c.value} title={c.label}
-              onClick={() => {
+              onMouseDown={e => {
+                e.preventDefault();
                 c.value
                   ? editor.chain().focus().setColor(c.value).run()
                   : editor.chain().focus().unsetColor().run();
@@ -445,7 +445,8 @@ function ColorPicker({ editor, onClose }: { editor: Editor; onClose: () => void 
         <div className="flex flex-wrap gap-1.5">
           {HIGHLIGHT_COLORS.map(c => (
             <button key={c.value} title={c.label}
-              onClick={() => {
+              onMouseDown={e => {
+                e.preventDefault();
                 c.value
                   ? editor.chain().focus().setHighlight({ color: c.value }).run()
                   : editor.chain().focus().unsetHighlight().run();
@@ -979,12 +980,11 @@ export function NoteEditor({
     setTablePickerOpen(false);
   }, [editor]);
 
-  // Alignment helper
+  // Alignment helper — targets actual current node type, no editor blur
   const setAlign = useCallback((align: string) => {
     if (!editor) return;
-    ["paragraph", "heading"].forEach(type => {
-      editor.chain().focus().updateAttributes(type, { textAlign: align }).run();
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (editor.chain().focus() as any).setTextAlign(align).run();
   }, [editor]);
 
   // Current block type label
@@ -1003,6 +1003,24 @@ export function NoteEditor({
 
   const charCount = editor.storage.characterCount?.words?.() ?? 0;
   const readMins  = Math.max(1, Math.ceil(charCount / 200));
+
+  // Active states for dropdowns
+  const activeTextStyle    = editor.getAttributes("textStyle") as Record<string, string | null>;
+  const activeFontFamily   = activeTextStyle.fontFamily ?? null;
+  const activeFontSize     = activeTextStyle.fontSize ?? null;
+  const activeTextAlign    = editor.getAttributes("paragraph").textAlign ?? editor.getAttributes("heading").textAlign ?? "left";
+
+  const FONT_LABELS: Record<string, string> = {
+    "Georgia, serif": "Serif",
+    "monospace":      "Mono",
+    "cursive":        "Cursive",
+  };
+  const SIZE_LABELS: Record<string, string> = {
+    "12px": "12", "14px": "14", "16px": "16",
+    "18px": "18", "24px": "24", "32px": "32",
+  };
+  const fontLabel = activeFontFamily ? (FONT_LABELS[activeFontFamily] ?? activeFontFamily) : "Font";
+  const sizeLabel = activeFontSize   ? (SIZE_LABELS[activeFontSize]   ?? activeFontSize)   : "Size";
 
   return (
     <div className={cn("relative flex-1 flex flex-col", className)}>
@@ -1030,7 +1048,8 @@ export function NoteEditor({
                   { label: "Quote",      icon: <Quote className="w-3.5 h-3.5" />,    action: () => editor.chain().focus().toggleBlockquote().run() },
                   { label: "Code Block", icon: <Code className="w-3.5 h-3.5" />,     action: () => editor.chain().focus().toggleCodeBlock().run() },
                 ].map(item => (
-                  <button key={item.label} onClick={() => { item.action(); setShowBlockMenu(false); }}
+                  <button key={item.label}
+                    onMouseDown={e => { e.preventDefault(); item.action(); setShowBlockMenu(false); }}
                     className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left hover:bg-accent transition-colors text-foreground">
                     <span className="text-muted-foreground">{item.icon}</span>
                     {item.label}
@@ -1049,27 +1068,41 @@ export function NoteEditor({
               className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[60px]"
               title="Font Family"
             >
-              <span className="truncate max-w-[52px]">Font</span>
+              <span className="truncate max-w-[64px]">{fontLabel}</span>
               <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
             </button>
             {showFontMenu && (
               <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[160px]">
                 {[
-                  { label: "Sans-serif", value: "",                      preview: "Aa" },
-                  { label: "Serif",      value: "Georgia, serif",         preview: "Aa" },
-                  { label: "Monospace",  value: "monospace",              preview: "Aa" },
-                  { label: "Cursive",    value: "cursive",                preview: "Aa" },
-                ].map(item => (
-                  <button key={item.label}
-                    onClick={() => {
-                      editor.chain().focus().setMark("textStyle", { fontFamily: item.value || null }).run();
-                      setShowFontMenu(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left hover:bg-accent transition-colors text-foreground">
-                    <span style={{ fontFamily: item.value || "inherit" }} className="text-[15px] w-6 text-center text-muted-foreground">{item.preview}</span>
-                    <span style={{ fontFamily: item.value || "inherit" }}>{item.label}</span>
-                  </button>
-                ))}
+                  { label: "Sans-serif", value: "",               preview: "Aa" },
+                  { label: "Serif",      value: "Georgia, serif",  preview: "Aa" },
+                  { label: "Monospace",  value: "monospace",       preview: "Aa" },
+                  { label: "Cursive",    value: "cursive",         preview: "Aa" },
+                ].map(item => {
+                  const isActive = activeFontFamily === (item.value || null);
+                  return (
+                    <button key={item.label}
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        if (item.value) {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          (editor.chain().focus() as any).setFontFamily(item.value).run();
+                        } else {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          (editor.chain().focus() as any).unsetFontFamily().run();
+                        }
+                        setShowFontMenu(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
+                        isActive ? "bg-orange-500/8 text-orange-500" : "hover:bg-accent text-foreground"
+                      )}>
+                      <span style={{ fontFamily: item.value || "inherit" }} className="text-[15px] w-6 text-center text-muted-foreground">{item.preview}</span>
+                      <span style={{ fontFamily: item.value || "inherit" }}>{item.label}</span>
+                      {isActive && <Check className="w-3 h-3 ml-auto shrink-0 text-orange-500" />}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1083,29 +1116,43 @@ export function NoteEditor({
               className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[48px]"
               title="Font Size"
             >
-              <span>Size</span>
+              <span>{sizeLabel}</span>
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
             {showSizeMenu && (
               <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[130px]">
                 {[
+                  { label: "Default", value: null },
                   { label: "Small",   value: "12px" },
-                  { label: "Default", value: "14px" },
                   { label: "Medium",  value: "16px" },
                   { label: "Large",   value: "18px" },
                   { label: "XL",      value: "24px" },
                   { label: "2XL",     value: "32px" },
-                ].map(item => (
-                  <button key={item.value}
-                    onClick={() => {
-                      editor.chain().focus().setMark("textStyle", { fontSize: item.value }).run();
-                      setShowSizeMenu(false);
-                    }}
-                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 text-left hover:bg-accent transition-colors text-foreground">
-                    <span style={{ fontSize: item.value }} className="leading-none">{item.label}</span>
-                    <span className="text-[10px] text-muted-foreground/60">{item.value}</span>
-                  </button>
-                ))}
+                ].map(item => {
+                  const isActive = activeFontSize === item.value;
+                  return (
+                    <button key={item.value ?? "default"}
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        if (item.value) {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          (editor.chain().focus() as any).setFontSize(item.value).run();
+                        } else {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          (editor.chain().focus() as any).unsetFontSize().run();
+                        }
+                        setShowSizeMenu(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between gap-3 px-3 py-1.5 text-left transition-colors",
+                        isActive ? "bg-orange-500/8 text-orange-500" : "hover:bg-accent text-foreground"
+                      )}>
+                      <span style={{ fontSize: item.value ?? undefined }} className="leading-none">{item.label}</span>
+                      {item.value && <span className="text-[10px] text-muted-foreground/60">{item.value}</span>}
+                      {isActive && <Check className="w-3 h-3 shrink-0 text-orange-500" />}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1155,7 +1202,10 @@ export function NoteEditor({
               className="flex items-center gap-1 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               title="Text Alignment"
             >
-              <AlignLeft className="w-3.5 h-3.5" />
+              {activeTextAlign === "center"  ? <AlignCenter className="w-3.5 h-3.5" />  :
+               activeTextAlign === "right"   ? <AlignRight className="w-3.5 h-3.5" />   :
+               activeTextAlign === "justify" ? <AlignJustify className="w-3.5 h-3.5" /> :
+               <AlignLeft className="w-3.5 h-3.5" />}
               <ChevronDown className="w-2.5 h-2.5 opacity-60" />
             </button>
             {showAlignMenu && (
@@ -1167,8 +1217,13 @@ export function NoteEditor({
                   { icon: <AlignJustify className="w-3.5 h-3.5" />, align: "justify", title: "Justify" },
                 ].map(item => (
                   <button key={item.align} title={item.title}
-                    onClick={() => { setAlign(item.align); setShowAlignMenu(false); }}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    onMouseDown={e => { e.preventDefault(); setAlign(item.align); setShowAlignMenu(false); }}
+                    className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                      activeTextAlign === item.align
+                        ? "bg-orange-500/12 text-orange-500"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    )}>
                     {item.icon}
                   </button>
                 ))}
@@ -1200,7 +1255,8 @@ export function NoteEditor({
                   { label: "Numbered List", icon: <ListOrdered className="w-3.5 h-3.5" />, active: editor.isActive("orderedList"), action: () => editor.chain().focus().toggleOrderedList().run() },
                   { label: "Checklist",     icon: <CheckSquare className="w-3.5 h-3.5" />, active: editor.isActive("taskList"),   action: () => editor.chain().focus().toggleTaskList().run() },
                 ].map(item => (
-                  <button key={item.label} onClick={() => { item.action(); setShowListMenu(false); }}
+                  <button key={item.label}
+                    onMouseDown={e => { e.preventDefault(); item.action(); setShowListMenu(false); }}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 py-2 text-[13px] text-left transition-colors",
                       item.active ? "text-orange-500 bg-orange-500/5" : "text-foreground hover:bg-accent"
