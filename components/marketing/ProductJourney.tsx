@@ -34,7 +34,7 @@ const STEPS = [
     emoji: "🤖",
     label: "AI Creates",
     title: "AI builds it in seconds",
-    desc: "Ebook, planner, guide, or template — formatted and designed",
+    desc: "Ebook, planner, guide, or template. Fully formatted and designed.",
     color: "from-orange-500/20 to-orange-600/10",
     border: "border-orange-500/40",
     iconColor: "text-orange-400",
@@ -53,7 +53,7 @@ const STEPS = [
     emoji: "🏪",
     label: "Publish",
     title: "List on your store",
-    desc: "Your branded storefront — Stripe payments, auto delivery",
+    desc: "Your branded storefront with Stripe payments and auto delivery.",
     color: "from-blue-500/20 to-blue-600/10",
     border: "border-blue-500/30",
     iconColor: "text-blue-400",
@@ -195,7 +195,7 @@ export function ProductJourney() {
         >
           <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">The journey</p>
           <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-            From idea to income —{" "}
+            From idea to income,{" "}
             <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
               in one afternoon
             </span>

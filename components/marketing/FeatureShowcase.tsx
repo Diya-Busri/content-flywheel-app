@@ -385,7 +385,7 @@ function MarketingMockup() {
           <div className="space-y-2 text-[11px] text-white/60 leading-relaxed font-mono">
             <p className="text-orange-400">[Hook] &quot;If you&apos;re always exhausted by 9am...&quot;</p>
             <p>[Show product] Morning Routine Guide on screen</p>
-            <p>[CTA] &quot;Link in bio — £19 for the full 7-day system&quot;</p>
+            <p>[CTA] &quot;Link in bio, £19 for the full 7-day system&quot;</p>
           </div>
         </div>
         {/* Generated posts */}
@@ -441,7 +441,7 @@ function EmailMockup() {
         {/* Email preview */}
         <div className="flex-1 p-4 overflow-hidden">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-bold text-white/70">Welcome Series — Email 1</p>
+            <p className="text-xs font-bold text-white/70">Welcome Series: Email 1</p>
             <span className="text-[9px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 font-semibold">Active</span>
           </div>
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
@@ -545,7 +545,7 @@ const FEATURES: Feature[] = [
     iconColor: "text-orange-400",
     iconBg: "bg-orange-500/15",
     title: "Describe it. AI builds it. Done.",
-    subtitle: "Type your idea and get a complete, formatted digital product in under 10 seconds — ebooks, planners, guides, workbooks, templates.",
+    subtitle: "Type your idea and get a complete, formatted digital product in under 10 seconds: ebooks, planners, guides, workbooks, templates.",
     bullets: [
       "Full PDF with cover design included",
       "Structured chapters and exercises",
@@ -562,7 +562,7 @@ const FEATURES: Feature[] = [
     iconColor: "text-purple-400",
     iconBg: "bg-purple-500/15",
     title: "Make it look premium. Instantly.",
-    subtitle: "A full canvas editor for covers, social graphics, and slide decks. No design skills needed — just pick a template and personalise.",
+    subtitle: "A full canvas editor for covers, social graphics, and slide decks. Just pick a template and personalise.",
     bullets: [
       "100+ premium templates",
       "Custom colour palettes and fonts",
@@ -582,7 +582,7 @@ const FEATURES: Feature[] = [
     subtitle: "Get a beautiful storefront at yourname.contentflywheel.co.uk. Stripe-powered payments, automatic delivery, no listing fees.",
     bullets: [
       "Custom domain support",
-      "Stripe payments — you keep earnings",
+      "Stripe payments, you keep all your earnings",
       "Automatic PDF delivery on purchase",
       "Discount codes and promo links",
     ],
@@ -595,7 +595,7 @@ const FEATURES: Feature[] = [
     icon: Megaphone,
     iconColor: "text-pink-400",
     iconBg: "bg-pink-500/15",
-    title: "Content that sells — written for you.",
+    title: "Content that sells, written for you.",
     subtitle: "Turn any product into TikTok scripts, Instagram captions, YouTube hooks, email sequences, and hashtag sets. In seconds.",
     bullets: [
       "Platform-specific copy for every channel",
@@ -707,7 +707,7 @@ export function FeatureShowcase() {
             {[
               { icon: ShoppingBag, color: "text-green-400", bg: "bg-green-500/10", title: "Marketplace", desc: "List products and reach buyers beyond your own audience." },
               { icon: BarChart3, color: "text-cyan-400", bg: "bg-cyan-500/10", title: "Analytics Dashboard", desc: "Revenue, conversions, and top products in real time." },
-              { icon: Mail, color: "text-blue-400", bg: "bg-blue-500/10", title: "Email Marketing", desc: "Collect subscribers and send campaigns — no Mailchimp needed." },
+              { icon: Mail, color: "text-blue-400", bg: "bg-blue-500/10", title: "Email Marketing", desc: "Collect subscribers and send campaigns. No Mailchimp needed." },
               { icon: Package, color: "text-orange-400", bg: "bg-orange-500/10", title: "Product Library", desc: "All your products, drafts, and sales data in one place." },
             ].map((item) => {
               const Icon = item.icon;

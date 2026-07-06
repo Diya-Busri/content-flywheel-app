@@ -57,10 +57,10 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
               The tool stack is{" "}
               <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">costing you £112+/mo</span>
-              {" "}— and none of it talks to itself
+              {" "}and none of it talks to itself
             </h2>
             <p className="mt-4 text-white/40 text-lg max-w-xl mx-auto">
-              Most creators stitch together five separate tools. Content Flywheel replaces all of them — one login, one price, everything connected.
+              Most creators stitch together five separate tools. Content Flywheel replaces all of them: one login, one price, everything connected.
             </p>
           </FadeUp>
 
@@ -106,10 +106,10 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 <ul className="space-y-3 text-sm">
                   {[
                     "AI creates your digital product in minutes",
-                    "Built-in store with Stripe — zero platform fees",
+                    "Built-in store with Stripe, zero platform fees",
                     "Promo video creator included",
                     "Content calendar to plan and stay consistent",
-                    "Email marketing built in — no Mailchimp needed",
+                    "Email marketing built in, no Mailchimp needed",
                     "Affiliate programme and discount codes included",
                     "Orders dashboard with automatic download delivery",
                   ].map((t) => (
@@ -146,9 +146,9 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 <p className="text-xs font-semibold uppercase tracking-widest text-orange-500">Why we built this</p>
               </div>
               <blockquote className="text-lg sm:text-xl text-white/70 leading-relaxed">
-                &ldquo;I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email — and none of them talked to each other.
+                &ldquo;I was spending more time managing tools than actually creating. ChatGPT for writing, Canva for design, Stan for selling, Mailchimp for email. None of them talked to each other.
                 <br /><br />
-                Creators shouldn&apos;t need a six-tool stack to run a digital product business. One platform should do it all — so I built it.&rdquo;
+                Creators shouldn&apos;t need a six-tool stack to run a digital product business. One platform should do it all, so I built it.&rdquo;
               </blockquote>
               <div className="mt-8 flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">CF</div>
@@ -246,32 +246,32 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 {
                   value: "what",
                   q: "What kind of digital products can I create?",
-                  a: "Ebooks, planners, workbooks, guides, templates, checklists — anything text and design based. You describe the topic and AI generates the full product including a cover.",
+                  a: "Ebooks, planners, workbooks, guides, templates, checklists: anything text and design based. You describe the topic and AI generates the full product including a cover.",
                 },
                 {
                   value: "credits",
                   q: "What are video credits, and how many do I get?",
-                  a: "Video credits power AI-generated videos on the platform — things like promo clips and short-form content. Every new account gets 100 free credits on signup, which is enough for roughly 10 standard videos. Subscribers receive a monthly credit top-up, and additional packs are available if you need more.",
+                  a: "Video credits power AI-generated videos on the platform, including promo clips and short-form content. Every new account gets 100 free credits on signup, which is enough for roughly 10 standard videos. Subscribers receive a monthly credit top-up, and additional packs are available if you need more.",
                 },
                 {
                   value: "who",
                   q: "Who is Content Flywheel for?",
-                  a: "Creators, coaches, consultants, and anyone who wants to sell digital products. If you have knowledge worth packaging, this platform builds it for you — no tech skills needed.",
+                  a: "Creators, coaches, consultants, and anyone who wants to sell digital products. If you have knowledge worth packaging, this platform builds it for you. No tech skills needed.",
                 },
                 {
                   value: "sell",
                   q: "How do I sell products and get paid?",
-                  a: "You get a branded store at yourname.contentflywheel.co.uk. Payments go through Stripe directly to your bank — we charge no per-sale fees.",
+                  a: "You get a branded store at yourname.contentflywheel.co.uk. Payments go through Stripe directly to your bank, and we charge no per-sale fees.",
                 },
                 {
                   value: "fees",
                   q: "Are there any per-sale fees?",
-                  a: "No. Content Flywheel charges a flat monthly subscription. There are no per-sale fees from us — whatever you earn from your products is yours.",
+                  a: "No. Content Flywheel charges a flat monthly subscription. There are no per-sale fees. Whatever you earn from your products is yours.",
                 },
                 {
                   value: "email",
                   q: "Is email marketing included?",
-                  a: "Yes. Collect subscribers and send email campaigns directly from Content Flywheel — no Mailchimp required.",
+                  a: "Yes. Collect subscribers and send email campaigns directly from Content Flywheel. No Mailchimp required.",
                 },
                 {
                   value: "cancel",
@@ -281,7 +281,7 @@ export function LandingAnimations({ reviews }: { reviews: { text: string; name: 
                 {
                   value: "trial",
                   q: "Is there a free trial?",
-                  a: "Yes — you can sign up and start creating products immediately without a credit card. The trial gives you access to the core tools so you can see the value before subscribing.",
+                  a: "Yes, you can sign up and start creating products immediately without a credit card. The trial gives you access to the core tools so you can see the value before subscribing.",
                 },
               ].map((item) => (
                 <AccordionItem

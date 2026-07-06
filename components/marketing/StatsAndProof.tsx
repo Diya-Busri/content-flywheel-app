@@ -37,7 +37,7 @@ const BETA_CARDS = [
   {
     emoji: "💬",
     title: "Direct Founder Feedback",
-    desc: "Every piece of feedback is reviewed personally. If something doesn't work, we want to know — and we'll fix it.",
+    desc: "Every piece of feedback is reviewed personally. If something doesn't work, we want to know and we'll fix it.",
     border: "border-blue-500/20",
     bg: "bg-blue-500/[0.04]",
     glow: "hover:border-blue-500/40",
