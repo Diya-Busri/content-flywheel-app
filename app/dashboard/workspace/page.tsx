@@ -8,7 +8,8 @@ import {
   Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
   FileText, Lightbulb, ChevronUp, Loader2,
   Pin, Minus, Copy, Clock,
-  LayoutDashboard, Package, Sparkles, ArrowRight, TrendingUp, PlayCircle, Bot, Cpu,
+  LayoutDashboard, Package, Sparkles, ArrowRight, TrendingUp, PlayCircle, Bot,
+  Activity, Shield,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -19,12 +20,11 @@ import { NoteEditor } from "@/components/notes/NoteEditor";
 import { ResearchTab } from "@/components/workspace/ResearchTab";
 import BusinessBrainTab from "@/components/workspace/BusinessBrainTab";
 import AgentCentreTab from "@/components/workspace/AgentCentreTab";
-import BusinessOSTab from "@/components/workspace/BusinessOSTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type WorkspaceTab = "dashboard" | "todos" | "notes" | "calendar" | "goals"
-  | "research" | "memory" | "agents" | "business-os" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
+  | "research" | "memory" | "agents" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
   | "analytics" | "distribution" | "experiments";
 type Priority = "high" | "medium" | "low";
 type TodoFilter = "all" | "active" | "completed";
@@ -229,15 +229,14 @@ function RingProgress({ pct, color, size = 80 }: { pct: number; color: string; s
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
 
 const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
-  { id: "dashboard", label: "Dashboard",        icon: <LayoutDashboard className="w-4 h-4" /> },
-  { id: "todos",    label: "To-Do List",        icon: <ListTodo className="w-4 h-4" /> },
-  { id: "notes",    label: "Notes",             icon: <StickyNote className="w-4 h-4" /> },
-  { id: "calendar", label: "Calendar",          icon: <Calendar className="w-4 h-4" /> },
-  { id: "goals",    label: "Goals",             icon: <Target className="w-4 h-4" /> },
-  { id: "research", label: "Research",          icon: <BookOpen className="w-4 h-4" /> },
-  { id: "memory",   label: "Business Brain",     icon: <Brain className="w-4 h-4" /> },
-  { id: "agents",      label: "Agent Team",   icon: <Bot className="w-4 h-4" /> },
-  { id: "business-os", label: "Business OS",  icon: <Cpu className="w-4 h-4" /> },
+  { id: "dashboard", label: "Today",          icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: "todos",     label: "To-Do List",     icon: <ListTodo className="w-4 h-4" /> },
+  { id: "notes",     label: "Notes",          icon: <StickyNote className="w-4 h-4" /> },
+  { id: "calendar",  label: "Calendar",       icon: <Calendar className="w-4 h-4" /> },
+  { id: "goals",     label: "Goals",          icon: <Target className="w-4 h-4" /> },
+  { id: "research",  label: "Research",       icon: <BookOpen className="w-4 h-4" /> },
+  { id: "memory",    label: "Business Brain", icon: <Brain className="w-4 h-4" /> },
+  { id: "agents",    label: "Agent Team",     icon: <Bot className="w-4 h-4" /> },
 ];
 
 const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
@@ -251,18 +250,56 @@ const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] =
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WORKSPACE DASHBOARD
+// WORKSPACE DASHBOARD — "Today" OS View
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface ActiveProduct { id: string; title: string; status: string; format?: string; updatedAt?: string; }
 
+interface OrchestratorDecision {
+  id: string; title: string; description: string | null; priority: number; isActioned: boolean;
+}
+interface OrchestratorState {
+  healthScore: { overall: number; grade: "A" | "B" | "C" | "D" | "F" };
+  decisions: OrchestratorDecision[];
+}
+interface AgentDiscovery {
+  id: string; agentType: string; discoveryType: string; title: string;
+  description: string | null; confidence: number; priority: number;
+  actionLabel: string | null; actionUrl: string | null; createdAt: string;
+}
+interface BrainRecommendation {
+  id: string; title: string; description: string; priority: number;
+}
+
+const AGENT_COLORS_DASH: Record<string, { text: string; bg: string; border: string }> = {
+  research:   { text: "text-blue-600 dark:text-blue-400",   bg: "bg-blue-500/10",   border: "border-blue-500/20" },
+  product:    { text: "text-green-600 dark:text-green-400", bg: "bg-green-500/10",  border: "border-green-500/20" },
+  content:    { text: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/20" },
+  analytics:  { text: "text-orange-600 dark:text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
+  experiment: { text: "text-pink-600 dark:text-pink-400",   bg: "bg-pink-500/10",   border: "border-pink-500/20" },
+  coach:      { text: "text-teal-600 dark:text-teal-400",   bg: "bg-teal-500/10",   border: "border-teal-500/20" },
+};
+const DISCOVERY_ICONS: Record<string, string> = {
+  opportunity: "🎯", warning: "⚠️", insight: "💡", recommendation: "⚡",
+};
+
 function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) => void }) {
   const router = useRouter();
+
+  // Local state
   const [todos, setTodos] = useState<Todo[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [goals, setGoals] = useState<Goal[]>(DEFAULT_GOALS);
+
+  // API state
   const [activeProduct, setActiveProduct] = useState<ActiveProduct | null>(null);
   const [productLoading, setProductLoading] = useState(true);
+  const [orchestrator, setOrchestrator] = useState<OrchestratorState | null>(null);
+  const [discoveries, setDiscoveries] = useState<AgentDiscovery[]>([]);
+  const [brainRecs, setBrainRecs] = useState<BrainRecommendation[]>([]);
+  const [briefExpanded, setBriefExpanded] = useState(false);
+
+  // AI Plan My Day
   const [planLoading, setPlanLoading] = useState(false);
   const [plan, setPlan] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -274,23 +311,35 @@ function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) 
     try { const g = localStorage.getItem("cf_goals"); if (g) setGoals(JSON.parse(g) as Goal[]); } catch {}
   }, []);
 
-  // Fetch most recent product
+  // Fetch API data in parallel — all non-blocking
   useEffect(() => {
     fetch("/api/products")
       .then(r => r.ok ? r.json() : { products: [] })
       .then(({ products }) => {
         const p = (products as ActiveProduct[]).find(p => p.status !== "archived") ?? null;
         setActiveProduct(p);
-      })
-      .catch(() => {})
-      .finally(() => setProductLoading(false));
+      }).catch(() => {}).finally(() => setProductLoading(false));
+
+    fetch("/api/orchestrator")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data && !data.error) setOrchestrator(data as OrchestratorState); })
+      .catch(() => {});
+
+    fetch("/api/agents/discoveries?limit=6&daysBack=14")
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setDiscoveries(data as AgentDiscovery[]); })
+      .catch(() => {});
+
+    fetch("/api/intelligence/recommendations")
+      .then(r => r.ok ? r.json() : { recommendations: [] })
+      .then(data => { if (Array.isArray(data?.recommendations)) setBrainRecs(data.recommendations as BrainRecommendation[]); })
+      .catch(() => {});
   }, []);
 
-  // Derived data
+  // Derived
   const today = new Date().toISOString().slice(0, 10);
   const activeTodos = todos.filter(t => !t.completed);
-  const todayTodos = activeTodos.filter(t => !t.dueDate || t.dueDate <= today);
-  const highPriorityTodos = [...todayTodos].sort((a, b) => {
+  const highPriorityTodos = [...activeTodos].sort((a, b) => {
     const ord: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
     return ord[a.priority] - ord[b.priority];
   }).slice(0, 5);
@@ -298,38 +347,22 @@ function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) 
   const completedToday = todos.filter(t => t.completed).length;
   const totalToday = todos.length;
   const progressPct = totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0;
-  const goalAvgPct = goals.length > 0
-    ? Math.round(goals.reduce((sum, g) => sum + Math.min(100, g.target > 0 ? (g.current / g.target) * 100 : 0), 0) / goals.length)
-    : 0;
-
   const recentNotes = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
+  const topDecisions = (orchestrator?.decisions ?? []).filter(d => !d.isActioned).slice(0, 4);
+  const healthScore = orchestrator?.healthScore.overall ?? null;
+  const healthGrade = orchestrator?.healthScore.grade ?? null;
+  const healthColor = healthScore !== null
+    ? (healthScore >= 70 ? "text-green-500" : healthScore >= 40 ? "text-orange-500" : "text-red-500")
+    : "text-muted-foreground";
 
-  // Recent Activity feed — merge note edits + task events, sorted by timestamp
-  const activityFeed = useMemo(() => {
-    const events: { ts: number; icon: string; label: string; text: string; badge?: string; onClick: () => void }[] = [];
-    // Note events — last 8 by updatedAt
-    [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8).forEach(n => {
-      events.push({
-        ts: n.updatedAt, icon: "📝", label: "Note",
-        text: n.title || "Untitled",
-        badge: n.tag,
-        onClick: () => { try { sessionStorage.setItem("cf_open_note", n.id); } catch {} onTabChange("notes"); },
-      });
-    });
-    // Task events — last 8 by createdAt
-    [...todos].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8).forEach(t => {
-      events.push({
-        ts: t.createdAt,
-        icon: t.completed ? "✅" : "⬜",
-        label: t.completed ? "Completed" : "Task added",
-        text: t.text,
-        badge: t.priority,
-        onClick: () => onTabChange("todos"),
-      });
-    });
-    return events.sort((a, b) => b.ts - a.ts).slice(0, 12);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes, todos]);
+  // AI Recommendations: brain recs → fallback to local heuristics
+  const localFallbackRecs: { icon: string; text: string; tab?: WorkspaceTab; href?: string }[] = [];
+  if (overdueCount > 0) localFallbackRecs.push({ icon: "⚠️", text: `${overdueCount} task${overdueCount > 1 ? "s are" : " is"} overdue — tackle these first.`, tab: "todos" });
+  if (activeTodos.length === 0) localFallbackRecs.push({ icon: "✅", text: "All tasks done! Add new tasks to keep momentum going.", tab: "todos" });
+  if (!activeProduct && !productLoading) localFallbackRecs.push({ icon: "📦", text: "Create your first digital product from AI research.", href: "/dashboard/digital-products/create-from-research" });
+  if (activeProduct?.status === "draft") localFallbackRecs.push({ icon: "🚀", text: `"${activeProduct.title}" is still a draft — finish and publish it!`, href: `/dashboard/digital-products/${activeProduct.id}/edit` });
+  if (notes.length === 0) localFallbackRecs.push({ icon: "📝", text: "Capture an idea in notes before it disappears.", tab: "notes" });
+  localFallbackRecs.push({ icon: "🔍", text: "Run AI research to find your next product opportunity.", tab: "research" });
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -339,76 +372,48 @@ function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) 
   })();
   const dateStr = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 
-  // AI recommendations based on data
-  const recommendations: { icon: string; text: string; action?: string; tab?: WorkspaceTab; href?: string }[] = [];
-  if (overdueCount > 0) recommendations.push({ icon: "⚠️", text: `${overdueCount} task${overdueCount > 1 ? "s are" : " is"} overdue — tackle these first today.`, tab: "todos" });
-  if (activeTodos.length === 0) recommendations.push({ icon: "✅", text: "All tasks done! Add new tasks to keep your momentum going.", tab: "todos" });
-  if (notes.length === 0) recommendations.push({ icon: "📝", text: "Start a note — capture your ideas before they disappear.", tab: "notes" });
-  if (goals.every(g => g.current === 0)) recommendations.push({ icon: "🎯", text: "Update your goal progress to stay motivated and on track.", tab: "goals" });
-  if (!activeProduct && !productLoading) recommendations.push({ icon: "📦", text: "You have no active product. Create your first digital product now!", href: "/dashboard/digital-products/create-from-research" });
-  if (activeProduct?.status === "draft") recommendations.push({ icon: "🚀", text: `"${activeProduct.title}" is still a draft — finish and publish it!`, href: `/dashboard/digital-products/${activeProduct.id}/edit` });
-  if (recommendations.length === 0) recommendations.push({ icon: "✨", text: "You're doing great! Research a new niche to find your next product opportunity.", tab: "research" });
-
-  // AI Plan My Day
   const handlePlanDay = async () => {
     setPlanLoading(true); setPlanError(null); setPlan(null);
     const taskList = highPriorityTodos.map(t => `- [${t.priority}] ${t.text}${t.dueDate ? ` (due ${t.dueDate})` : ""}`).join("\n");
     const goalList = goals.map(g => `${g.label}: ${g.current}/${g.target} ${g.unit}`).join(", ");
     const productInfo = activeProduct ? `Active product: "${activeProduct.title}" (${activeProduct.status})` : "No active product";
+    const discoveryContext = discoveries.slice(0, 3).map(d => `- ${d.title}`).join("\n");
     const prompt = `You are a productivity coach for a digital creator and online entrepreneur. Based on their current situation, create a focused daily action plan.
 
-Current data:
 Tasks (${activeTodos.length} active, ${overdueCount} overdue):
 ${taskList || "No tasks yet"}
 Goals: ${goalList || "None set"}
 ${productInfo}
 Notes: ${notes.length} saved
+${discoveryContext ? `Agent discoveries:\n${discoveryContext}` : ""}
 
 Create a concise, motivating daily action plan with 3-5 prioritised actions. Format as a numbered list. Be direct and specific. Keep each item to 1 sentence. End with one motivational sentence.`;
-
     try {
-      const res = await fetch("/api/research/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: prompt, mode: "plan" }),
-      });
+      const res = await fetch("/api/research/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "plan" }) });
       const json = await res.json() as { summary?: string; error?: string };
       if (json.summary) setPlan(json.summary);
-      else if (json.error) setPlanError(json.error);
-      else setPlanError("No plan returned.");
-    } catch {
-      setPlanError("Could not generate plan. Try again.");
-    } finally { setPlanLoading(false); }
+      else setPlanError(json.error ?? "No plan returned.");
+    } catch { setPlanError("Could not generate plan. Try again."); }
+    finally { setPlanLoading(false); }
   };
-
-  const QUICK_ACTIONS: { label: string; emoji: string; desc: string; onClick: () => void }[] = [
-    { label: "Create Product", emoji: "📦", desc: "Start from research", onClick: () => router.push("/dashboard/digital-products/create-from-research") },
-    { label: "AI Research", emoji: "🔍", desc: "Find opportunities", onClick: () => onTabChange("research") },
-    { label: "New Note", emoji: "📝", desc: "Capture an idea", onClick: () => onTabChange("notes") },
-    { label: "Add Task", emoji: "✅", desc: "Plan your work", onClick: () => onTabChange("todos") },
-    { label: "Design Studio", emoji: "🎨", desc: "Create visuals", onClick: () => router.push("/dashboard/design-studio") },
-    { label: "Content Calendar", emoji: "📅", desc: "Schedule posts", onClick: () => onTabChange("calendar") },
-  ];
 
   return (
     <div className="space-y-6 max-w-6xl">
-      {/* ── Greeting header ─────────────────────────────────────────────── */}
+
+      {/* ── Greeting ────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-xl font-bold text-foreground">{greeting} 👋</h2>
           <p className="text-sm text-muted-foreground mt-0.5">{dateStr}</p>
         </div>
-        <button
-          onClick={handlePlanDay}
-          disabled={planLoading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold shadow-sm hover:shadow-md transition-all hover:from-orange-600 hover:to-amber-600 disabled:opacity-60"
-        >
+        <button onClick={handlePlanDay} disabled={planLoading}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold shadow-sm hover:shadow-md transition-all hover:from-orange-600 hover:to-amber-600 disabled:opacity-60">
           {planLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           {planLoading ? "Planning your day…" : "✨ Plan My Day"}
         </button>
       </div>
 
-      {/* ── AI Daily Plan ───────────────────────────────────────────────── */}
+      {/* ── AI Plan ─────────────────────────────────────────────────────── */}
       {(plan || planError) && (
         <div className={cn("rounded-2xl border p-5", plan ? "border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-amber-500/5" : "border-red-500/30 bg-red-500/5")}>
           <div className="flex items-center gap-2 mb-3">
@@ -421,75 +426,100 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
         </div>
       )}
 
-      {/* ── Stat cards ───────────────────────────────────────────────────── */}
+      {/* ── OS Status bar ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Active tasks */}
+        {/* Business Health */}
+        <button onClick={() => onTabChange("agents")}
+          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-green-500/30 hover:bg-green-500/5 transition-all text-left group">
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-3 h-3 text-muted-foreground/50" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Business Health</p>
+          </div>
+          <p className={cn("text-3xl font-black tabular-nums", healthColor)}>
+            {healthScore !== null ? `${healthScore}%` : "—"}
+          </p>
+          <p className="text-[10px] text-muted-foreground/40">
+            {healthGrade ? `Grade ${healthGrade} · Agent Team →` : "Run agents to score →"}
+          </p>
+        </button>
+
+        {/* Active Tasks */}
         <button onClick={() => onTabChange("todos")}
           className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-blue-500/30 hover:bg-blue-500/5 transition-all text-left group">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Active Tasks</p>
-          <p className="text-3xl font-black text-blue-500 tabular-nums">{activeTodos.length}</p>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
-            <ListTodo className="w-3 h-3" /><span>To-Do List →</span>
+          <div className="flex items-center gap-1.5">
+            <ListTodo className="w-3 h-3 text-muted-foreground/50" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Active Tasks</p>
           </div>
+          <p className="text-3xl font-black text-blue-500 tabular-nums">{activeTodos.length}</p>
+          <p className="text-[10px] text-muted-foreground/40">
+            {completedToday > 0 ? `${completedToday}/${totalToday} done today →` : "To-Do List →"}
+          </p>
+        </button>
+
+        {/* Agent Discoveries */}
+        <button onClick={() => onTabChange("agents")}
+          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-purple-500/30 hover:bg-purple-500/5 transition-all text-left group">
+          <div className="flex items-center gap-1.5">
+            <Bot className="w-3 h-3 text-muted-foreground/50" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Discoveries</p>
+          </div>
+          <p className="text-3xl font-black text-purple-500 tabular-nums">{discoveries.length}</p>
+          <p className="text-[10px] text-muted-foreground/40">Last 14 days · Agent Team →</p>
         </button>
 
         {/* Notes */}
         <button onClick={() => onTabChange("notes")}
           className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-amber-500/30 hover:bg-amber-500/5 transition-all text-left group">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Notes</p>
+          <div className="flex items-center gap-1.5">
+            <StickyNote className="w-3 h-3 text-muted-foreground/50" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Notes</p>
+          </div>
           <p className="text-3xl font-black text-amber-500 tabular-nums">{notes.length}</p>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
-            <StickyNote className="w-3 h-3" /><span>Notes →</span>
-          </div>
-        </button>
-
-        {/* Goals avg */}
-        <button onClick={() => onTabChange("goals")}
-          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-green-500/30 hover:bg-green-500/5 transition-all text-left group">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Avg Goal</p>
-          <p className={cn("text-3xl font-black tabular-nums", goalAvgPct >= 100 ? "text-green-500" : goalAvgPct >= 50 ? "text-orange-500" : "text-foreground")}>
-            {goalAvgPct}%
-          </p>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
-            <Target className="w-3 h-3" /><span>Goals →</span>
-          </div>
-        </button>
-
-        {/* Done today */}
-        <button onClick={() => onTabChange("todos")}
-          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Done Today</p>
-          <p className="text-3xl font-black text-orange-500 tabular-nums">{completedToday}</p>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40">
-            <CheckCircle2 className="w-3 h-3" /><span>{progressPct}% complete →</span>
-          </div>
+          <p className="text-[10px] text-muted-foreground/40">Ideas captured · Notes →</p>
         </button>
       </div>
 
-      {/* ── Quick actions ────────────────────────────────────────────────── */}
-      <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Quick Actions</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {QUICK_ACTIONS.map(a => (
-            <button key={a.label} onClick={a.onClick}
-              className="flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border border-border bg-card hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
-              <span className="text-xl">{a.emoji}</span>
-              <div>
-                <p className="text-xs font-bold text-foreground group-hover:text-orange-500 transition-colors">{a.label}</p>
-                <p className="text-[10px] text-muted-foreground">{a.desc}</p>
-              </div>
-            </button>
-          ))}
+      {/* ── AI Daily Brief ───────────────────────────────────────────────── */}
+      {topDecisions.length > 0 && (
+        <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-5">
+          <button onClick={() => setBriefExpanded(v => !v)} className="flex items-center gap-2 w-full text-left">
+            <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />
+            <p className="text-sm font-bold text-foreground flex-1">AI Daily Brief</p>
+            <span className="text-[10px] text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full font-semibold">
+              {topDecisions.length} priorities
+            </span>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform ml-1", briefExpanded && "rotate-180")} />
+          </button>
+          {!briefExpanded && (
+            <p className="mt-2 text-xs text-muted-foreground leading-relaxed line-clamp-1">
+              {topDecisions[0]?.title}
+              {topDecisions.length > 1 ? ` and ${topDecisions.length - 1} more priorities` : ""}
+            </p>
+          )}
+          {briefExpanded && (
+            <div className="mt-4 space-y-2">
+              {topDecisions.map((d, i) => (
+                <div key={d.id} className="flex items-start gap-3 p-3.5 rounded-xl bg-background/80 border border-orange-500/10">
+                  <span className="w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">{d.title}</p>
+                    {d.description && <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{d.description}</p>}
+                  </div>
+                </div>
+              ))}
+              <button onClick={() => onTabChange("agents")} className="text-xs text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1 pt-1">
+                Full report in Agent Team <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* ── Main 2-col grid ──────────────────────────────────────────────── */}
       <div className="grid lg:grid-cols-5 gap-6">
 
-        {/* LEFT: Today's Focus + Goals */}
+        {/* LEFT: Today's Focus */}
         <div className="lg:col-span-3 space-y-6">
-
-          {/* Today's Focus */}
           <div className="rounded-2xl border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -505,8 +535,6 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
                 All tasks <ArrowRight className="w-3 h-3" />
               </button>
             </div>
-
-            {/* Progress bar */}
             {totalToday > 0 && (
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
@@ -515,7 +543,6 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
                 <span className="text-[11px] text-muted-foreground font-medium whitespace-nowrap">{completedToday}/{totalToday} done</span>
               </div>
             )}
-
             {highPriorityTodos.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-sm text-muted-foreground mb-3">No tasks yet — what will you tackle today?</p>
@@ -587,10 +614,9 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
           </div>
         </div>
 
-        {/* RIGHT: Active Product + Notes */}
+        {/* RIGHT: Active Project + Quick Actions */}
         <div className="lg:col-span-2 space-y-6">
-
-          {/* Active Product */}
+          {/* Active Project */}
           <div className="rounded-2xl border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -602,34 +628,30 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
               </button>
             </div>
             {productLoading ? (
-              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />Loading…
-              </div>
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading…</div>
             ) : activeProduct ? (
-              <div>
-                <div className="p-4 rounded-xl border border-border bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/digital-products/${activeProduct.id}/edit`)}>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <p className="text-sm font-semibold text-foreground leading-snug">{activeProduct.title}</p>
-                    <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0",
-                      activeProduct.status === "complete" ? "bg-green-500/10 text-green-600 dark:text-green-400" :
-                      activeProduct.status === "draft" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground")}>
-                      {activeProduct.status}
-                    </span>
-                  </div>
-                  {activeProduct.format && <p className="text-[11px] text-muted-foreground capitalize">{activeProduct.format}</p>}
-                  <div className="mt-3 flex gap-2">
-                    {activeProduct.status === "draft" ? (
-                      <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/digital-products/${activeProduct.id}/edit`); }}
-                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors">
-                        Continue editing →
-                      </button>
-                    ) : (
-                      <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/design-studio`); }}
-                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors">
-                        Create visuals →
-                      </button>
-                    )}
-                  </div>
+              <div className="p-4 rounded-xl border border-border bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/digital-products/${activeProduct.id}/edit`)}>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <p className="text-sm font-semibold text-foreground leading-snug">{activeProduct.title}</p>
+                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0",
+                    activeProduct.status === "complete" ? "bg-green-500/10 text-green-600 dark:text-green-400" :
+                    activeProduct.status === "draft" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground")}>
+                    {activeProduct.status}
+                  </span>
+                </div>
+                {activeProduct.format && <p className="text-[11px] text-muted-foreground capitalize">{activeProduct.format}</p>}
+                <div className="mt-3">
+                  {activeProduct.status === "draft" ? (
+                    <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/digital-products/${activeProduct.id}/edit`); }}
+                      className="w-full text-xs font-semibold py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors">
+                      Continue editing →
+                    </button>
+                  ) : (
+                    <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/design-studio`); }}
+                      className="w-full text-xs font-semibold py-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors">
+                      Create visuals →
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -646,129 +668,162 @@ Create a concise, motivating daily action plan with 3-5 prioritised actions. For
             )}
           </div>
 
-          {/* Recent Notes */}
+          {/* Quick Actions */}
           <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <StickyNote className="w-4 h-4 text-orange-500" />
-                <p className="text-sm font-bold text-foreground">Recent Notes</p>
-              </div>
-              <button onClick={() => onTabChange("notes")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-                All notes <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-            {recentNotes.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-xs text-muted-foreground mb-3">No notes yet — capture your first idea</p>
-                <button onClick={() => onTabChange("notes")} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 mx-auto">
-                  <Plus className="w-3.5 h-3.5" />New note
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {recentNotes.map(note => {
-                  const preview = cleanPreview(note.body).slice(0, 80);
-                  return (
-                    <button key={note.id}
-                      onClick={() => {
-                        try { sessionStorage.setItem("cf_open_note", note.id); } catch {}
-                        onTabChange("notes");
-                      }}
-                      className="w-full text-left p-3 rounded-xl border border-border/60 bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors group">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <p className="text-xs font-semibold text-foreground truncate group-hover:text-orange-500 transition-colors">{note.title || "Untitled"}</p>
-                        {note.tag && <span className={cn("text-[9px] font-bold px-1.5 py-px rounded-full border shrink-0", NOTE_TAGS[note.tag as NoteTag]?.pill)}>{NOTE_TAGS[note.tag as NoteTag]?.label}</span>}
-                      </div>
-                      {preview && <p className="text-[11px] text-muted-foreground line-clamp-1">{preview}</p>}
-                      <p className="text-[10px] text-muted-foreground/40 mt-1">{formatRelativeTime(note.updatedAt)}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── AI Recommendations ──────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-4 h-4 text-orange-500" />
-          <p className="text-sm font-bold text-foreground">AI Recommendations</p>
-          <span className="text-[10px] font-medium text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full">Based on your activity</span>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {recommendations.map((rec, i) => (
-            <button key={i}
-              onClick={() => {
-                if (rec.href) router.push(rec.href);
-                else if (rec.tab) onTabChange(rec.tab);
-              }}
-              className={cn("flex items-start gap-3 p-3.5 rounded-xl border bg-background text-left transition-all group",
-                (rec.href || rec.tab) ? "hover:border-orange-500/30 hover:bg-orange-500/5 cursor-pointer" : "cursor-default border-border/60")}
-            >
-              <span className="text-lg shrink-0 leading-none mt-0.5">{rec.icon}</span>
-              <p className="text-xs text-foreground/80 group-hover:text-foreground transition-colors leading-relaxed">{rec.text}</p>
-              {(rec.href || rec.tab) && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 mt-0.5 ml-auto transition-colors" />}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Recent Activity ──────────────────────────────────────────────── */}
-      {activityFeed.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-5">
-            <Clock className="w-4 h-4 text-orange-500" />
-            <p className="text-sm font-bold text-foreground">Recent Activity</p>
-            <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-              {activityFeed.length} event{activityFeed.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-
-          {/* Timeline */}
-          <div className="relative pl-2">
-            {/* Vertical line */}
-            <div className="absolute left-[18px] top-2 bottom-2 w-px bg-border/50 pointer-events-none" />
-
-            <div className="space-y-0.5">
-              {activityFeed.map((ev, i) => (
-                <button
-                  key={i}
-                  onClick={ev.onClick}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-accent transition-colors text-left group"
-                >
-                  {/* Timeline node */}
-                  <div className="w-5 h-5 rounded-full bg-background border border-border/80 flex items-center justify-center shrink-0 z-10 group-hover:border-orange-500/50 transition-colors">
-                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500/50 group-hover:bg-orange-500 transition-colors" />
-                  </div>
-
-                  {/* Emoji */}
-                  <span className="text-sm leading-none shrink-0">{ev.icon}</span>
-
-                  {/* Label + text */}
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50 block leading-none mb-0.5">{ev.label}</span>
-                    <p className="text-xs text-foreground/80 group-hover:text-foreground transition-colors truncate">{ev.text}</p>
-                  </div>
-
-                  {/* Badge */}
-                  {ev.badge && (
-                    <span className="text-[9px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0 capitalize">
-                      {ev.badge}
-                    </span>
-                  )}
-
-                  {/* Time */}
-                  <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums">
-                    {formatRelativeTime(ev.ts)}
-                  </span>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Quick Actions</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: "AI Research", emoji: "🔍", onClick: () => onTabChange("research") },
+                { label: "New Note", emoji: "📝", onClick: () => onTabChange("notes") },
+                { label: "Create Product", emoji: "📦", onClick: () => router.push("/dashboard/digital-products/create-from-research") },
+                { label: "Design Studio", emoji: "🎨", onClick: () => router.push("/dashboard/design-studio") },
+                { label: "Add Task", emoji: "✅", onClick: () => onTabChange("todos") },
+                { label: "Calendar", emoji: "📅", onClick: () => onTabChange("calendar") },
+              ].map(a => (
+                <button key={a.label} onClick={a.onClick}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border/60 bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
+                  <span className="text-base">{a.emoji}</span>
+                  <p className="text-xs font-semibold text-foreground group-hover:text-orange-500 transition-colors">{a.label}</p>
                 </button>
               ))}
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Agent Discoveries + AI Recommendations ───────────────────────── */}
+      <div className="grid lg:grid-cols-2 gap-6">
+
+        {/* Agent Discoveries */}
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bot className="w-4 h-4 text-purple-500" />
+              <p className="text-sm font-bold text-foreground">Agent Discoveries</p>
+              {discoveries.length > 0 && (
+                <span className="text-[10px] font-semibold text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                  {discoveries.length} new
+                </span>
+              )}
+            </div>
+            <button onClick={() => onTabChange("agents")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+              Agent Team <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          {discoveries.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">
+                <Bot className="w-5 h-5 text-purple-400" />
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">No discoveries yet</p>
+              <button onClick={() => onTabChange("agents")} className="text-xs font-semibold text-purple-500 hover:text-purple-600 flex items-center gap-1 mx-auto">
+                Run your agents <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {discoveries.slice(0, 5).map(d => {
+                const agentStyle = AGENT_COLORS_DASH[d.agentType] ?? AGENT_COLORS_DASH.research;
+                return (
+                  <div key={d.id} className="flex items-start gap-3 p-3 rounded-xl border border-border/60 bg-background hover:border-purple-500/20 transition-colors">
+                    <span className="text-base leading-none mt-0.5 shrink-0">{DISCOVERY_ICONS[d.discoveryType] ?? "💡"}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-xs font-semibold text-foreground truncate flex-1">{d.title}</p>
+                        <span className={cn("text-[9px] font-bold px-1.5 py-px rounded-full shrink-0 capitalize", agentStyle.bg, agentStyle.text)}>
+                          {d.agentType}
+                        </span>
+                      </div>
+                      {d.description && <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{d.description}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+              {discoveries.length > 5 && (
+                <button onClick={() => onTabChange("agents")} className="text-xs text-muted-foreground hover:text-purple-500 transition-colors pt-1">
+                  +{discoveries.length - 5} more in Agent Team →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* AI Recommendations */}
+        <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-4 h-4 text-orange-500" />
+            <p className="text-sm font-bold text-foreground">AI Recommendations</p>
+            <span className="text-[10px] font-medium text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full ml-auto">
+              {brainRecs.length > 0 ? "From Business Brain" : "From your activity"}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {(brainRecs.length > 0
+              ? brainRecs.slice(0, 4).map(r => ({ icon: "⚡", text: r.title, sub: r.description, tab: undefined as WorkspaceTab | undefined, href: undefined as string | undefined }))
+              : localFallbackRecs.slice(0, 4).map(r => ({ icon: r.icon, text: r.text, sub: undefined, tab: r.tab, href: r.href }))
+            ).map((rec, i) => (
+              <button key={i}
+                onClick={() => {
+                  if (rec.href) router.push(rec.href);
+                  else if (rec.tab) onTabChange(rec.tab);
+                  else onTabChange("memory");
+                }}
+                className="w-full flex items-start gap-3 p-3 rounded-xl border border-orange-500/10 bg-background/80 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
+                <span className="text-base shrink-0 leading-none mt-0.5">{rec.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-foreground group-hover:text-orange-500 transition-colors leading-snug">{rec.text}</p>
+                  {rec.sub && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{rec.sub}</p>}
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 mt-0.5 transition-colors" />
+              </button>
+            ))}
+            {brainRecs.length === 0 && (
+              <button onClick={() => onTabChange("memory")} className="w-full text-xs text-center text-muted-foreground hover:text-orange-500 transition-colors pt-1 flex items-center justify-center gap-1">
+                <Brain className="w-3 h-3" />Open Business Brain for deeper insights
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent Notes ─────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <StickyNote className="w-4 h-4 text-orange-500" />
+            <p className="text-sm font-bold text-foreground">Recent Notes</p>
+          </div>
+          <button onClick={() => onTabChange("notes")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
+            All notes <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+        {recentNotes.length === 0 ? (
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-muted-foreground">No notes yet — capture your first idea.</p>
+            <button onClick={() => onTabChange("notes")} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 whitespace-nowrap">
+              <Plus className="w-3.5 h-3.5" />New note
+            </button>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-3 gap-3">
+            {recentNotes.map(note => {
+              const preview = cleanPreview(note.body).slice(0, 90);
+              return (
+                <button key={note.id}
+                  onClick={() => { try { sessionStorage.setItem("cf_open_note", note.id); } catch {} onTabChange("notes"); }}
+                  className="text-left p-3 rounded-xl border border-border/60 bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors group">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <p className="text-xs font-semibold text-foreground truncate group-hover:text-orange-500 transition-colors">{note.title || "Untitled"}</p>
+                    {note.tag && <span className={cn("text-[9px] font-bold px-1.5 py-px rounded-full border shrink-0", NOTE_TAGS[note.tag as NoteTag]?.pill)}>{NOTE_TAGS[note.tag as NoteTag]?.label}</span>}
+                  </div>
+                  {preview && <p className="text-[11px] text-muted-foreground line-clamp-2">{preview}</p>}
+                  <p className="text-[10px] text-muted-foreground/40 mt-1.5">{formatRelativeTime(note.updatedAt)}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -4138,22 +4193,21 @@ export default function WorkspacePage() {
   }, [tab]);
 
   const tabDesc: Record<WorkspaceTab, string> = {
-    dashboard:            "Your execution hub — tasks, goals, projects and AI recommendations",
-    todos:                "Stay on top of your daily content tasks",
-    notes:                "Capture ideas, scripts, and notes",
-    calendar:             "Plan and schedule your content drops",
-    goals:                "Track revenue, growth, and product targets",
-    "research":           "AI Business Analyst — discover opportunities, understand markets, take action",
-    "memory":             "Business Brain — an AI that continuously learns your business, getting smarter every day",
-    "agents":             "Agent Team — 6 specialised AI agents that proactively monitor, analyse, and improve your business",
-    "business-os":        "Business OS — autonomous analysis, prioritised decisions, and a real-time health score for your business",
-    "founder-os":         "Your internal OS — the memory and intelligence layer for Content Flywheel",
+    dashboard:              "Your operating system — everything happening in your business, today",
+    todos:                  "Stay on top of your daily content tasks",
+    notes:                  "Capture ideas, scripts, and notes",
+    calendar:               "Plan and schedule your content drops",
+    goals:                  "Track revenue, growth, and product targets",
+    "research":             "Search and report library — AI-powered market and niche research",
+    "memory":               "Business Brain — learned patterns, strategic insights, and your knowledge library",
+    "agents":               "Agent Team — 6 AI specialists monitoring, discovering, and improving your business",
+    "founder-os":           "Your internal OS — the memory and intelligence layer for Content Flywheel",
     "marketing-psychology": "Psychological triggers and buyer behavior principles",
-    "copywriting":        "Headline formulas, frameworks, and reusable copy templates",
-    "content-ideas":      "Hooks, angles, scripts, and viral content formats",
-    "analytics":          "What's working, what's not, and key metric learnings",
-    "distribution":       "Channels, partnerships, and traffic source strategies",
-    "experiments":        "Hypotheses, active tests, and documented results",
+    "copywriting":          "Headline formulas, frameworks, and reusable copy templates",
+    "content-ideas":        "Hooks, angles, scripts, and viral content formats",
+    "analytics":            "What's working, what's not, and key metric learnings",
+    "distribution":         "Channels, partnerships, and traffic source strategies",
+    "experiments":          "Hypotheses, active tests, and documented results",
   };
 
   // Cmd+K / Ctrl+K — global workspace search for all users
@@ -4256,9 +4310,8 @@ export default function WorkspacePage() {
       {tab === "goals"    && <GoalsTab />}
 
       {tab === "research" && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
-      {tab === "memory"       && <BusinessBrainTab />}
-      {tab === "agents"       && <AgentCentreTab />}
-      {tab === "business-os"  && <BusinessOSTab />}
+      {tab === "memory"   && <BusinessBrainTab />}
+      {tab === "agents"   && <AgentCentreTab />}
 
       {/* Admin-only tab content */}
       {isAdmin && tab === "founder-os"             && <FounderOSOverview onTabChange={setTab} />}

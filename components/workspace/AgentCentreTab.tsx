@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Bot, Brain, Package, Pencil, BarChart2, FlaskConical, Target,
-  Play, RefreshCw, X, Check, ChevronDown, Loader2,
-  Sparkles, Zap, Lightbulb, AlertTriangle, TrendingUp,
-  Clock, Activity, BookOpen, ArrowRight, Search,
-  Sun, Calendar, Star,
+  Bot, Brain, Package, Pencil, BarChart2, FlaskConical,
+  Play, RefreshCw, X, Loader2, Sparkles, Zap, Lightbulb,
+  AlertTriangle, TrendingUp, Clock, ArrowRight, Search,
+  ChevronDown, Activity, CheckCircle2,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,18 +49,6 @@ interface AgentTask {
   createdAt: string;
 }
 
-interface DailyBrief {
-  date: string;
-  headline: string;
-  prioritiesHtml: string;
-  discoveries: string[];
-  tasks: string[];
-  warnings: string[];
-  opportunities: string[];
-  businessHealth: number;
-  generatedAt: string;
-}
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const AGENT_ICONS: Record<AgentType, React.ComponentType<{ className?: string }>> = {
@@ -73,245 +60,41 @@ const AGENT_ICONS: Record<AgentType, React.ComponentType<{ className?: string }>
   coach:      Brain,
 };
 
-const AGENT_COLORS: Record<AgentType, { bg: string; text: string; border: string; badge: string }> = {
-  research:   { bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",   border: "border-blue-500/20",   badge: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
-  product:    { bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400", border: "border-green-500/20",  badge: "bg-green-500/15 text-green-700 dark:text-green-300" },
-  content:    { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400", border: "border-purple-500/20", badge: "bg-purple-500/15 text-purple-700 dark:text-purple-300" },
-  analytics:  { bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", border: "border-orange-500/20", badge: "bg-orange-500/15 text-orange-700 dark:text-orange-300" },
-  experiment: { bg: "bg-pink-500/10",   text: "text-pink-600 dark:text-pink-400",   border: "border-pink-500/20",   badge: "bg-pink-500/15 text-pink-700 dark:text-pink-300" },
-  coach:      { bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", border: "border-violet-500/20", badge: "bg-violet-500/15 text-violet-700 dark:text-violet-300" },
+const AGENT_COLORS: Record<AgentType, { bg: string; text: string; border: string }> = {
+  research:   { bg: "bg-blue-500/10",   text: "text-blue-600 dark:text-blue-400",     border: "border-blue-500/20" },
+  product:    { bg: "bg-green-500/10",  text: "text-green-600 dark:text-green-400",   border: "border-green-500/20" },
+  content:    { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400", border: "border-purple-500/20" },
+  analytics:  { bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", border: "border-orange-500/20" },
+  experiment: { bg: "bg-pink-500/10",   text: "text-pink-600 dark:text-pink-400",     border: "border-pink-500/20" },
+  coach:      { bg: "bg-teal-500/10",   text: "text-teal-600 dark:text-teal-400",     border: "border-teal-500/20" },
 };
 
-const DISCOVERY_TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
-  opportunity:    { icon: TrendingUp,    color: "text-green-500" },
-  warning:        { icon: AlertTriangle, color: "text-amber-500" },
-  insight:        { icon: Lightbulb,     color: "text-blue-500" },
-  recommendation: { icon: Zap,           color: "text-purple-500" },
+const DISCOVERY_STYLE: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+  opportunity:    { icon: <TrendingUp className="w-3.5 h-3.5" />,    color: "text-green-600 dark:text-green-400 bg-green-500/10 border-green-500/20",  label: "Opportunity" },
+  warning:        { icon: <AlertTriangle className="w-3.5 h-3.5" />, color: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20",  label: "Warning" },
+  insight:        { icon: <Lightbulb className="w-3.5 h-3.5" />,    color: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20",      label: "Insight" },
+  recommendation: { icon: <Zap className="w-3.5 h-3.5" />,          color: "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20", label: "Action" },
 };
 
-function fmtRelative(dateStr: string): string {
+function fmtRelative(dateStr: string | null): string {
+  if (!dateStr) return "Never run";
   const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 1) return "Just now";
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-function nextRunIn(lastRunAt: string | null, rateLimitHours: number): string {
-  if (!lastRunAt) return "Ready to run";
-  const hoursElapsed = (Date.now() - new Date(lastRunAt).getTime()) / 3_600_000;
-  const remaining = rateLimitHours - hoursElapsed;
-  if (remaining <= 0) return "Ready to run";
-  if (remaining < 1) return `${Math.round(remaining * 60)}m`;
-  return `${remaining.toFixed(1)}h`;
-}
-
-// ─── Agent Card ───────────────────────────────────────────────────────────────
-
-function AgentCard({
-  agent,
-  onToggle,
-  onRun,
-  running,
-}: {
-  agent: Agent;
-  onToggle: (type: AgentType, enabled: boolean) => void;
-  onRun: (type: AgentType) => void;
-  running: boolean;
-}) {
-  const Icon = AGENT_ICONS[agent.agentType];
-  const colors = AGENT_COLORS[agent.agentType];
-  const ready = !agent.lastRunAt ||
-    (Date.now() - new Date(agent.lastRunAt).getTime()) > agent.rateLimitHours * 3_600_000;
-
-  return (
-    <div className={`rounded-2xl border p-4 transition-all ${agent.isEnabled ? `${colors.bg} ${colors.border}` : "border-border bg-card opacity-50"}`}>
-      <div className="flex items-start gap-3">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${agent.isEnabled ? colors.bg : "bg-muted/60"}`}>
-          <Icon className={`w-4 h-4 ${agent.isEnabled ? colors.text : "text-muted-foreground"}`} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-bold text-foreground leading-tight">{agent.name}</p>
-            <button
-              onClick={() => onToggle(agent.agentType, !agent.isEnabled)}
-              className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${agent.isEnabled ? "bg-purple-500" : "bg-muted"}`}
-              title={agent.isEnabled ? "Disable agent" : "Enable agent"}
-            >
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${agent.isEnabled ? "translate-x-4" : "translate-x-0.5"}`} />
-            </button>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{agent.description}</p>
-
-          <div className="flex items-center gap-2 mt-2">
-            {agent.lastRunAt ? (
-              <span className="text-[9px] text-muted-foreground/60 flex items-center gap-0.5">
-                <Clock className="w-2.5 h-2.5" />{fmtRelative(agent.lastRunAt)}
-              </span>
-            ) : (
-              <span className="text-[9px] text-muted-foreground/40">Never run</span>
-            )}
-            {agent.lastDiscoveriesCount > 0 && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${colors.badge}`}>
-                {agent.lastDiscoveriesCount} found
-              </span>
-            )}
-            <button
-              onClick={() => onRun(agent.agentType)}
-              disabled={running || !agent.isEnabled}
-              title={ready ? "Run agent now" : `Next run: ${nextRunIn(agent.lastRunAt, agent.rateLimitHours)}`}
-              className={`ml-auto flex items-center gap-1 text-[9px] font-semibold px-2 py-1 rounded-lg transition-colors ${running ? "opacity-50 cursor-not-allowed" : ready ? `${colors.bg} ${colors.text} hover:opacity-80` : "bg-muted/60 text-muted-foreground cursor-not-allowed"}`}
-            >
-              {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-              {running ? "Running" : ready ? "Run" : nextRunIn(agent.lastRunAt, agent.rateLimitHours)}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Discovery Card ───────────────────────────────────────────────────────────
-
-function DiscoveryCard({
-  discovery,
-  onDismiss,
-}: {
-  discovery: Discovery;
-  onDismiss: (id: string) => void;
-}) {
-  const [dismissing, setDismissing] = useState(false);
-  const typeConfig = DISCOVERY_TYPE_CONFIG[discovery.discoveryType] ?? DISCOVERY_TYPE_CONFIG.insight!;
-  const TypeIcon = typeConfig.icon;
-  const agentColors = AGENT_COLORS[discovery.agentType];
-
-  return (
-    <div className="group flex items-start gap-3 py-3 border-b border-border/40 last:border-0">
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${agentColors.bg}`}>
-        <TypeIcon className={`w-3.5 h-3.5 ${typeConfig.color}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2">
-          <p className="text-xs font-semibold text-foreground flex-1 leading-tight">{discovery.title}</p>
-          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${agentColors.badge}`}>
-            {discovery.agentType}
-          </span>
-        </div>
-        {discovery.description && (
-          <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed line-clamp-2">{discovery.description}</p>
-        )}
-        <div className="flex items-center gap-2 mt-1">
-          <div className="flex items-center gap-0.5">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className={`w-1 h-1.5 rounded-full ${i < Math.round(discovery.confidence * 5) ? "bg-purple-500" : "bg-muted/40"}`} />
-            ))}
-          </div>
-          <span className="text-[9px] text-muted-foreground/40">{fmtRelative(discovery.createdAt)}</span>
-          {discovery.actionLabel && discovery.actionUrl && (
-            <a href={discovery.actionUrl} className={`ml-auto flex items-center gap-0.5 text-[9px] font-semibold ${agentColors.text}`}>
-              {discovery.actionLabel}<ArrowRight className="w-2.5 h-2.5" />
-            </a>
-          )}
-        </div>
-      </div>
-      <button
-        onClick={async () => { setDismissing(true); await onDismiss(discovery.id); }}
-        disabled={dismissing}
-        className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0 mt-1"
-      >
-        {dismissing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-      </button>
-    </div>
-  );
-}
-
-// ─── Daily Brief Panel ────────────────────────────────────────────────────────
-
-function DailyBriefPanel({ brief, onClose }: { brief: DailyBrief; onClose: () => void }) {
-  // Null-safe: any array field could be missing if API returned partial data
-  const opportunities = brief.opportunities ?? [];
-  const warnings      = brief.warnings ?? [];
-  const tasks         = brief.tasks ?? [];
-  const health        = brief.businessHealth ?? 0;
-  const healthColor   = health >= 70 ? "text-green-500" : health >= 40 ? "text-amber-500" : "text-red-500";
-
-  return (
-    <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-violet-500/5 p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Sun className="w-5 h-5 text-amber-500" />
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Daily Business Brief</p>
-            <p className="text-xs text-muted-foreground/60">{new Date(brief.generatedAt).toLocaleString()}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Business Health</p>
-            <p className={`text-xl font-black ${healthColor}`}>{health}<span className="text-xs font-medium">/100</span></p>
-          </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
-        </div>
-      </div>
-
-      <div>
-        <p className="text-base font-bold text-foreground">{brief.headline ?? "Your daily brief is ready."}</p>
-        {brief.prioritiesHtml && (
-          <div className="text-xs text-muted-foreground mt-1 leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: brief.prioritiesHtml }} />
-        )}
-      </div>
-
-      {opportunities.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-green-600 dark:text-green-400 mb-1.5">Opportunities</p>
-          <ul className="space-y-1">
-            {opportunities.map((o, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
-                <TrendingUp className="w-3 h-3 text-green-500 shrink-0 mt-0.5" />{o}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-1.5">Watch Out</p>
-          <ul className="space-y-1">
-            {warnings.map((w, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
-                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />{w}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {tasks.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Today&apos;s Priorities</p>
-          <ul className="space-y-1">
-            {tasks.map((t, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
-                <span className="w-4 h-4 rounded-full border border-purple-500/40 flex items-center justify-center text-[9px] font-bold text-purple-500 shrink-0 mt-0.5">{i + 1}</span>{t}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {opportunities.length === 0 && warnings.length === 0 && tasks.length === 0 && (
-        <div className="text-center py-4">
-          <p className="text-xs text-muted-foreground">No discoveries yet — run your agents to populate the brief.</p>
-        </div>
-      )}
-    </div>
-  );
+function getAgentStatus(agent: Agent): { label: string; dotColor: string; textColor: string; pulse: boolean } {
+  if (!agent.isEnabled) return { label: "Off", dotColor: "bg-gray-400", textColor: "text-muted-foreground", pulse: false };
+  if (!agent.lastRunAt) return { label: "Ready", dotColor: "bg-blue-500", textColor: "text-blue-500", pulse: false };
+  const hrs = (Date.now() - new Date(agent.lastRunAt).getTime()) / 3600000;
+  if (hrs < 1) return { label: "Active", dotColor: "bg-green-500", textColor: "text-green-500", pulse: true };
+  if (hrs < agent.rateLimitHours) return { label: "Cooling down", dotColor: "bg-amber-500", textColor: "text-amber-500", pulse: false };
+  return { label: "Ready", dotColor: "bg-blue-500", textColor: "text-blue-500", pulse: false };
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -321,275 +104,344 @@ export default function AgentCentreTab() {
   const [discoveries, setDiscoveries] = useState<Discovery[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [runningAll, setRunningAll] = useState(false);
   const [runningAgent, setRunningAgent] = useState<AgentType | null>(null);
-  const [generatingBrief, setGeneratingBrief] = useState(false);
-  const [brief, setBrief] = useState<DailyBrief | null>(null);
-  const [activeFilter, setActiveFilter] = useState<AgentType | "all">("all");
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
+  const [runningAll, setRunningAll] = useState(false);
+  const [discoveryFilter, setDiscoveryFilter] = useState<string>("all");
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async () => {
     try {
-      const [agentsRes, discoveriesRes, tasksRes] = await Promise.all([
+      const [agentsRes, discRes, tasksRes] = await Promise.all([
         fetch("/api/agents"),
-        fetch("/api/agents/discoveries?daysBack=7&limit=50"),
-        fetch("/api/agents/tasks?status=pending&limit=30"),
+        fetch("/api/agents/discoveries?limit=50&daysBack=30"),
+        fetch("/api/agents/tasks"),
       ]);
-      const [agentsData, discoveriesData, tasksData] = await Promise.all([
-        agentsRes.json() as Promise<Agent[]>,
-        discoveriesRes.json() as Promise<Discovery[]>,
-        tasksRes.json() as Promise<AgentTask[]>,
-      ]);
-      setAgents(Array.isArray(agentsData) ? agentsData : []);
-      setDiscoveries(Array.isArray(discoveriesData) ? discoveriesData : []);
-      setTasks(Array.isArray(tasksData) ? tasksData : []);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const handleToggle = useCallback(async (agentType: AgentType, isEnabled: boolean) => {
-    setAgents(prev => prev.map(a => a.agentType === agentType ? { ...a, isEnabled } : a));
-    await fetch("/api/agents", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentType, isEnabled }),
-    }).catch(() => {});
-  }, []);
-
-  const handleRunAgent = useCallback(async (agentType: AgentType) => {
-    setRunningAgent(agentType);
-    await fetch("/api/agents/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentType, forceRun: true }),
-    }).catch(() => {});
-    // Wait for async run, then reload
-    await new Promise(r => setTimeout(r, 4000));
-    await load();
-    setRunningAgent(null);
-  }, [load]);
-
-  const handleRunAll = useCallback(async () => {
-    setRunningAll(true);
-    await fetch("/api/agents/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ forceRun: true }),
-    }).catch(() => {});
-    await new Promise(r => setTimeout(r, 6000));
-    await load();
-    setRunningAll(false);
-  }, [load]);
-
-  const handleDismiss = useCallback(async (id: string) => {
-    setDismissed(prev => new Set(Array.from(prev).concat(id)));
-    await fetch("/api/agents/discoveries", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    }).catch(() => {});
-  }, []);
-
-  const handleCompleteTask = useCallback(async (id: string) => {
-    setCompletedTasks(prev => new Set(Array.from(prev).concat(id)));
-    await fetch("/api/agents/tasks", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status: "completed" }),
-    }).catch(() => {});
-  }, []);
-
-  const handleGenerateBrief = useCallback(async () => {
-    setGeneratingBrief(true);
-    try {
-      const res = await fetch("/api/agents/daily-review", { method: "POST" });
-      if (!res.ok) {
-        console.error("Daily brief API error", res.status);
-        return;
+      if (agentsRes.ok) setAgents((await agentsRes.json()) as Agent[]);
+      if (discRes.ok) {
+        const data = await discRes.json() as unknown;
+        setDiscoveries(Array.isArray(data) ? data as Discovery[] : []);
       }
-      const data = await res.json() as DailyBrief;
-      // Ensure every array field has a safe default before storing
-      setBrief({
-        ...data,
-        opportunities: data.opportunities ?? [],
-        warnings:      data.warnings      ?? [],
-        tasks:         data.tasks         ?? [],
-        discoveries:   data.discoveries   ?? [],
-      });
-      await load();
-    } catch (err) {
-      console.error("Failed to generate brief", err);
+      if (tasksRes.ok) {
+        const data = await tasksRes.json() as unknown;
+        setTasks(Array.isArray(data) ? data as AgentTask[] : []);
+      }
+    } catch {
+      setFetchError("Failed to load agent data.");
     } finally {
-      setGeneratingBrief(false);
+      setLoading(false);
     }
-  }, [load]);
+  }, []);
 
-  const visibleDiscoveries = discoveries.filter(d =>
-    !dismissed.has(d.id) &&
-    (activeFilter === "all" || d.agentType === activeFilter),
+  useEffect(() => { void fetchAll(); }, [fetchAll]);
+
+  const toggleAgent = async (agentType: AgentType, isEnabled: boolean) => {
+    try {
+      await fetch("/api/agents", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentType, isEnabled }) });
+      setAgents(prev => prev.map(a => a.agentType === agentType ? { ...a, isEnabled } : a));
+    } catch { /* silent */ }
+  };
+
+  const runAgent = async (agentType: AgentType) => {
+    setRunningAgent(agentType);
+    try {
+      await fetch("/api/agents/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentType }) });
+      await fetchAll();
+    } catch { /* silent */ }
+    setRunningAgent(null);
+  };
+
+  const runAllAgents = async () => {
+    setRunningAll(true);
+    try {
+      await Promise.all(
+        agents.filter(a => a.isEnabled).map(a =>
+          fetch("/api/agents/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentType: a.agentType }) })
+        )
+      );
+      await fetchAll();
+    } catch { /* silent */ }
+    setRunningAll(false);
+  };
+
+  const dismissDiscovery = async (id: string) => {
+    try {
+      await fetch("/api/agents/discoveries", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      setDiscoveries(prev => prev.filter(d => d.id !== id));
+    } catch { /* silent */ }
+  };
+
+  const filteredDiscoveries = discoveries.filter(d =>
+    discoveryFilter === "all" || d.discoveryType === discoveryFilter
   );
-  const visibleTasks = tasks.filter(t => !completedTasks.has(t.id));
-  const enabledCount = agents.filter(a => a.isEnabled).length;
 
-  return (
-    <div className="space-y-6 max-w-5xl">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-black text-foreground flex items-center gap-2">
-            <Bot className="w-5 h-5 text-purple-500" />
-            Agent Team
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {enabledCount} of {agents.length} agents active — continuously monitoring and improving your business.
-          </p>
+  const completedTasks = tasks.filter(t => t.status === "completed");
+  const pendingTasks   = tasks.filter(t => t.status !== "completed");
+  const activeAgents   = agents.filter(a => a.isEnabled).length;
+  const lastRunTime    = agents.reduce((latest, a) => {
+    if (!a.lastRunAt) return latest;
+    return !latest || new Date(a.lastRunAt) > new Date(latest) ? a.lastRunAt : latest;
+  }, null as string | null);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Loading your team…</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => void load()} className="p-2 rounded-xl border border-border hover:bg-muted/60 transition-colors">
-            <RefreshCw className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button
-            onClick={handleGenerateBrief}
-            disabled={generatingBrief}
-            className="flex items-center gap-1.5 text-sm font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-2 rounded-xl hover:bg-amber-500/15 transition-colors disabled:opacity-50"
-          >
-            {generatingBrief ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sun className="w-4 h-4" />}
-            {generatingBrief ? "Generating…" : "Daily Brief"}
-          </button>
-          <button
-            onClick={handleRunAll}
-            disabled={runningAll}
-            className="flex items-center gap-1.5 text-sm font-semibold bg-purple-600 text-white px-3 py-2 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50"
-          >
-            {runningAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            {runningAll ? "Running Agents…" : "Run All Agents"}
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="text-center">
+          <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-3" />
+          <p className="text-sm font-semibold text-foreground mb-1">Could not load agents</p>
+          <p className="text-xs text-muted-foreground mb-4">{fetchError}</p>
+          <button onClick={() => void fetchAll()} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 mx-auto">
+            <RefreshCw className="w-3.5 h-3.5" />Retry
           </button>
         </div>
       </div>
+    );
+  }
 
-      {/* Daily Brief */}
-      {brief && <DailyBriefPanel brief={brief} onClose={() => setBrief(null)} />}
+  return (
+    <div className="space-y-8 max-w-5xl">
 
-      {/* Agent grid */}
-      {loading ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-28 rounded-2xl border border-border bg-card animate-pulse" />)}
+      {/* ── Team header ──────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <h2 className="text-base font-bold text-foreground">Your AI Team</h2>
+            <span className="flex items-center gap-1.5 text-[10px] font-bold text-green-600 dark:text-green-400 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full">
+              <Activity className="w-3 h-3" />{activeAgents} active
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {lastRunTime ? `Last activity ${fmtRelative(lastRunTime)}` : "No runs yet — activate your team below"}
+            {discoveries.length > 0 && ` · ${discoveries.length} discoveries in the last 30 days`}
+          </p>
         </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {agents.map(agent => (
-            <AgentCard
-              key={agent.agentType}
-              agent={agent}
-              onToggle={handleToggle}
-              onRun={handleRunAgent}
-              running={runningAgent === agent.agentType || runningAll}
-            />
-          ))}
-        </div>
-      )}
+        <button
+          onClick={() => void runAllAgents()}
+          disabled={runningAll || activeAgents === 0}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-60"
+        >
+          {runningAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {runningAll ? "Running team…" : "Run All Agents"}
+        </button>
+      </div>
 
-      {/* Discoveries + Tasks in two columns */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        {/* Discoveries feed — 2/3 width */}
-        <div className="lg:col-span-2 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Discoveries
-              {visibleDiscoveries.length > 0 && (
-                <span className="ml-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-bold">
-                  {visibleDiscoveries.length}
-                </span>
-              )}
-            </p>
-            <div className="flex items-center gap-1 flex-wrap ml-auto">
-              {(["all", "research", "product", "content", "analytics", "experiment", "coach"] as const).map(f => {
-                const count = f === "all"
-                  ? visibleDiscoveries.length
-                  : visibleDiscoveries.filter(d => d.agentType === f).length;
-                if (f !== "all" && count === 0) return null;
-                return (
-                  <button key={f} onClick={() => setActiveFilter(f)}
-                    className={`text-[9px] font-semibold px-2 py-1 rounded-lg transition-colors ${activeFilter === f ? "bg-purple-500/15 text-purple-600 dark:text-purple-400" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}>
-                    {f === "all" ? "All" : f} {count > 0 ? `(${count})` : ""}
+      {/* ── Agent team cards ─────────────────────────────────────────────── */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {agents.map(agent => {
+          const AgentIcon = AGENT_ICONS[agent.agentType];
+          const colors = AGENT_COLORS[agent.agentType];
+          const status = getAgentStatus(agent);
+          const isRunning = runningAgent === agent.agentType;
+
+          return (
+            <div key={agent.agentType}
+              className={`rounded-2xl border bg-card p-5 flex flex-col gap-4 transition-all hover:shadow-sm ${colors.border} ${!agent.isEnabled ? "opacity-60" : ""}`}>
+              {/* Card header: avatar + name + toggle */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-2xl ${colors.bg} flex items-center justify-center shrink-0`}>
+                    <AgentIcon className={`w-5 h-5 ${colors.text}`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-bold text-foreground">{agent.name}</p>
+                      <span className="relative flex shrink-0">
+                        <span className={`w-2 h-2 rounded-full ${status.dotColor}`} />
+                        {status.pulse && <span className={`absolute w-2 h-2 rounded-full ${status.dotColor} animate-ping opacity-75`} />}
+                      </span>
+                    </div>
+                    <p className={`text-[10px] font-semibold ${status.textColor}`}>{status.label}</p>
+                  </div>
+                </div>
+                {/* Enable/disable toggle */}
+                <button onClick={() => void toggleAgent(agent.agentType, !agent.isEnabled)}
+                  className={`w-9 h-5 rounded-full transition-colors shrink-0 relative ${agent.isEnabled ? "bg-orange-500" : "bg-muted-foreground/30"}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${agent.isEnabled ? "left-4" : "left-0.5"}`} />
+                </button>
+              </div>
+
+              {/* Role description */}
+              <p className="text-xs text-muted-foreground leading-relaxed">{agent.goal}</p>
+
+              {/* Stats */}
+              <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>{fmtRelative(agent.lastRunAt)}</span>
+                </div>
+                {agent.lastDiscoveriesCount > 0 && (
+                  <div className={`flex items-center gap-1 font-semibold ${colors.text}`}>
+                    <Sparkles className="w-3 h-3" />
+                    <span>{agent.lastDiscoveriesCount} found last run</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Run button */}
+              <button
+                onClick={() => void runAgent(agent.agentType)}
+                disabled={isRunning || !agent.isEnabled}
+                className={`flex items-center justify-center gap-2 w-full py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 ${colors.bg} ${colors.text} border ${colors.border} hover:opacity-80`}
+              >
+                {isRunning ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Running…</> : <><Play className="w-3.5 h-3.5" />Run now</>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Discoveries feed ─────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-bold text-foreground">Discoveries</h3>
+            {filteredDiscoveries.length > 0 && (
+              <span className="text-[10px] font-bold text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                {filteredDiscoveries.length}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(["all", "opportunity", "warning", "insight", "recommendation"] as const).map(f => (
+              <button key={f} onClick={() => setDiscoveryFilter(f)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold capitalize transition-all ${
+                  discoveryFilter === f
+                    ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}>
+                {f === "all" ? `All (${discoveries.length})` : f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredDiscoveries.length === 0 ? (
+          <div className="text-center py-12 rounded-2xl border border-dashed border-border">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">
+              <Bot className="w-6 h-6 text-purple-400" />
+            </div>
+            <p className="text-sm font-semibold text-foreground mb-1">No discoveries yet</p>
+            <p className="text-xs text-muted-foreground mb-4">Run your agents to start finding opportunities, warnings, and insights</p>
+            <button onClick={() => void runAllAgents()} disabled={runningAll || activeAgents === 0}
+              className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 mx-auto disabled:opacity-50">
+              <Sparkles className="w-3.5 h-3.5" />Run All Agents
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredDiscoveries.map(d => {
+              const AgentIcon = AGENT_ICONS[d.agentType] ?? Bot;
+              const agentColors = AGENT_COLORS[d.agentType] ?? AGENT_COLORS.research;
+              const discStyle = DISCOVERY_STYLE[d.discoveryType] ?? DISCOVERY_STYLE.insight;
+              return (
+                <div key={d.id} className="group flex items-start gap-3 p-4 rounded-xl border border-border/60 bg-card hover:border-border transition-colors">
+                  {/* Discovery type badge */}
+                  <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border shrink-0 mt-0.5 ${discStyle.color}`}>
+                    {discStyle.icon}
+                    <span>{discStyle.label}</span>
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-2 mb-1">
+                      <p className="text-xs font-semibold text-foreground flex-1 leading-snug">{d.title}</p>
+                      <span className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 capitalize ${agentColors.bg} ${agentColors.text}`}>
+                        <AgentIcon className="w-2.5 h-2.5" />
+                        {d.agentType}
+                      </span>
+                    </div>
+                    {d.description && <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{d.description}</p>}
+                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+                      <span className="text-[10px] text-muted-foreground/50">
+                        {new Date(d.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <div className="h-1 w-12 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-orange-500 rounded-full" style={{ width: `${Math.round(d.confidence * 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground/50">{Math.round(d.confidence * 100)}% confidence</span>
+                      </div>
+                      {d.actionLabel && d.actionUrl && (
+                        <a href={d.actionUrl} className="text-[10px] font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-0.5">
+                          {d.actionLabel} <ArrowRight className="w-2.5 h-2.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <button onClick={() => void dismissDiscovery(d.id)}
+                    className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-all mt-0.5">
+                    <X className="w-3.5 h-3.5" />
                   </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Work history ─────────────────────────────────────────────────── */}
+      {(completedTasks.length > 0 || pendingTasks.length > 0) && (
+        <div>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h3 className="text-sm font-bold text-foreground">Work History</h3>
+            <button onClick={() => setShowCompleted(v => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCompleted ? "rotate-180" : ""}`} />
+              {showCompleted ? "Hide" : "Show"} completed ({completedTasks.length})
+            </button>
+          </div>
+
+          {pendingTasks.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {pendingTasks.slice(0, 5).map(task => {
+                const AgentIcon = AGENT_ICONS[task.agentType] ?? Bot;
+                const agentColors = AGENT_COLORS[task.agentType] ?? AGENT_COLORS.research;
+                return (
+                  <div key={task.id} className="flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card">
+                    <div className={`w-6 h-6 rounded-lg ${agentColors.bg} flex items-center justify-center shrink-0`}>
+                      <AgentIcon className={`w-3.5 h-3.5 ${agentColors.text}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{task.title}</p>
+                      {task.description && <p className="text-[10px] text-muted-foreground truncate">{task.description}</p>}
+                    </div>
+                    <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full capitalize shrink-0">
+                      {task.status}
+                    </span>
+                  </div>
                 );
               })}
             </div>
-          </div>
+          )}
 
-          <div className="rounded-2xl border border-border bg-card p-4">
-            {visibleDiscoveries.length === 0 ? (
-              <div className="text-center py-10">
-                <Bot className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No discoveries yet</p>
-                <p className="text-xs text-muted-foreground/60 mt-0.5">Run your agents to start finding opportunities</p>
-                <button onClick={handleRunAll} disabled={runningAll}
-                  className="mt-3 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-xl font-semibold hover:bg-purple-700 transition-colors inline-flex items-center gap-1">
-                  <Play className="w-3 h-3" />Run All Agents
-                </button>
-              </div>
-            ) : (
-              <div>
-                {visibleDiscoveries.map(d => (
-                  <DiscoveryCard key={d.id} discovery={d} onDismiss={handleDismiss} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tasks — 1/3 width */}
-        <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Agent Tasks
-            {visibleTasks.length > 0 && (
-              <span className="ml-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-bold">
-                {visibleTasks.length}
-              </span>
-            )}
-          </p>
-
-          <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
-            {visibleTasks.length === 0 ? (
-              <div className="text-center py-6">
-                <Check className="w-6 h-6 text-green-500 mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">No pending tasks</p>
-              </div>
-            ) : (
-              visibleTasks.map(task => {
-                const agentColors = AGENT_COLORS[task.agentType as AgentType] ?? AGENT_COLORS.coach;
+          {showCompleted && completedTasks.length > 0 && (
+            <div className="space-y-1.5">
+              {completedTasks.slice(0, 10).map(task => {
+                const AgentIcon = AGENT_ICONS[task.agentType] ?? Bot;
+                const agentColors = AGENT_COLORS[task.agentType] ?? AGENT_COLORS.research;
                 return (
-                  <div key={task.id} className="flex items-start gap-2.5 group py-2 border-b border-border/40 last:border-0">
-                    <button
-                      onClick={() => void handleCompleteTask(task.id)}
-                      className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center shrink-0 mt-0.5 hover:border-green-500 hover:bg-green-500/10 transition-colors group"
-                    >
-                      <Check className="w-2.5 h-2.5 text-muted-foreground/0 group-hover:text-green-500 transition-colors" />
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground leading-tight">{task.title}</p>
-                      {task.description && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
-                      )}
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${agentColors.badge}`}>
-                          {task.agentType}
-                        </span>
-                        <span className="text-[9px] text-muted-foreground/40">P{task.priority}</span>
-                      </div>
+                  <div key={task.id} className="flex items-center gap-3 p-3 rounded-xl border border-border/40 bg-background/50 opacity-70">
+                    <div className={`w-6 h-6 rounded-lg ${agentColors.bg} flex items-center justify-center shrink-0`}>
+                      <AgentIcon className={`w-3.5 h-3.5 ${agentColors.text}`} />
                     </div>
+                    <p className="text-xs text-foreground/70 flex-1 truncate">{task.title}</p>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
                   </div>
                 );
-              })
-            )}
-          </div>
+              })}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

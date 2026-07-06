@@ -3,11 +3,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Brain, Search, Pin, Star, Archive, Trash2, Plus, X,
-  BookOpen, FlaskConical, BarChart2, Package, Pencil, Target,
-  StickyNote, Sparkles, Loader2, ChevronDown, Check,
-  Megaphone, TrendingUp, RefreshCw, DatabaseZap, Lightbulb,
-  Zap, AlertTriangle, ArrowRight, Clock, Activity,
-  ChevronRight, BarChart, Eye,
+  BookOpen, BarChart2, Package, Pencil, Target, StickyNote,
+  Sparkles, Loader2, ChevronDown, TrendingUp, RefreshCw,
+  Lightbulb, Zap, AlertTriangle, ArrowRight, Activity,
+  Eye, BarChart,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -48,706 +47,428 @@ interface Recommendation {
   actionType: string | null;
 }
 
-interface TimelineEvent {
-  id: string;
-  eventType: string;
-  title: string;
-  description: string | null;
-  createdAt: string;
-}
-
 interface DashboardData {
   knowledgeScore: number;
   totalMemories: number;
   memoriesThisWeek: number;
-  memoriesCreatedToday: number;
   patternsDetected: number;
   recommendationsAvailable: number;
   averageConfidence: number;
   categoryCounts: Record<string, number>;
-  mostReferenced: { id: string; title: string; category: string; usageCount: number }[];
   patterns: Pattern[];
   recommendations: Recommendation[];
-  timeline: TimelineEvent[];
   topMemories: { id: string; category: string; title: string; aiSummary: string | null; combinedScore: number; usageCount: number }[];
 }
 
 type ActiveView = "all" | "pinned" | "favourite" | "archived";
 
-// ─── Category config ─────────────────────────────────────────────────────────
+// ─── Category config ──────────────────────────────────────────────────────────
 
 const CATEGORIES: Record<string, { label: string; Icon: React.ComponentType<{ className?: string }> }> = {
   research:    { label: "Research",    Icon: Search },
-  products:    { label: "Products",    Icon: Package },
+  product:     { label: "Product",     Icon: Package },
   content:     { label: "Content",     Icon: Pencil },
-  design:      { label: "Design",      Icon: Sparkles },
   analytics:   { label: "Analytics",   Icon: BarChart2 },
-  experiments: { label: "Experiments", Icon: FlaskConical },
-  brand:       { label: "Brand",       Icon: Megaphone },
-  goals:       { label: "Goals",       Icon: Target },
+  strategy:    { label: "Strategy",    Icon: Target },
   notes:       { label: "Notes",       Icon: StickyNote },
-  coaching:    { label: "Coaching",    Icon: Brain },
+  general:     { label: "General",     Icon: Brain },
+  book:        { label: "Books",       Icon: BookOpen },
 };
 
-const PATTERN_TYPE_COLORS: Record<string, string> = {
-  content:   "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  product:   "bg-purple-500/15 text-purple-600 dark:text-purple-400",
-  design:    "bg-pink-500/15 text-pink-600 dark:text-pink-400",
-  analytics: "bg-green-500/15 text-green-600 dark:text-green-400",
-  behavior:  "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-  pricing:   "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+const PATTERN_ICONS: Record<string, React.ReactNode> = {
+  content_success:  <TrendingUp className="w-4 h-4 text-green-500" />,
+  topic_trend:      <BarChart className="w-4 h-4 text-blue-500" />,
+  engagement:       <Activity className="w-4 h-4 text-purple-500" />,
+  product_market:   <Package className="w-4 h-4 text-orange-500" />,
+  recurring_theme:  <RefreshCw className="w-4 h-4 text-teal-500" />,
 };
+const patternIcon = (type: string) => PATTERN_ICONS[type] ?? <Lightbulb className="w-4 h-4 text-amber-500" />;
 
-const REC_TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string; bg: string }> = {
-  action:      { icon: Zap,           color: "text-blue-600 dark:text-blue-400",   bg: "bg-blue-500/10 border-blue-500/20" },
-  insight:     { icon: Lightbulb,     color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/10 border-purple-500/20" },
-  opportunity: { icon: TrendingUp,    color: "text-green-600 dark:text-green-400",  bg: "bg-green-500/10 border-green-500/20" },
-  warning:     { icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400",  bg: "bg-amber-500/10 border-amber-500/20" },
+const REC_PRIORITY: Record<number, { label: string; color: string }> = {
+  1: { label: "Critical", color: "text-red-500 bg-red-500/10 border-red-500/20" },
+  2: { label: "High",     color: "text-orange-500 bg-orange-500/10 border-orange-500/20" },
+  3: { label: "Medium",   color: "text-amber-500 bg-amber-500/10 border-amber-500/20" },
+  4: { label: "Low",      color: "text-green-500 bg-green-500/10 border-green-500/20" },
 };
+const recPriority = (p: number) => REC_PRIORITY[p] ?? REC_PRIORITY[4];
 
-const TIMELINE_ICONS: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
-  memory_saved:       { icon: DatabaseZap, color: "text-purple-500" },
-  memory_merged:      { icon: Activity,    color: "text-blue-500" },
-  pattern_detected:   { icon: Brain,       color: "text-violet-500" },
-  recommendation_generated: { icon: Lightbulb, color: "text-amber-500" },
-  score_updated:      { icon: BarChart,    color: "text-green-500" },
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  coach: "AI Coach", research: "Research", analytics: "Analytics",
-  design: "Design Studio", product: "Product Studio", experiment: "Experiments",
-  marketplace: "Marketplace", notes: "Notes", manual: "Manual",
-};
-
-function fmtRelative(dateStr: string) {
+function fmtRelative(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
   if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
   return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
-function ScoreRing({ score, size = 40 }: { score: number; size?: number }) {
-  const r = (size - 6) / 2;
-  const circumference = 2 * Math.PI * r;
-  const fill = circumference * (1 - score);
-  const color = score >= 0.7 ? "#8b5cf6" : score >= 0.4 ? "#6366f1" : "#a1a1aa";
-  return (
-    <svg width={size} height={size} className="-rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={3} className="text-muted/30" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={3}
-        strokeDasharray={circumference} strokeDashoffset={fill} strokeLinecap="round" />
-    </svg>
-  );
-}
-
-// ─── Intelligence Dashboard ───────────────────────────────────────────────────
-
-function IntelligenceDashboard({
-  data, onRunPipeline, running,
-}: {
-  data: DashboardData | null;
-  onRunPipeline: () => void;
-  running: boolean;
-}) {
-  const [dismissing, setDismissing] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [showAllTimeline, setShowAllTimeline] = useState(false);
-
-  const handleDismiss = async (id: string) => {
-    setDismissing(id);
-    try {
-      await fetch("/api/intelligence/recommendations", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      setDismissed(prev => new Set(Array.from(prev).concat(id)));
-    } catch { /* ignore */ }
-    setDismissing(null);
-  };
-
-  if (!data) {
-    // API failed or returned no data — show empty state, NOT skeleton
-    return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">
-          <Brain className="w-7 h-7 text-purple-500/60" />
-        </div>
-        <p className="text-sm font-semibold text-foreground">Intelligence unavailable</p>
-        <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-          Use the AI Coach, run research, or create products — the brain learns from everything automatically.
-        </p>
-        <button
-          onClick={onRunPipeline}
-          disabled={running}
-          className="mt-4 inline-flex items-center gap-1.5 text-xs bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors"
-        >
-          {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-          {running ? "Analysing…" : "Analyse Now"}
-        </button>
-      </div>
-    );
-  }
-
-  const activeRecs = data.recommendations.filter(r => !dismissed.has(r.id));
-  const timeline = showAllTimeline ? data.timeline : data.timeline.slice(0, 5);
-
-  return (
-    <div className="space-y-4">
-      {/* Stats strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Knowledge Score — featured */}
-        <div className="col-span-2 sm:col-span-1 rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-violet-500/5 p-4 flex items-center gap-3">
-          <div className="relative flex items-center justify-center w-10 h-10 shrink-0">
-            <ScoreRing score={data.knowledgeScore / 100} size={40} />
-            <span className="absolute text-[9px] font-black text-foreground">{data.knowledgeScore}</span>
-          </div>
-          <div>
-            <p className="text-[10px] text-muted-foreground">Knowledge Score</p>
-            <p className="text-xs font-bold text-foreground">
-              {data.knowledgeScore >= 70 ? "Strong" : data.knowledgeScore >= 40 ? "Growing" : "Early"}
-            </p>
-          </div>
-        </div>
-
-        {[
-          { label: "Memories",       value: data.totalMemories,            sub: data.memoriesCreatedToday > 0 ? `+${data.memoriesCreatedToday} today` : `+${data.memoriesThisWeek} this week`, color: "text-foreground" },
-          { label: "Patterns",       value: data.patternsDetected,         sub: "detected",                            color: "text-violet-500" },
-          { label: "Suggestions",    value: data.recommendationsAvailable, sub: "waiting",                             color: "text-blue-500" },
-          { label: "AI Confidence",  value: `${Math.round(data.averageConfidence * 100)}%`, sub: "average",            color: "text-green-500" },
-        ].map(s => (
-          <div key={s.label} className="rounded-2xl border border-border bg-card p-4">
-            <p className={`text-2xl font-black tabular-nums ${s.color}`}>{s.value}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-            <p className="text-[9px] text-muted-foreground/50">{s.sub}</p>
-          </div>
-        ))}
-
-        {/* Run pipeline button */}
-        <button
-          onClick={onRunPipeline}
-          disabled={running}
-          className="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 flex flex-col items-center justify-center gap-1.5 hover:bg-purple-500/10 transition-colors disabled:opacity-50 group"
-        >
-          {running
-            ? <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
-            : <Activity className="w-5 h-5 text-purple-500 group-hover:scale-110 transition-transform" />}
-          <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 text-center">
-            {running ? "Analysing…" : "Analyse Now"}
-          </p>
-        </button>
-      </div>
-
-      {/* Most Referenced */}
-      {data.mostReferenced.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Most Referenced</p>
-          <div className="flex flex-wrap gap-2">
-            {data.mostReferenced.map(m => {
-              const catMeta = CATEGORIES[m.category];
-              const Icon = catMeta?.Icon ?? BookOpen;
-              return (
-                <div key={m.id} className="flex items-center gap-1.5 text-[10px] bg-muted/50 border border-border px-2.5 py-1.5 rounded-xl">
-                  <Icon className="w-3 h-3 text-muted-foreground shrink-0" />
-                  <span className="text-foreground/80 font-medium truncate max-w-[140px]">{m.title}</span>
-                  <span className="text-purple-500 font-bold shrink-0">{m.usageCount}×</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Patterns */}
-      {data.patterns.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Detected Patterns</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {data.patterns.map(p => (
-              <div key={p.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full capitalize ${PATTERN_TYPE_COLORS[p.patternType] ?? "bg-muted text-muted-foreground"}`}>
-                      {p.patternType}
-                    </span>
-                  </div>
-                  {/* Confidence indicator */}
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    {[...Array(5)].map((_, i) => (
-                      <div key={i} className={`w-1 h-2 rounded-full ${i < Math.round(p.confidence * 5) ? "bg-purple-500" : "bg-muted/40"}`} />
-                    ))}
-                  </div>
-                </div>
-                <p className="text-xs font-semibold text-foreground leading-tight">{p.title}</p>
-                <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">{p.description}</p>
-                {p.evidence.length > 0 && (
-                  <p className="text-[9px] text-muted-foreground/50 italic line-clamp-1">
-                    {p.evidence[0]}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Recommendations */}
-      {activeRecs.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">AI Suggestions</p>
-          <div className="space-y-2">
-            {activeRecs.map(r => {
-              const config = REC_TYPE_CONFIG[r.recType] ?? REC_TYPE_CONFIG.insight;
-              const Icon = config.icon;
-              return (
-                <div key={r.id} className={`rounded-xl border p-3 ${config.bg}`}>
-                  <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-background/60 flex items-center justify-center shrink-0 mt-0.5">
-                      <Icon className={`w-3.5 h-3.5 ${config.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-2">
-                        <p className="text-xs font-bold text-foreground flex-1">{r.title}</p>
-                        <span className="text-[9px] font-bold text-muted-foreground/60 shrink-0">P{r.priority}</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">{r.description}</p>
-                      {r.actionType && (
-                        <button className={`mt-2 flex items-center gap-1 text-[10px] font-semibold ${config.color}`}>
-                          Take action <ArrowRight className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDismiss(r.id)}
-                      disabled={dismissing === r.id}
-                      className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
-                    >
-                      {dismissing === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Learning Timeline */}
-      {data.timeline.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Learning Timeline</p>
-            {data.timeline.length > 5 && (
-              <button onClick={() => setShowAllTimeline(s => !s)} className="text-[10px] text-purple-500 font-medium">
-                {showAllTimeline ? "Show less" : `Show all ${data.timeline.length}`}
-              </button>
-            )}
-          </div>
-          <div className="space-y-1">
-            {timeline.map(event => {
-              const { icon: EventIcon, color } = TIMELINE_ICONS[event.eventType] ?? TIMELINE_ICONS.memory_saved;
-              return (
-                <div key={event.id} className="flex items-start gap-2.5 py-1.5">
-                  <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-muted/40`}>
-                    <EventIcon className={`w-3 h-3 ${color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground/80 leading-tight">{event.title}</p>
-                    {event.description && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{event.description}</p>
-                    )}
-                  </div>
-                  <span className="text-[9px] text-muted-foreground/40 shrink-0 tabular-nums">{fmtRelative(event.createdAt)}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Memory Card ─────────────────────────────────────────────────────────────
-
-function MemoryCard({
-  entry,
-  onPin, onFavourite, onArchive, onDelete,
-}: {
-  entry: UserMemoryEntry;
-  onPin: (id: string, current: string) => void;
-  onFavourite: (id: string, current: string) => void;
-  onArchive: (id: string, current: string) => void;
-  onDelete: (id: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const catMeta = CATEGORIES[entry.category];
-  const CatIcon = catMeta?.Icon ?? BookOpen;
-  const isPinned = entry.memoryType === "pinned";
-  const isFav = entry.memoryType === "favourite";
-  const isArchived = entry.memoryType === "archived";
-  const score = entry.combinedScore ?? 0.5;
-
-  const displayText = entry.aiSummary ?? entry.content;
-  const isLong = displayText.length > 180;
-
-  return (
-    <div className={`group relative rounded-2xl border bg-card p-3.5 transition-all hover:border-purple-500/30 hover:shadow-sm ${isPinned ? "border-amber-400/40 bg-amber-500/5" : isFav ? "border-purple-400/40 bg-purple-500/5" : isArchived ? "border-border/40 opacity-60" : "border-border"}`}>
-      {/* Score bar — top edge */}
-      <div className="absolute top-0 left-3 right-3 h-0.5 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-violet-500 to-purple-400 rounded-full transition-all"
-          style={{ width: `${Math.round(score * 100)}%` }}
-        />
-      </div>
-
-      <div className="flex items-start gap-2.5 mt-1">
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isPinned ? "bg-amber-500/15" : isFav ? "bg-purple-500/15" : "bg-muted/60"}`}>
-          <CatIcon className={`w-3.5 h-3.5 ${isPinned ? "text-amber-600 dark:text-amber-400" : isFav ? "text-purple-500" : "text-muted-foreground"}`} />
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-1.5">
-            <p className="text-xs font-semibold text-foreground leading-tight flex-1">{entry.title}</p>
-            {isPinned && <Pin className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />}
-            {isFav && <Star className="w-3 h-3 text-purple-500 fill-purple-500 shrink-0 mt-0.5" />}
-          </div>
-
-          <p className={`text-[10px] text-muted-foreground leading-relaxed mt-1 ${!expanded && isLong ? "line-clamp-2" : ""}`}>
-            {displayText}
-          </p>
-          {isLong && (
-            <button onClick={() => setExpanded(e => !e)} className="text-[9px] text-purple-500 mt-0.5 flex items-center gap-0.5">
-              {expanded ? "Less" : "More"}<ChevronDown className={`w-2.5 h-2.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
-            </button>
-          )}
-
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            <span className="text-[9px] bg-muted/60 px-1.5 py-0.5 rounded-full text-muted-foreground capitalize">
-              {catMeta?.label ?? entry.category}
-            </span>
-            {entry.usageCount > 0 && (
-              <span className="text-[9px] text-purple-500/70 flex items-center gap-0.5">
-                <Eye className="w-2.5 h-2.5" />{entry.usageCount}×
-              </span>
-            )}
-            <span className="text-[9px] text-muted-foreground/40 ml-auto tabular-nums">{fmtRelative(entry.updatedAt)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1 mt-2.5 pt-2 border-t border-border/40 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={() => onPin(entry.id, entry.memoryType)} className={`flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-lg transition-colors ${isPinned ? "bg-amber-500/15 text-amber-600" : "text-muted-foreground hover:bg-muted/60"}`} title="Pin">
-          <Pin className="w-2.5 h-2.5" />{isPinned ? "Pinned" : "Pin"}
-        </button>
-        <button onClick={() => onFavourite(entry.id, entry.memoryType)} className={`flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-lg transition-colors ${isFav ? "bg-purple-500/15 text-purple-600" : "text-muted-foreground hover:bg-muted/60"}`} title="Save">
-          <Star className="w-2.5 h-2.5" />{isFav ? "Saved" : "Save"}
-        </button>
-        <button onClick={() => onArchive(entry.id, entry.memoryType)} className={`flex items-center gap-1 text-[9px] px-1.5 py-1 rounded-lg transition-colors ${isArchived ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60"}`} title="Archive">
-          <Archive className="w-2.5 h-2.5" />{isArchived ? "Restore" : "Archive"}
-        </button>
-        <button onClick={() => onDelete(entry.id)} className="ml-auto text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-500/10">
-          <Trash2 className="w-2.5 h-2.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Add Memory Form ──────────────────────────────────────────────────────────
-
-function AddMemoryForm({ onSave, onCancel }: { onSave: (data: Record<string, unknown>) => Promise<void>; onCancel: () => void }) {
-  const [category, setCategory] = useState("notes");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  return (
-    <div className="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Brain className="w-4 h-4 text-purple-500" />
-        <span className="text-sm font-bold text-foreground">Add Knowledge</span>
-        <button onClick={onCancel} className="ml-auto text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {Object.entries(CATEGORIES).map(([key, meta]) => {
-          const Icon = meta.Icon;
-          return (
-            <button key={key} onClick={() => setCategory(key)}
-              className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-colors ${category === key ? "bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}>
-              <Icon className="w-3 h-3" />{meta.label}
-            </button>
-          );
-        })}
-      </div>
-      <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="What should your Business Brain remember?" className="text-sm" onKeyDown={async e => { if (e.key === "Enter" && !e.shiftKey && title.trim()) { setSaving(true); await onSave({ category, type: "note", title, content, source: "manual", memoryType: "pinned" }); setSaving(false); onCancel(); }}} />
-      <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Details, context, why it matters... (optional)" rows={3}
-        className="w-full text-sm bg-background border border-input rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-purple-500/50 text-foreground placeholder:text-muted-foreground" />
-      <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="text-xs text-muted-foreground px-3 py-1.5 rounded-lg hover:bg-muted/60">Cancel</button>
-        <button onClick={async () => { if (!title.trim()) return; setSaving(true); await onSave({ category, type: "note", title, content, source: "manual", memoryType: "pinned" }); setSaving(false); onCancel(); }}
-          disabled={!title.trim() || saving}
-          className="text-xs bg-purple-600 text-white px-3 py-1.5 rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 flex items-center gap-1.5">
-          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
-          {saving ? "Teaching Brain…" : "Teach Business Brain"}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function BusinessBrainTab() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [memories, setMemories] = useState<UserMemoryEntry[]>([]);
   const [dashLoading, setDashLoading] = useState(true);
-  const [entries, setEntries] = useState<UserMemoryEntry[]>([]);
   const [memLoading, setMemLoading] = useState(true);
-  const [searchQ, setSearchQ] = useState("");
+  const [runningIntelligence, setRunningIntelligence] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("all");
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [searchResults, setSearchResults] = useState<UserMemoryEntry[] | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [pipelineRunning, setPipelineRunning] = useState(false);
-  const [activeSection, setActiveSection] = useState<"dashboard" | "memories">("dashboard");
-  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [libraryExpanded, setLibraryExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // ── Load Dashboard ──────────────────────────────────────────────────────────
-  const loadDashboard = useCallback(async () => {
-    setDashLoading(true);
+  const fetchDashboard = useCallback(async () => {
     try {
       const res = await fetch("/api/intelligence/dashboard");
-      if (res.ok) setDashboard(await res.json() as DashboardData);
-    } catch { /* ignore */ }
-    setDashLoading(false);
+      if (res.ok) setDashboard((await res.json()) as DashboardData);
+    } catch { /* silent */ }
+    finally { setDashLoading(false); }
   }, []);
 
-  // ── Load Memories ──────────────────────────────────────────────────────────
-  const loadMemories = useCallback(async () => {
+  const fetchMemories = useCallback(async (view: ActiveView, q: string, cat: string) => {
     setMemLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "100" });
-      if (activeCategory) params.set("category", activeCategory);
-      if (activeView !== "all") params.set("memoryType", activeView);
-      const res = await fetch(`/api/user-memory?${params}`);
-      const data = await res.json() as UserMemoryEntry[];
-      // Sort by combined_score desc (already from DB, but ensure)
-      setEntries(Array.isArray(data) ? [...data].sort((a, b) => (b.combinedScore ?? 0) - (a.combinedScore ?? 0)) : []);
-    } catch { /* ignore */ }
-    setMemLoading(false);
-  }, [activeCategory, activeView]);
+      const params = new URLSearchParams();
+      params.set("limit", "40");
+      if (view !== "all") params.set("memoryType", view);
+      if (q) params.set("search", q);
+      if (cat) params.set("category", cat);
+      const res = await fetch(`/api/user-memory?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json() as { memories: UserMemoryEntry[] };
+        setMemories(data.memories ?? []);
+      }
+    } catch {
+      setError("Failed to load memories.");
+    } finally { setMemLoading(false); }
+  }, []);
 
-  useEffect(() => { void loadDashboard(); void loadMemories(); }, [loadDashboard, loadMemories]);
-
-  // ── Semantic search ────────────────────────────────────────────────────────
+  useEffect(() => { void fetchDashboard(); }, [fetchDashboard]);
   useEffect(() => {
-    if (!searchQ.trim()) { setSearchResults(null); return; }
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch("/api/user-memory/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: searchQ, limit: 20, excludeArchived: false }),
-        });
-        const raw = await res.json();
-        setSearchResults(Array.isArray(raw) ? raw as UserMemoryEntry[] : []);
-      } catch { setSearchResults([]); }
-      setSearching(false);
-    }, 450);
-    return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current); };
-  }, [searchQ]);
+    if (libraryExpanded) void fetchMemories(activeView, search, selectedCategory);
+  }, [fetchMemories, libraryExpanded, activeView, search, selectedCategory]);
 
-  // ── Run Intelligence Pipeline ──────────────────────────────────────────────
-  const handleRunPipeline = useCallback(async () => {
-    setPipelineRunning(true);
+  const runIntelligence = async () => {
+    setRunningIntelligence(true);
     try {
       await fetch("/api/intelligence/run", { method: "POST" });
-      // Wait 3 seconds for async ops then reload
-      await new Promise(r => setTimeout(r, 3000));
-      await loadDashboard();
-    } catch { /* ignore */ }
-    setPipelineRunning(false);
-  }, [loadDashboard]);
+      await fetchDashboard();
+    } catch { /* silent */ }
+    finally { setRunningIntelligence(false); }
+  };
 
-  // ── Memory actions ─────────────────────────────────────────────────────────
-  const updateMemoryType = useCallback(async (id: string, newType: string) => {
-    setEntries(prev => prev.map(e => e.id === id ? { ...e, memoryType: newType as UserMemoryEntry["memoryType"] } : e));
-    await fetch("/api/user-memory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, memoryType: newType }) }).catch(() => {});
-  }, []);
+  const updateMemory = async (id: string, patch: Partial<Pick<UserMemoryEntry, "memoryType">>) => {
+    try {
+      await fetch(`/api/user-memory?id=${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+      setMemories(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));
+    } catch { /* silent */ }
+  };
 
-  const handlePin = useCallback((id: string, c: string) => updateMemoryType(id, c === "pinned" ? "automatic" : "pinned"), [updateMemoryType]);
-  const handleFavourite = useCallback((id: string, c: string) => updateMemoryType(id, c === "favourite" ? "automatic" : "favourite"), [updateMemoryType]);
-  const handleArchive = useCallback((id: string, c: string) => updateMemoryType(id, c === "archived" ? "automatic" : "archived"), [updateMemoryType]);
-  const handleDelete = useCallback(async (id: string) => {
-    setEntries(prev => prev.filter(e => e.id !== id));
-    await fetch(`/api/user-memory?id=${id}`, { method: "DELETE" }).catch(() => {});
-  }, []);
+  const deleteMemory = async (id: string) => {
+    try {
+      await fetch(`/api/user-memory?id=${id}`, { method: "DELETE" });
+      setMemories(prev => prev.filter(m => m.id !== id));
+    } catch { /* silent */ }
+  };
 
-  const handleSaveNew = useCallback(async (data: Record<string, unknown>) => {
-    const res = await fetch("/api/user-memory/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    if (!res.ok) { setShowAddForm(false); return; }
-    const entry = await res.json() as UserMemoryEntry;
-    if (entry?.id) setEntries(prev => [entry, ...prev]);
-    setShowAddForm(false);
-    void loadDashboard();
-  }, [loadDashboard]);
-
-  // ── Derived ────────────────────────────────────────────────────────────────
-  const displayEntries = searchResults ?? entries;
-  const totalByCategory = Object.keys(CATEGORIES).reduce<Record<string, number>>((acc, key) => {
-    acc[key] = entries.filter(e => e.category === key).length;
-    return acc;
-  }, {});
-  const pinnedCount = entries.filter(e => e.memoryType === "pinned").length;
-  const favCount = entries.filter(e => e.memoryType === "favourite").length;
-
-  const VIEWS: { key: ActiveView; label: string; count?: number }[] = [
-    { key: "all",       label: "All",     count: entries.length },
-    { key: "pinned",    label: "Pinned",  count: pinnedCount },
-    { key: "favourite", label: "Saved",   count: favCount },
-    { key: "archived",  label: "Archived" },
-  ];
+  const patterns = dashboard?.patterns ?? [];
+  const recommendations = (dashboard?.recommendations ?? []).sort((a, b) => a.priority - b.priority);
+  const topMemories = dashboard?.topMemories ?? [];
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-black text-foreground flex items-center gap-2">
-            <Brain className="w-5 h-5 text-purple-500" />
-            Business Brain
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            An AI that continuously learns your business — getting smarter with every interaction.
+    <div className="space-y-8 max-w-5xl">
+
+      {/* ── Metric strip ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Knowledge Score</p>
+          <p className="text-3xl font-black text-orange-500 tabular-nums">
+            {dashLoading ? "—" : `${dashboard?.knowledgeScore ?? 0}%`}
           </p>
+          <p className="text-[10px] text-muted-foreground/40">{dashboard?.totalMemories ?? 0} entries total</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { void loadDashboard(); void loadMemories(); }} className="p-2 rounded-xl border border-border hover:bg-muted/60 transition-colors" title="Refresh">
-            <RefreshCw className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button onClick={() => setShowAddForm(s => !s)} className="flex items-center gap-1.5 text-sm font-semibold bg-purple-600 text-white px-3 py-2 rounded-xl hover:bg-purple-700 transition-colors">
-            <Plus className="w-4 h-4" />Teach Brain
-          </button>
+        <div className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Patterns Found</p>
+          <p className="text-3xl font-black text-blue-500 tabular-nums">
+            {dashLoading ? "—" : (dashboard?.patternsDetected ?? 0)}
+          </p>
+          <p className="text-[10px] text-muted-foreground/40">learned from your data</p>
+        </div>
+        <div className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Recommendations</p>
+          <p className="text-3xl font-black text-purple-500 tabular-nums">
+            {dashLoading ? "—" : (dashboard?.recommendationsAvailable ?? 0)}
+          </p>
+          <p className="text-[10px] text-muted-foreground/40">strategic actions available</p>
+        </div>
+        <div className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">This Week</p>
+          <p className="text-3xl font-black text-green-500 tabular-nums">
+            {dashLoading ? "—" : `+${dashboard?.memoriesThisWeek ?? 0}`}
+          </p>
+          <p className="text-[10px] text-muted-foreground/40">new memories learned</p>
         </div>
       </div>
 
-      {/* Section nav */}
-      <div className="flex items-center gap-1 bg-muted/40 rounded-xl p-1 w-fit">
-        {([
-          { key: "dashboard" as const, label: "Intelligence", icon: Activity },
-          { key: "memories" as const,  label: "Knowledge",   icon: DatabaseZap },
-        ]).map(s => {
-          const Icon = s.icon;
-          return (
-            <button key={s.key} onClick={() => setActiveSection(s.key)}
-              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${activeSection === s.key ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-              <Icon className="w-3.5 h-3.5" />{s.label}
+      {/* ── What Your Business Has Learned ───────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-foreground">What Your Business Has Learned</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Patterns detected across your research, content, and product activity</p>
+          </div>
+          <button onClick={() => void runIntelligence()} disabled={runningIntelligence}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-orange-500/40 transition-all disabled:opacity-50">
+            {runningIntelligence ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {runningIntelligence ? "Analysing…" : "Run Analysis"}
+          </button>
+        </div>
+
+        {dashLoading ? (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 rounded-2xl border border-border bg-card animate-pulse" />
+            ))}
+          </div>
+        ) : patterns.length === 0 ? (
+          <div className="text-center py-12 rounded-2xl border border-dashed border-border">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-3">
+              <Brain className="w-6 h-6 text-blue-400" />
+            </div>
+            <p className="text-sm font-semibold text-foreground mb-1">No patterns detected yet</p>
+            <p className="text-xs text-muted-foreground mb-4">Use Research, AI Coach, and other features to build your business knowledge base. Patterns emerge automatically.</p>
+            <button onClick={() => void runIntelligence()} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 mx-auto">
+              <Sparkles className="w-3.5 h-3.5" />Run Intelligence Analysis
             </button>
-          );
-        })}
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {patterns.slice(0, 6).map(pattern => (
+              <div key={pattern.id} className="p-4 rounded-2xl border border-border bg-card hover:border-blue-500/20 transition-colors">
+                <div className="flex items-start gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                    {patternIcon(pattern.patternType)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-foreground leading-snug">{pattern.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] font-semibold text-blue-500 capitalize">{pattern.patternType.replace(/_/g, " ")}</span>
+                      <span className="text-[10px] text-muted-foreground/50">{Math.round(pattern.confidence * 100)}% confidence</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{pattern.description}</p>
+                {/* Confidence bar */}
+                <div className="mt-3 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.round(pattern.confidence * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Add form */}
-      {showAddForm && <AddMemoryForm onSave={handleSaveNew} onCancel={() => setShowAddForm(false)} />}
+      {/* ── Strategic Recommendations ─────────────────────────────────────── */}
+      <div>
+        <div className="mb-4">
+          <h3 className="text-sm font-bold text-foreground">Strategic Recommendations</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">AI-generated actions ranked by impact and urgency</p>
+        </div>
 
-      {/* Dashboard section */}
-      {activeSection === "dashboard" && (
-        dashLoading
-          ? <div className="space-y-3 animate-pulse">{[...Array(3)].map((_, i) => <div key={i} className="h-20 rounded-2xl border border-border bg-card" />)}</div>
-          : <IntelligenceDashboard data={dashboard} onRunPipeline={handleRunPipeline} running={pipelineRunning} />
+        {dashLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl border border-border bg-card animate-pulse" />)}
+          </div>
+        ) : recommendations.length === 0 ? (
+          <div className="text-center py-8 rounded-2xl border border-dashed border-border">
+            <Zap className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground">No recommendations yet — run the intelligence analysis to generate strategic actions.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recommendations.slice(0, 8).map(rec => {
+              const pStyle = recPriority(rec.priority);
+              return (
+                <div key={rec.id} className="flex items-start gap-3 p-4 rounded-xl border border-border/60 bg-card hover:border-orange-500/20 transition-colors group">
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border shrink-0 mt-0.5 ${pStyle.color}`}>
+                    {pStyle.label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-foreground leading-snug mb-0.5">{rec.title}</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{rec.description}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <div className="h-1 w-8 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.round(rec.confidence * 100)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Most Referenced Knowledge ─────────────────────────────────────── */}
+      {topMemories.length > 0 && (
+        <div>
+          <div className="mb-4">
+            <h3 className="text-sm font-bold text-foreground">Most Referenced Knowledge</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">What your AI references most often when working for you</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {topMemories.slice(0, 6).map(m => {
+              const catConfig = CATEGORIES[m.category] ?? CATEGORIES.general;
+              const CatIcon = catConfig.Icon;
+              return (
+                <div key={m.id} className="p-4 rounded-xl border border-border/60 bg-card hover:border-orange-500/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                      <CatIcon className="w-3.5 h-3.5 text-orange-500" />
+                    </div>
+                    <span className="text-[10px] font-semibold text-muted-foreground capitalize">{catConfig.label}</span>
+                    <span className="ml-auto flex items-center gap-0.5 text-[10px] text-muted-foreground/50">
+                      <Eye className="w-3 h-3" />{m.usageCount}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-foreground leading-snug line-clamp-2">{m.title}</p>
+                  {m.aiSummary && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{m.aiSummary}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
-      {/* Knowledge browser section */}
-      {activeSection === "memories" && (
-        <div className="space-y-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search your Business Brain semantically…" className="pl-9 pr-9" />
-            {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />}
-            {searchQ && !searching && <button onClick={() => setSearchQ("")} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>}
+      {/* ── Knowledge Library (collapsible) ──────────────────────────────── */}
+      <div className="rounded-2xl border border-border overflow-hidden">
+        <button
+          onClick={() => setLibraryExpanded(v => !v)}
+          className="w-full flex items-center justify-between gap-4 p-5 hover:bg-accent/40 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center">
+              <Brain className="w-4 h-4 text-orange-500" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">Knowledge Library</p>
+              <p className="text-xs text-muted-foreground">{dashboard?.totalMemories ?? 0} entries · Browse and manage everything your business brain knows</p>
+            </div>
           </div>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${libraryExpanded ? "rotate-180" : ""}`} />
+        </button>
 
-          {!searchQ && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 bg-muted/40 rounded-xl p-1">
-                {VIEWS.map(v => (
-                  <button key={v.key} onClick={() => setActiveView(v.key)}
-                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all ${activeView === v.key ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                    {v.label}{v.count !== undefined ? ` (${v.count})` : ""}
+        {libraryExpanded && (
+          <div className="border-t border-border p-5 space-y-5">
+            {/* Search + filters */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  ref={searchRef}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search your knowledge…"
+                  className="pl-8 h-9 text-xs"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {/* View filter */}
+              <div className="flex items-center gap-1">
+                {(["all", "pinned", "favourite", "archived"] as ActiveView[]).map(v => (
+                  <button key={v} onClick={() => setActiveView(v)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
+                      activeView === v ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    }`}>
+                    {v}
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 flex-wrap">
-                <button onClick={() => setActiveCategory(null)} className={`text-[10px] font-semibold px-2 py-1.5 rounded-lg transition-colors ${!activeCategory ? "bg-purple-500/15 text-purple-600 dark:text-purple-400" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}>
-                  All
-                </button>
-                {Object.entries(CATEGORIES).filter(([key]) => totalByCategory[key] > 0).map(([key, meta]) => {
-                  const Icon = meta.Icon;
+              {/* Category filter */}
+              <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}
+                className="h-9 px-2.5 text-xs border border-border rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+                <option value="">All categories</option>
+                {Object.entries(CATEGORIES).map(([key, val]) => (
+                  <option key={key} value={key}>{val.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Memory entries */}
+            {memLoading ? (
+              <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />Loading…
+              </div>
+            ) : error ? (
+              <p className="text-sm text-red-500 py-4">{error}</p>
+            ) : memories.length === 0 ? (
+              <div className="text-center py-10">
+                <Brain className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  {search ? "No entries match your search." : activeView !== "all" ? `No ${activeView} entries yet.` : "Your knowledge library is empty — it grows as you use Research, AI Coach, and other features."}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {memories.map(mem => {
+                  const catConfig = CATEGORIES[mem.category] ?? CATEGORIES.general;
+                  const CatIcon = catConfig.Icon;
                   return (
-                    <button key={key} onClick={() => setActiveCategory(activeCategory === key ? null : key)}
-                      className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1.5 rounded-lg transition-colors ${activeCategory === key ? "bg-purple-500/15 text-purple-600 dark:text-purple-400" : "bg-muted/60 text-muted-foreground hover:bg-muted"}`}>
-                      <Icon className="w-3 h-3" />{meta.label} <span className="tabular-nums">{totalByCategory[key]}</span>
-                    </button>
+                    <div key={mem.id} className="group flex items-start gap-3 p-3.5 rounded-xl border border-border/60 bg-background hover:border-orange-500/20 transition-colors">
+                      <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <CatIcon className="w-3.5 h-3.5 text-orange-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2 mb-0.5">
+                          <p className="text-xs font-semibold text-foreground flex-1 leading-snug">{mem.title}</p>
+                          <span className="text-[10px] text-muted-foreground/50 shrink-0">{fmtRelative(mem.updatedAt)}</span>
+                        </div>
+                        {mem.aiSummary && <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{mem.aiSummary}</p>}
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <span className="text-[9px] font-semibold text-muted-foreground/50 capitalize">{catConfig.label}</span>
+                          <span className="text-[9px] text-muted-foreground/30">·</span>
+                          <span className="text-[9px] text-muted-foreground/50 capitalize">{mem.source.replace(/_/g, " ")}</span>
+                          {mem.usageCount > 0 && (
+                            <>
+                              <span className="text-[9px] text-muted-foreground/30">·</span>
+                              <span className="flex items-center gap-0.5 text-[9px] text-orange-500/70">
+                                <Eye className="w-2.5 h-2.5" />{mem.usageCount}× referenced
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button onClick={() => void updateMemory(mem.id, { memoryType: mem.memoryType === "pinned" ? "automatic" : "pinned" })}
+                          className={`p-1 rounded-lg transition-colors ${mem.memoryType === "pinned" ? "text-orange-500" : "text-muted-foreground hover:text-orange-500"}`}>
+                          <Pin className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => void updateMemory(mem.id, { memoryType: mem.memoryType === "favourite" ? "automatic" : "favourite" })}
+                          className={`p-1 rounded-lg transition-colors ${mem.memoryType === "favourite" ? "text-amber-500" : "text-muted-foreground hover:text-amber-500"}`}>
+                          <Star className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => void updateMemory(mem.id, { memoryType: mem.memoryType === "archived" ? "automatic" : "archived" })}
+                          className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+                          <Archive className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => void deleteMemory(mem.id)}
+                          className="p-1 rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {searchQ && searchResults !== null && (
-            <p className="text-xs text-muted-foreground">
-              {searching ? "Searching…" : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""} for "${searchQ}"`}
-            </p>
-          )}
-
-          {!memLoading && displayEntries.length === 0 && (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-8 h-8 text-purple-500" />
-              </div>
-              {entries.length === 0 ? (
-                <>
-                  <p className="text-sm font-semibold text-foreground">Business Brain is empty</p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                    Start using the AI Coach, run research, or create products — everything important gets learned automatically.
-                  </p>
-                  <button onClick={() => setShowAddForm(true)} className="mt-4 text-xs bg-purple-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-purple-700 transition-colors inline-flex items-center gap-1.5">
-                    <Brain className="w-3.5 h-3.5" />Teach it something
-                  </button>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">Nothing matches this filter.</p>
-              )}
-            </div>
-          )}
-
-          {memLoading && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {[...Array(6)].map((_, i) => <div key={i} className="h-28 rounded-2xl border border-border bg-card animate-pulse" />)}
-            </div>
-          )}
-
-          {!memLoading && displayEntries.length > 0 && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {displayEntries.map(entry => (
-                <MemoryCard key={entry.id} entry={entry}
-                  onPin={handlePin} onFavourite={handleFavourite}
-                  onArchive={handleArchive} onDelete={handleDelete} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
