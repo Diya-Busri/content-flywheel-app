@@ -24,9 +24,9 @@ const LEGAL_LINKS = [
 
 // Only include social accounts with confirmed active profiles
 const SOCIAL_LINKS = [
-  { label: "Twitter / X", href: "https://twitter.com/contentflywheel", icon: "𝕏" },
-  { label: "Instagram", href: "https://instagram.com/contentflywheel", icon: "IG" },
-  { label: "TikTok", href: "https://tiktok.com/@contentflywheel", icon: "TK" },
+  { label: "X", href: "https://x.com/ContentFlywhee1", icon: "𝕏" },
+  { label: "Instagram", href: "https://instagram.com/content.flywheel", icon: "IG" },
+  { label: "TikTok", href: "https://tiktok.com/@contentflywheelofficial", icon: "TK" },
 ];
 
 export function LightFooter() {

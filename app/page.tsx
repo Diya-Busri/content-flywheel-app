@@ -60,9 +60,9 @@ export default async function HomePage() {
               {/* Social links */}
               <div className="flex items-center gap-3 mt-6">
                 {[
-                  { label: "Twitter / X", href: "https://twitter.com/contentflywheel", icon: "𝕏" },
-                  { label: "TikTok", href: "https://tiktok.com/@contentflywheel", icon: "T" },
-                  { label: "Instagram", href: "https://instagram.com/contentflywheel", icon: "IG" },
+                  { label: "X", href: "https://x.com/ContentFlywhee1", icon: "𝕏" },
+                  { label: "TikTok", href: "https://tiktok.com/@contentflywheelofficial", icon: "T" },
+                  { label: "Instagram", href: "https://instagram.com/content.flywheel", icon: "IG" },
                 ].map((s) => (
                   <a
                     key={s.label}
