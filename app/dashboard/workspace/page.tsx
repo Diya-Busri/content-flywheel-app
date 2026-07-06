@@ -1317,7 +1317,11 @@ function cleanPreview(body: string): string {
     .trim();
 }
 
-const AI_WRITING_ACTIONS = new Set(["improve-writing", "expand-idea", "summarise", "shorten", "rewrite"]);
+const AI_WRITING_ACTIONS = new Set([
+  "fix-grammar", "improve-writing", "continue-writing",
+  "rewrite", "expand-idea", "shorten", "summarise", "change-tone",
+  "extract-action-items", "turn-into-blog-post", "turn-into-email", "turn-into-thread",
+]);
 
 function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }) {
   const router = useRouter();
@@ -1427,7 +1431,8 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
     if (!active) return;
     if (AI_WRITING_ACTIONS.has(actionId)) {
       setAiLoading(actionId);
-      const textToSend = selectedText || active.body;
+      // continue-writing uses full body regardless of selection (it appends, not replaces)
+      const textToSend = actionId === "continue-writing" ? active.body : (selectedText || active.body);
       try {
         const res = await fetch("/api/notes/ai-action", {
           method: "POST",
@@ -1436,10 +1441,23 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
         });
         const json = await res.json() as { result?: string; error?: string };
         if (json.result) {
-          if (replaceCallback) replaceCallback(json.result);
-          else updateNote(active.id, { body: json.result, content: undefined });
+          if (actionId === "continue-writing") {
+            // Always append to end of note — never replace
+            const newBody = active.body.trim() + "\n\n" + json.result;
+            updateNote(active.id, { body: newBody, content: undefined });
+            if (replaceCallback) replaceCallback(""); // clear bubble loading
+          } else if (replaceCallback) {
+            replaceCallback(json.result);
+          } else {
+            updateNote(active.id, { body: json.result, content: undefined });
+          }
+        } else {
+          // Always clear bubble loading even on empty/error response
+          if (replaceCallback) replaceCallback("");
         }
-      } catch {}
+      } catch {
+        if (replaceCallback) replaceCallback("");
+      }
       finally { setAiLoading(null); }
       return;
     }
@@ -1774,43 +1792,47 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
                 {summaryLoading ? "Summarising…" : aiSummary ? "Re-summarise" : "Summarise"}
               </button>
               <button
-                onClick={() => handleAiAction("rewrite")}
+                onClick={() => handleAiAction("fix-grammar")}
                 disabled={!!aiLoading || !active.body.trim()}
                 className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
-                {aiLoading === "rewrite" ? <Loader2 className="w-3 h-3 animate-spin" /> : <TrendingUp className="w-3 h-3" />}
-                Rewrite
+                {aiLoading === "fix-grammar" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                Fix Grammar
               </button>
               <button
-                onClick={() => handleAiAction("expand-idea")}
+                onClick={() => handleAiAction("continue-writing")}
                 disabled={!!aiLoading || !active.body.trim()}
                 className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
-                {aiLoading === "expand-idea" ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronUp className="w-3 h-3" />}
-                Expand
+                {aiLoading === "continue-writing" ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronUp className="w-3 h-3" />}
+                Continue
               </button>
 
               <div className="w-px h-4 bg-border/60 mx-0.5" />
 
-              {/* Convert to actions */}
-              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-0.5">Convert to</span>
+              {/* Convert to actions — navigate to other tools */}
+              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-0.5">Open in</span>
               <button
                 onClick={() => handleAiAction("turn-into-research")}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                disabled={!active.body.trim()}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
                 🔬 Research
               </button>
               <button
                 onClick={() => handleAiAction("turn-into-product")}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                disabled={!active.body.trim()}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
                 📦 Product
               </button>
               <button
                 onClick={() => handleAiAction("turn-into-carousel")}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                disabled={!active.body.trim()}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
                 🎠 Carousel
               </button>
               <button
                 onClick={() => handleAiAction("turn-into-video")}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
-                🎬 Video Script
+                disabled={!active.body.trim()}
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-all disabled:opacity-40">
+                🎬 Video
               </button>
 
               {aiSummary && (

@@ -515,24 +515,39 @@ function TablePicker({ position, onSelect, onClose }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI actions in the floating bubble
+// AI actions in the floating bubble (selection-based transforms)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AI_WRITING_ACTIONS = [
-  { id: "improve-writing", label: "Improve",   icon: <Wand2 className="w-3 h-3" />,    writing: true  },
-  { id: "rewrite",         label: "Rewrite",   icon: <BookOpen className="w-3 h-3" />, writing: true  },
-  { id: "expand-idea",     label: "Expand",    icon: <Maximize2 className="w-3 h-3" />, writing: true  },
-  { id: "shorten",         label: "Shorten",   icon: <Minimize2 className="w-3 h-3" />, writing: true },
-  { id: "summarise",       label: "Summarise", icon: <Sparkles className="w-3 h-3" />,  writing: true  },
+  { id: "fix-grammar",     label: "Fix Grammar", icon: <Check className="w-3 h-3" />,    },
+  { id: "improve-writing", label: "Improve",     icon: <Wand2 className="w-3 h-3" />,    },
+  { id: "rewrite",         label: "Rewrite",     icon: <BookOpen className="w-3 h-3" />, },
+  { id: "shorten",         label: "Shorten",     icon: <Minimize2 className="w-3 h-3" />, },
+  { id: "change-tone",     label: "Change Tone", icon: <Mic className="w-3 h-3" />,      },
 ];
 
-// All AI actions including navigation (used in command palette)
-const ALL_AI_ACTIONS = [
-  ...AI_WRITING_ACTIONS,
-  { id: "turn-into-script",   label: "Turn into Script",          icon: <Mic className="w-3 h-3" />,     writing: false },
-  { id: "turn-into-carousel", label: "Turn into Carousel",        icon: <Layers className="w-3 h-3" />,  writing: false },
-  { id: "turn-into-video",    label: "Turn into Video Guide",     icon: <Video className="w-3 h-3" />,   writing: false },
-  { id: "turn-into-product",  label: "Turn into Digital Product", icon: <Package className="w-3 h-3" />, writing: false },
+// All text-transform AI actions for command palette (excludes navigation)
+const AI_TRANSFORM_ACTIONS = [
+  { id: "fix-grammar",          label: "Fix Grammar",          description: "Fixes grammar & spelling",      icon: <Check className="w-3 h-3" /> },
+  { id: "improve-writing",      label: "Improve Writing",      description: "Sharpens clarity and flow",      icon: <Wand2 className="w-3 h-3" /> },
+  { id: "continue-writing",     label: "Continue Writing",     description: "Writes what comes next",         icon: <Sparkles className="w-3 h-3" /> },
+  { id: "rewrite",              label: "Rewrite",              description: "Fresh take, same ideas",         icon: <BookOpen className="w-3 h-3" /> },
+  { id: "expand-idea",          label: "Expand",               description: "Adds depth and examples",        icon: <Maximize2 className="w-3 h-3" /> },
+  { id: "shorten",              label: "Shorten",              description: "Cuts to half the length",        icon: <Minimize2 className="w-3 h-3" /> },
+  { id: "summarise",            label: "Summarise",            description: "Bullet-point key ideas",         icon: <Sparkles className="w-3 h-3" /> },
+  { id: "change-tone",          label: "Change Tone",          description: "Makes it more conversational",   icon: <Mic className="w-3 h-3" /> },
+  { id: "extract-action-items", label: "Extract Action Items", description: "Pulls out tasks and next steps", icon: <List className="w-3 h-3" /> },
+  { id: "turn-into-blog-post",  label: "Turn into Blog Post",  description: "Formats as a publish-ready post", icon: <BookOpen className="w-3 h-3" /> },
+  { id: "turn-into-email",      label: "Turn into Email",      description: "Subject line + email body",      icon: <Layers className="w-3 h-3" /> },
+  { id: "turn-into-thread",     label: "Turn into Thread",     description: "X/Twitter thread format",        icon: <Video className="w-3 h-3" /> },
+];
+
+// Navigate actions — open other tools (no AI text transform)
+const AI_NAVIGATE_ACTIONS = [
+  { id: "turn-into-research", label: "Open in Research",       description: "Starts a research session",        icon: <Sparkles className="w-3 h-3" /> },
+  { id: "turn-into-product",  label: "Open in Product Library", description: "Creates a digital product",       icon: <Package className="w-3 h-3" /> },
+  { id: "turn-into-carousel", label: "Open in Design Studio",  description: "Creates a carousel design",       icon: <Layers className="w-3 h-3" /> },
+  { id: "turn-into-video",    label: "Open in Video Guide",    description: "Creates a video script",          icon: <Video className="w-3 h-3" /> },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -584,12 +599,12 @@ function CommandPalette({ editor, isMac, onAiAction, onClose }: CommandPalettePr
         onClose();
       },
     })),
-    // AI
-    ...ALL_AI_ACTIONS.map(a => ({
+    // AI — text transforms
+    ...AI_TRANSFORM_ACTIONS.map(a => ({
       id: `ai-${a.id}`,
       label: a.label,
-      description: a.writing ? "Rewrites selected text" : "Navigate",
-      group: "AI",
+      description: a.description,
+      group: "AI Transform",
       icon: a.icon,
       action: () => {
         if (!onAiAction) { onClose(); return; }
@@ -600,6 +615,19 @@ function CommandPalette({ editor, isMac, onAiAction, onClose }: CommandPalettePr
             editor.chain().focus().insertContentAt({ from, to }, result).run();
           }
         });
+        onClose();
+      },
+    })),
+    // AI — navigate to other tools
+    ...AI_NAVIGATE_ACTIONS.map(a => ({
+      id: `nav-${a.id}`,
+      label: a.label,
+      description: a.description,
+      group: "Open In",
+      icon: a.icon,
+      action: () => {
+        if (!onAiAction) { onClose(); return; }
+        onAiAction(a.id, "", () => {});
         onClose();
       },
     })),
