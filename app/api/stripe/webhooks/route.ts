@@ -6,26 +6,28 @@ import { updateProfile, updateProfileByStripeCustomerId, getProfileByUserId } fr
 import { VIDEO_CREDITS_METADATA_KEY, SUBSCRIPTION_VIDEO_CREDITS } from "@/lib/video-credits";
 import { CUSTOM_DOMAIN_METADATA_KEY } from "@/app/api/custom-domain/checkout/route";
 import { db } from "@/db/db";
-import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transactions-schema";
 import { promoCodesTable, promoCodeUsesTable } from "@/db/schema/promo-codes-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { awardVideoCredits } from "@/lib/award-credits";
 
 /**
- * Add video credits to a subscriber's balance by Stripe customer ID.
- * Fetches current balance first so we ADD rather than overwrite.
+ * Award video credits to a subscriber, identified by their Stripe customer ID.
+ * Uses awardVideoCredits() for idempotency — pass the invoice ID so Stripe webhook
+ * retries don't double-grant.
  */
 async function addSubscriptionVideoCredits(
   stripeCustomerId: string,
   interval: "month" | "year",
-  label: string
+  label: string,
+  idempotencyKey: string
 ): Promise<void> {
   const creditsToAdd = SUBSCRIPTION_VIDEO_CREDITS[interval];
 
-  // Find profile by Stripe customer ID
+  // Resolve Stripe customer → profile
   const [profile] = await db
-    .select()
+    .select({ userId: profilesTable.userId })
     .from(profilesTable)
     .where(eq(profilesTable.stripeCustomerId, stripeCustomerId));
 
@@ -34,19 +36,12 @@ async function addSubscriptionVideoCredits(
     return;
   }
 
-  const currentCredits = profile.videoCredits ?? 0;
-  const newBalance = currentCredits + creditsToAdd;
-
-  await updateProfile(profile.userId, { videoCredits: newBalance });
-
-  await db.insert(videoCreditTransactionsTable).values({
+  await awardVideoCredits({
     userId: profile.userId,
-    type: "purchase",
     amount: creditsToAdd,
-    description: `📅 ${label} — ${creditsToAdd} credits included`,
-  }).catch((e) => console.error("[sub-credits] Failed to log transaction:", e));
-
-  console.log(`[sub-credits] Added ${creditsToAdd} credits to ${profile.userId} (${label}). Balance: ${currentCredits} → ${newBalance}`);
+    reason: `📅 ${label} — ${creditsToAdd} credits`,
+    idempotencyKey,
+  });
 }
 
 export const dynamic = "force-dynamic";
@@ -135,22 +130,13 @@ async function handleCheckoutSession(event: Stripe.Event) {
     const credits = parseInt(checkoutSession.metadata?.credits ?? "0", 10);
 
     if (userId && credits > 0) {
-      try {
-        const profile = await getProfileByUserId(userId);
-        const current = profile?.videoCredits ?? 0;
-        await updateProfile(userId, { videoCredits: current + credits });
-        console.log(`[video-credits] Added ${credits} credits to user ${userId} (new balance: ${current + credits})`);
-        // Log the purchase transaction
-        const packLabel = checkoutSession.metadata?.packId ?? "Credit pack";
-        await db.insert(videoCreditTransactionsTable).values({
-          userId,
-          type: "purchase",
-          amount: credits,
-          description: `Purchased ${credits} video credits (${packLabel})`,
-        }).catch((err) => console.error("[video-credits] Failed to log purchase transaction:", err));
-      } catch (err) {
-        console.error("[video-credits] Failed to add credits:", err);
-      }
+      const packLabel = checkoutSession.metadata?.packId ?? "Credit pack";
+      await awardVideoCredits({
+        userId,
+        amount: credits,
+        reason: `Purchased ${credits} video credits (${packLabel})`,
+        idempotencyKey: `stripe:session:${checkoutSession.id}`,
+      }).catch((err) => console.error("[video-credits] Failed to add credits:", err));
     }
     return; // Don't fall through to subscription handling
   }
@@ -241,14 +227,10 @@ async function handleCheckoutSession(event: Stripe.Event) {
       }
     }
 
-    // Add monthly video credits on new subscription
-    const interval = (subscription.items.data[0]?.price?.recurring?.interval ?? "month") as "month" | "year";
-    const planLabel = interval === "year" ? "Annual plan monthly credits" : "Monthly plan credits";
-    await addSubscriptionVideoCredits(
-      checkoutSession.customer as string,
-      interval,
-      planLabel
-    ).catch((e) => console.error("[sub-credits] Failed to add signup credits:", e));
+    // NOTE: Subscription video credits are NOT awarded at checkout/trial start.
+    // They are awarded in handlePaymentSuccess when the first real payment is charged
+    // (billing_reason === "subscription_create") and on each renewal ("subscription_cycle").
+    // This ensures free-trial users always start with exactly the signup credits (100).
   }
 }
 
@@ -275,14 +257,23 @@ async function handlePaymentSuccess(event: Stripe.Event) {
 
       console.log(`Reset usage credits to ${DEFAULT_USAGE_CREDITS} for Stripe customer ${customerId}`);
 
-      // Skip the first invoice — checkout.session.completed already handled it
-      // billing_reason "subscription_create" = first payment, "subscription_cycle" = renewal
-      const isRenewal = invoice.billing_reason === "subscription_cycle";
-      if (isRenewal) {
+      // Award subscription video credits on first real payment and on each renewal.
+      // "subscription_create" = trial ended / first charge; "subscription_cycle" = renewal.
+      // We do NOT award on checkout (trial start) — that way trial users keep their 100
+      // signup credits and only receive subscription credits when they actually pay.
+      // Invoice ID is the idempotency key — safe against Stripe webhook retries.
+      const isFirstPaymentOrRenewal =
+        invoice.billing_reason === "subscription_create" ||
+        invoice.billing_reason === "subscription_cycle";
+
+      if (isFirstPaymentOrRenewal) {
         const interval = (subscription.items.data[0]?.price?.recurring?.interval ?? "month") as "month" | "year";
-        const planLabel = interval === "year" ? "Annual plan — monthly top-up" : "Monthly plan renewal credits";
-        await addSubscriptionVideoCredits(customerId, interval, planLabel)
-          .catch((e) => console.error("[sub-credits] Failed to add renewal credits:", e));
+        const isRenewal = invoice.billing_reason === "subscription_cycle";
+        const planLabel = interval === "year"
+          ? (isRenewal ? "Annual plan renewal" : "Annual plan — first payment")
+          : (isRenewal ? "Monthly plan renewal" : "Monthly plan — first payment");
+        await addSubscriptionVideoCredits(customerId, interval, planLabel, `stripe:invoice:${invoice.id}`)
+          .catch((e) => console.error("[sub-credits] Failed to add subscription credits:", e));
       }
     } catch (error) {
       console.error(`Error processing payment success: ${error}`);

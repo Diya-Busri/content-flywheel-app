@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { Resend } from "resend";
-import { createProfile, getProfileByUserId } from "@/db/queries/profiles-queries";
-import { db } from "@/db/db";
-import { videoCreditTransactionsTable } from "@/db/schema/video-credit-transactions-schema";
+import { createProfile } from "@/db/queries/profiles-queries";
 import { FREE_SIGNUP_CREDITS } from "@/lib/video-credits";
+import { awardVideoCredits } from "@/lib/award-credits";
 
 export const runtime = "nodejs";
 
@@ -80,29 +79,28 @@ export async function POST(req: Request) {
     const email = getEmail(data);
     const userId = data.id;
 
-    // Create profile row for new user with free starter credits
+    // Create profile row for new user, then award signup credits via the central
+    // awardVideoCredits() function (idempotent — safe against webhook retries and
+    // the race where the dashboard fallback created the profile before this fires).
     if (userId) {
       try {
-        const existing = await getProfileByUserId(userId);
-        if (!existing) {
-          await createProfile({
-            userId,
-            email: email ?? undefined,
-            membership: "free",
-            videoCredits: FREE_SIGNUP_CREDITS,
-          });
-          // Log the welcome credit grant as a transaction
-          await db.insert(videoCreditTransactionsTable).values({
-            userId,
-            type: "purchase",
-            amount: FREE_SIGNUP_CREDITS,
-            description: "🎁 Welcome credits — free on signup",
-          }).catch((e) => console.error("[Clerk webhook] Failed to log welcome credits transaction:", e));
-          console.log(`[Clerk webhook] Created profile + granted ${FREE_SIGNUP_CREDITS} free credits for ${userId}`);
-        }
+        // Profile starts at 0 video credits (DB default). awardVideoCredits() adds the 100.
+        await createProfile({
+          userId,
+          email: email ?? undefined,
+          membership: "free",
+        });
       } catch (err) {
         console.error("[Clerk webhook] Failed to create profile:", err);
       }
+
+      // Award signup credits — idempotency key prevents double-grant on webhook retry
+      await awardVideoCredits({
+        userId,
+        amount: FREE_SIGNUP_CREDITS,
+        reason: "🎁 Welcome credits — free on signup",
+        idempotencyKey: `clerk:signup:${userId}`,
+      }).catch((e) => console.error("[Clerk webhook] Failed to award signup credits:", e));
     }
 
     if (!RESEND_API_KEY) {
