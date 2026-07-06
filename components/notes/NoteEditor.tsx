@@ -822,9 +822,24 @@ export function NoteEditor({
 
   const getInitialContent = () => {
     if (!content) return "";
-    if (isLegacy) return content;
-    try { return JSON.parse(content); }
-    catch { return content; }
+    // If it looks like TipTap JSON, parse it
+    if (content.trimStart().startsWith("{")) {
+      try { return JSON.parse(content); }
+      catch { /* fall through to HTML handling */ }
+    }
+    // If it looks like HTML already, pass through
+    if (content.trimStart().startsWith("<")) return content;
+    // Plain text (isLegacy or AI-generated): convert to HTML paragraphs
+    return (
+      content
+        .split("\n")
+        .map(line =>
+          `<p>${line
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;") || "<br>"}</p>`)
+        .join("") || "<p></p>"
+    );
   };
 
   // Memoize: never recreate the slash extension across renders — it holds ProseMirror plugin state
@@ -943,6 +958,18 @@ export function NoteEditor({
     },
     immediatelyRender: false,
   }, [noteId]);
+
+  // If the editor mounts empty but content prop is non-empty, set it.
+  // This handles the case where content arrives after mount (e.g. AI action updates body).
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const editorEmpty = editor.state.doc.textContent.trim().length === 0;
+    if (editorEmpty && content) {
+      const newContent = getInitialContent();
+      if (newContent) editor.commands.setContent(newContent, false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, editor]);
 
   // Global ⌘K / Ctrl+K listener (catches it even when editor not focused)
   useEffect(() => {

@@ -1427,6 +1427,10 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
     finally { setSummaryLoading(false); }
   };
 
+  // Convert plain text lines to HTML paragraphs for TipTap
+  const textToHtml = (text: string) =>
+    text.split("\n").map(l => `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") || "<br>"}</p>`).join("");
+
   const handleAiAction = async (actionId: string, selectedText?: string, replaceCallback?: (result: string) => void) => {
     if (!active) return;
     if (AI_WRITING_ACTIONS.has(actionId)) {
@@ -1444,12 +1448,12 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
           if (actionId === "continue-writing") {
             // Always append to end of note — never replace
             const newBody = active.body.trim() + "\n\n" + json.result;
-            updateNote(active.id, { body: newBody, content: undefined });
+            updateNote(active.id, { body: newBody, content: textToHtml(newBody) });
             if (replaceCallback) replaceCallback(""); // clear bubble loading
           } else if (replaceCallback) {
             replaceCallback(json.result);
           } else {
-            updateNote(active.id, { body: json.result, content: undefined });
+            updateNote(active.id, { body: json.result, content: textToHtml(json.result) });
           }
         } else {
           // Always clear bubble loading even on empty/error response
@@ -1864,7 +1868,7 @@ function NotesTab({ onTabChange }: { onTabChange?: (tab: WorkspaceTab) => void }
               {/* Rich text editor */}
               <NoteEditor
                 key={active.id}
-                content={active.content ?? active.body}
+                content={active.content || active.body}
                 isLegacy={!active.content && !!active.body}
                 onUpdate={(jsonStr, text) => {
                   updateNote(active.id, { content: jsonStr, body: text });
