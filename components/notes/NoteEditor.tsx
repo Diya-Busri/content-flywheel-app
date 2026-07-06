@@ -4,18 +4,20 @@
 import { useEditor, EditorContent, ReactRenderer, Editor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Underline } from "@tiptap/extension-underline";
-import { TaskList, TaskItem } from "@tiptap/extension-list";
+import { TaskList } from "@tiptap/extension-task-list";
+import { TaskItem } from "@tiptap/extension-task-item";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { Highlight } from "@tiptap/extension-highlight";
 import { Mention } from "@tiptap/extension-mention";
-import { Placeholder, CharacterCount } from "@tiptap/extensions";
+import { Placeholder } from "@tiptap/extension-placeholder";
+import { CharacterCount } from "@tiptap/extension-character-count";
 import { Link } from "@tiptap/extension-link";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
-import { Extension, type RawCommands } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 
 // Custom FontFamily extension — avoids @tiptap/extension-font-family peer-dep conflict
 const FontFamily = Extension.create({
@@ -37,14 +39,6 @@ const FontFamily = Extension.create({
       },
     ];
   },
-  addCommands() {
-    return {
-      setFontFamily: (fontFamily: string) => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
-        chain().setMark("textStyle", { fontFamily }).run(),
-      unsetFontFamily: () => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
-        chain().setMark("textStyle", { fontFamily: null }).run(),
-    } as unknown as RawCommands;
-  },
 });
 import { Suggestion } from "@tiptap/suggestion";
 import tippy from "tippy.js";
@@ -52,7 +46,7 @@ import "tippy.js/dist/tippy.css";
 
 // ─── React ──────────────────────────────────────────────────────────────────
 import {
-  useState, useEffect, useCallback, useRef, forwardRef,
+  useState, useEffect, useCallback, useRef, useMemo, forwardRef,
   useImperativeHandle, KeyboardEvent, type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils";
@@ -86,14 +80,6 @@ const FontSize = Extension.create({
         },
       },
     }];
-  },
-  addCommands() {
-    return {
-      setFontSize: (fontSize: string) => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
-        chain().setMark("textStyle", { fontSize }).run(),
-      unsetFontSize: () => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) =>
-        chain().setMark("textStyle", { fontSize: null }).run(),
-    } as unknown as RawCommands;
   },
 });
 
@@ -155,20 +141,6 @@ const TextAlignExtension = Extension.create({
         },
       },
     ];
-  },
-  addCommands() {
-    return {
-      setTextAlign: (align: string) => ({ editor, chain }: { editor: { state: { selection: { $from: { parent: { type: { name: string } } } } } }; chain: () => { updateAttributes: (type: string, attrs: Record<string, unknown>) => { run: () => boolean } } }) => {
-        const nodeType = (editor.state.selection.$from.parent as { type: { name: string } }).type.name;
-        if (nodeType === "paragraph" || nodeType === "heading") {
-          return chain().updateAttributes(nodeType, { textAlign: align }).run();
-        }
-        // Fallback: try both
-        chain().updateAttributes("paragraph", { textAlign: align }).run();
-        chain().updateAttributes("heading", { textAlign: align }).run();
-        return true;
-      },
-    } as unknown as RawCommands;
   },
 });
 
@@ -855,7 +827,8 @@ export function NoteEditor({
     catch { return content; }
   };
 
-  const SlashCommandExtension = createSlashCommandExtension();
+  // Memoize: never recreate the slash extension across renders — it holds ProseMirror plugin state
+  const SlashCommandExtension = useMemo(() => createSlashCommandExtension(), []);
 
   const editor = useEditor({
     extensions: [
@@ -1009,10 +982,16 @@ export function NoteEditor({
     setTablePickerOpen(false);
   }, [editor]);
 
-  // Alignment helper — targets actual current node type, no editor blur
+  // Alignment helper — directly calls updateAttributes on the current node type
   const setAlign = useCallback((align: string) => {
     if (!editor) return;
-    (editor.chain().focus() as any).setTextAlign(align).run(); // custom command — no TS defs
+    const nodeTypeName = editor.state.selection.$from.parent.type.name;
+    if (nodeTypeName === "paragraph" || nodeTypeName === "heading") {
+      editor.chain().focus().updateAttributes(nodeTypeName, { textAlign: align }).run();
+    } else {
+      // Fallback for any other block that might support textAlign
+      editor.chain().focus().updateAttributes("paragraph", { textAlign: align }).run();
+    }
   }, [editor]);
 
   // Current block type label
@@ -1112,11 +1091,7 @@ export function NoteEditor({
                     <button key={item.label}
                       onMouseDown={e => {
                         e.preventDefault();
-                        if (item.value) {
-                          (editor.chain().focus() as any).setFontFamily(item.value).run();
-                        } else {
-                          (editor.chain().focus() as any).unsetFontFamily().run();
-                        }
+                        editor.chain().focus().setMark("textStyle", { fontFamily: item.value || null }).run();
                         setShowFontMenu(false);
                       }}
                       className={cn(
@@ -1160,11 +1135,7 @@ export function NoteEditor({
                     <button key={item.value ?? "default"}
                       onMouseDown={e => {
                         e.preventDefault();
-                        if (item.value) {
-                          (editor.chain().focus() as any).setFontSize(item.value).run();
-                        } else {
-                          (editor.chain().focus() as any).unsetFontSize().run();
-                        }
+                        editor.chain().focus().setMark("textStyle", { fontSize: item.value || null }).run();
                         setShowSizeMenu(false);
                       }}
                       className={cn(
@@ -1294,6 +1265,28 @@ export function NoteEditor({
             )}
           </div>
 
+          {/* ── Group 7b: Indent / Outdent ──────────────────────────────── */}
+          <TBtn title="Indent (Tab)" onClick={() => {
+            if (!editor) return;
+            const inList = editor.isActive("listItem") || editor.isActive("taskItem");
+            if (inList) {
+              const nodeName = editor.isActive("taskItem") ? "taskItem" : "listItem";
+              (editor.chain().focus() as unknown as Record<string, (...a: unknown[]) => { run: () => boolean }>).sinkListItem(nodeName).run();
+            }
+          }}>
+            <span className="text-[11px] font-mono">→</span>
+          </TBtn>
+          <TBtn title="Outdent (Shift+Tab)" onClick={() => {
+            if (!editor) return;
+            const inList = editor.isActive("listItem") || editor.isActive("taskItem");
+            if (inList) {
+              const nodeName = editor.isActive("taskItem") ? "taskItem" : "listItem";
+              (editor.chain().focus() as unknown as Record<string, (...a: unknown[]) => { run: () => boolean }>).liftListItem(nodeName).run();
+            }
+          }}>
+            <span className="text-[11px] font-mono">←</span>
+          </TBtn>
+
           <Divider />
 
           {/* ── Group 8: Link | Table | Divider | Code | Quote ────────────── */}
@@ -1382,7 +1375,7 @@ export function NoteEditor({
             { title: `Underline (${mod}U)`,   icon: <UnderlineIcon className="w-3.5 h-3.5" />, active: editor.isActive("underline"), run: () => editor.chain().focus().toggleUnderline().run() },
             { title: "Strikethrough",         icon: <Strikethrough className="w-3.5 h-3.5" />, active: editor.isActive("strike"),    run: () => editor.chain().focus().toggleStrike().run() },
           ].map((btn, i) => (
-            <button key={i} title={btn.title} onClick={btn.run}
+            <button key={i} title={btn.title} onMouseDown={e => { e.preventDefault(); btn.run(); }}
               className={cn("w-7 h-7 rounded-lg flex items-center justify-center transition-colors",
                 btn.active ? "bg-orange-500/15 text-orange-500" : "text-muted-foreground hover:text-foreground hover:bg-accent")}>
               {btn.icon}
@@ -1393,7 +1386,7 @@ export function NoteEditor({
 
           {/* Color picker in bubble */}
           <div className="relative">
-            <button title="Colors &amp; Highlight" onClick={() => setShowColorPicker(v => !v)}
+            <button title="Colors &amp; Highlight" onMouseDown={e => { e.preventDefault(); setShowColorPicker(v => !v); }}
               className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground hover:bg-accent gap-0.5">
               <Type className="w-3.5 h-3.5" />
               <ChevronDown className="w-2.5 h-2.5" />
@@ -1407,7 +1400,8 @@ export function NoteEditor({
 
           {/* Link */}
           <button title="Link"
-            onClick={() => {
+            onMouseDown={e => {
+              e.preventDefault();
               if (editor.isActive("link")) { editor.chain().focus().unsetLink().run(); return; }
               const url = window.prompt("URL:");
               if (url) editor.chain().focus().setLink({ href: url }).run();
