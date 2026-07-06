@@ -1012,8 +1012,7 @@ export function NoteEditor({
   // Alignment helper — targets actual current node type, no editor blur
   const setAlign = useCallback((align: string) => {
     if (!editor) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (editor.chain().focus() as any).setTextAlign(align).run();
+    (editor.chain().focus() as any).setTextAlign(align).run(); // custom command — no TS defs
   }, [editor]);
 
   // Current block type label
@@ -1114,10 +1113,8 @@ export function NoteEditor({
                       onMouseDown={e => {
                         e.preventDefault();
                         if (item.value) {
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           (editor.chain().focus() as any).setFontFamily(item.value).run();
                         } else {
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           (editor.chain().focus() as any).unsetFontFamily().run();
                         }
                         setShowFontMenu(false);
@@ -1164,10 +1161,8 @@ export function NoteEditor({
                       onMouseDown={e => {
                         e.preventDefault();
                         if (item.value) {
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           (editor.chain().focus() as any).setFontSize(item.value).run();
                         } else {
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           (editor.chain().focus() as any).unsetFontSize().run();
                         }
                         setShowSizeMenu(false);
