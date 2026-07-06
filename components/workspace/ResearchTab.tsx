@@ -10,7 +10,7 @@ import {
   Send, AlertCircle, RefreshCw, Copy, Check,
   ArrowRight, Zap, Hash, Star, MessageSquare,
   Library, Trash2, Heart, Brain, Building2, FlaskConical,
-  DatabaseZap, BookOpen, Plus, GitMerge, Megaphone,
+  DatabaseZap, BookOpen, Plus, GitMerge, Megaphone, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
