@@ -1,222 +1,224 @@
 "use client";
 
-import { motion, useInView, useMotionValue, useSpring, animate } from "framer-motion";
-import { useEffect, useRef } from "react";
-import { Star, TrendingUp, Package, Users, Zap } from "lucide-react";
+import { motion, useInView } from "framer-motion";
+import { useRef } from "react";
+import {
+  Sparkles, Store, Megaphone, Mail, Users, Star,
+  ShieldCheck, CreditCard, Repeat, Package,
+} from "lucide-react";
+import Link from "next/link";
 
-/* ─── Animated counter ─── */
-function Counter({ to, prefix = "", suffix = "", duration = 1.8, delay = 0 }: {
-  to: number; prefix?: string; suffix?: string; duration?: number; delay?: number;
+/* ─── helpers ─── */
+function FadeUp({ children, delay = 0, className = "" }: {
+  children: React.ReactNode; delay?: number; className?: string;
 }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inViewRef = useRef(null);
-  const inView = useInView(inViewRef, { once: true, margin: "-60px" });
-
-  useEffect(() => {
-    if (!inView || !ref.current) return;
-    const timeout = setTimeout(() => {
-      const controls = animate(0, to, {
-        duration,
-        ease: "easeOut",
-        onUpdate(v) {
-          if (ref.current) {
-            ref.current.textContent = prefix + (to >= 1000 ? Math.round(v).toLocaleString() : Math.round(v * 10) / 10) + suffix;
-          }
-        },
-      });
-      return () => controls.stop();
-    }, delay * 1000);
-    return () => clearTimeout(timeout);
-  }, [inView, to, duration, delay, prefix, suffix]);
-
-  return (
-    <div ref={inViewRef}>
-      <span ref={ref}>{prefix}0{suffix}</span>
-    </div>
-  );
-}
-
-/* ─── Stats section ─── */
-const STATS = [
-  { icon: Package, label: "Products Created", value: 14800, suffix: "+", color: "text-orange-400", bgColor: "bg-orange-500/15", borderColor: "border-orange-500/20" },
-  { icon: Users, label: "Active Creators", value: 1200, suffix: "+", color: "text-blue-400", bgColor: "bg-blue-500/15", borderColor: "border-blue-500/20" },
-  { icon: TrendingUp, label: "Revenue Generated", prefix: "£", value: 280000, suffix: "+", color: "text-green-400", bgColor: "bg-green-500/15", borderColor: "border-green-500/20" },
-  { icon: Zap, label: "AI Generations", value: 48000, suffix: "+", color: "text-purple-400", bgColor: "bg-purple-500/15", borderColor: "border-purple-500/20" },
-];
-
-/* ─── Testimonials ─── */
-const TESTIMONIALS = [
-  {
-    quote: "I had my first digital product live within an hour of signing up. The AI wrote the whole thing — I just tweaked a few bits. Already made back my subscription three times over.",
-    name: "Sarah M.",
-    role: "Fitness Coach",
-    avatar: "SM",
-    rating: 5,
-    color: "from-orange-500/10 to-orange-600/5",
-  },
-  {
-    quote: "I used to spend £80/month on tools that didn't work together. Now everything's in one place and my email list has grown 3x since I switched.",
-    name: "Jake R.",
-    role: "Business Consultant",
-    avatar: "JR",
-    rating: 5,
-    color: "from-blue-500/10 to-blue-600/5",
-  },
-  {
-    quote: "The Design Studio alone is worth it. My covers look like they were made by a professional. My conversion rate went from 3% to 8% after updating my product images.",
-    name: "Emma L.",
-    role: "Digital Creator",
-    avatar: "EL",
-    rating: 5,
-    color: "from-purple-500/10 to-purple-600/5",
-  },
-  {
-    quote: "I launched a Notion template pack in a weekend. The marketing tools created all my TikTok captions and I hit £1k in revenue before the Monday.",
-    name: "Marcus T.",
-    role: "Productivity Coach",
-    avatar: "MT",
-    rating: 5,
-    color: "from-green-500/10 to-green-600/5",
-  },
-  {
-    quote: "What I love is that it's all connected. I create the product, it goes straight to my store, I generate content to promote it, and track the sales — zero faff.",
-    name: "Priya K.",
-    role: "Finance Creator",
-    avatar: "PK",
-    rating: 5,
-    color: "from-pink-500/10 to-pink-600/5",
-  },
-  {
-    quote: "The AI coach helps me whenever I'm stuck. Asked it how to price my first ebook and it walked me through the whole strategy. It's like having a business partner.",
-    name: "Tom H.",
-    role: "Career Coach",
-    avatar: "TH",
-    rating: 5,
-    color: "from-amber-500/10 to-amber-600/5",
-  },
-];
-
-function TestimonialCard({ t, delay }: { t: typeof TESTIMONIALS[0]; delay: number }) {
   const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
+  const inView = useInView(ref, { once: true, margin: "-60px" });
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 24 }}
+      initial={{ opacity: 0, y: 28 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={`rounded-2xl border border-white/[0.07] bg-gradient-to-br ${t.color} p-6 hover:border-white/20 transition-colors`}
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={className}
     >
-      {/* Stars */}
-      <div className="flex gap-0.5 mb-4">
-        {[...Array(t.rating)].map((_, i) => (
-          <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-        ))}
-      </div>
-      {/* Quote */}
-      <p className="text-sm text-white/65 leading-relaxed mb-5">
-        &ldquo;{t.quote}&rdquo;
-      </p>
-      {/* Author */}
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-[11px] font-bold text-orange-400">
-          {t.avatar}
-        </div>
-        <div>
-          <p className="text-sm font-bold text-white">{t.name}</p>
-          <p className="text-xs text-white/30">{t.role}</p>
-        </div>
-      </div>
+      {children}
     </motion.div>
   );
 }
 
-export function StatsAndProof() {
-  const sectionRef = useRef(null);
-  const sectionInView = useInView(sectionRef, { once: true, margin: "-60px" });
+/* ─── Value proposition cards — all 100% factual ─── */
+const VALUE_CARDS = [
+  {
+    icon: ShieldCheck,
+    color: "text-orange-400",
+    bg: "bg-orange-500/10",
+    border: "border-orange-500/20",
+    title: "7-Day Free Trial",
+    desc: "Try every feature before you pay. No credit card required to start.",
+  },
+  {
+    icon: CreditCard,
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/20",
+    title: "One Subscription",
+    desc: "Everything included in a single monthly price. No per-sale fees, no hidden add-ons.",
+  },
+  {
+    icon: Sparkles,
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/20",
+    title: "AI Product Creator",
+    desc: "Describe your idea. AI writes and formats a complete digital product — ebook, planner, template, or guide.",
+  },
+  {
+    icon: Store,
+    color: "text-green-400",
+    bg: "bg-green-500/10",
+    border: "border-green-500/20",
+    title: "Your Own Storefront",
+    desc: "A branded store at yourname.contentflywheel.co.uk. Stripe payments go directly to your bank.",
+  },
+  {
+    icon: Megaphone,
+    color: "text-purple-400",
+    bg: "bg-purple-500/10",
+    border: "border-purple-500/20",
+    title: "Marketing Tools Included",
+    desc: "Content calendar, video scripts, social captions, and promo assets — all generated by AI.",
+  },
+  {
+    icon: Mail,
+    color: "text-pink-400",
+    bg: "bg-pink-500/10",
+    border: "border-pink-500/20",
+    title: "Email Marketing Built In",
+    desc: "Collect subscribers and send campaigns directly from the platform. No Mailchimp required.",
+  },
+  {
+    icon: Users,
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10",
+    border: "border-cyan-500/20",
+    title: "Affiliate Programme",
+    desc: "Built-in referral tracking and discount codes. Let your customers grow your audience for you.",
+  },
+  {
+    icon: Package,
+    color: "text-teal-400",
+    bg: "bg-teal-500/10",
+    border: "border-teal-500/20",
+    title: "Marketplace Included",
+    desc: "List your products on the Content Flywheel marketplace to reach buyers beyond your own audience.",
+  },
+  {
+    icon: Repeat,
+    color: "text-rose-400",
+    bg: "bg-rose-500/10",
+    border: "border-rose-500/20",
+    title: "Cancel Anytime",
+    desc: "No long-term contracts. Cancel from your dashboard whenever you want. No questions asked.",
+  },
+];
 
+/* ─── Real review card ─── */
+function ReviewCard({ review, delay }: {
+  review: { text: string; name: string; rating?: number };
+  delay: number;
+}) {
+  const rating = review.rating ?? 5;
+  return (
+    <FadeUp delay={delay} className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 hover:border-white/20 transition-colors">
+      <div className="flex gap-0.5 mb-4">
+        {[...Array(Math.min(5, Math.max(1, rating)))].map((_, i) => (
+          <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+        ))}
+      </div>
+      <p className="text-sm text-white/65 leading-relaxed mb-5">&ldquo;{review.text}&rdquo;</p>
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-[11px] font-bold text-orange-400">
+          {review.name.slice(0, 2).toUpperCase()}
+        </div>
+        <p className="text-sm font-bold text-white">{review.name}</p>
+      </div>
+    </FadeUp>
+  );
+}
+
+/* ─── Main export ─── */
+export function StatsAndProof({
+  reviews = [],
+}: {
+  reviews?: { text: string; name: string; rating?: number }[];
+}) {
   return (
     <>
-      {/* ─── Stats ─── */}
-      <section className="py-20 border-y border-white/[0.05] bg-white/[0.02] relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(249,115,22,0.06),transparent_60%)] pointer-events-none" />
-        <div className="max-w-6xl mx-auto px-6">
-          <div ref={sectionRef} className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-            {STATS.map((s, i) => {
-              const Icon = s.icon;
+      {/* ─── Value proposition grid ─── */}
+      <section className="py-24 lg:py-32 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <FadeUp className="text-center mb-16">
+            <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">What you get</p>
+            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+              Everything a digital creator needs.{" "}
+              <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
+                Nothing you don&apos;t.
+              </span>
+            </h2>
+            <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">
+              One subscription. No hidden fees. Every tool in the list below is included.
+            </p>
+          </FadeUp>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {VALUE_CARDS.map((card, i) => {
+              const Icon = card.icon;
               return (
-                <motion.div
-                  key={s.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={sectionInView ? { opacity: 1, y: 0 } : {}}
-                  transition={{ duration: 0.5, delay: i * 0.1 }}
-                  className="text-center"
-                >
-                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl ${s.bgColor} border ${s.borderColor} mb-4`}>
-                    <Icon className={`w-5 h-5 ${s.color}`} />
+                <FadeUp key={card.title} delay={i * 0.05}>
+                  <div className={`flex items-start gap-4 p-5 rounded-2xl border ${card.border} bg-white/[0.02] hover:bg-white/[0.04] transition-colors h-full`}>
+                    <div className={`w-10 h-10 rounded-xl ${card.bg} flex items-center justify-center shrink-0`}>
+                      <Icon className={`w-5 h-5 ${card.color}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white mb-1">{card.title}</p>
+                      <p className="text-xs text-white/45 leading-relaxed">{card.desc}</p>
+                    </div>
                   </div>
-                  <p className={`text-4xl font-extrabold ${s.color} tracking-tight`}>
-                    <Counter to={s.value} prefix={s.prefix ?? ""} suffix={s.suffix} delay={i * 0.15} />
-                  </p>
-                  <p className="text-sm text-white/40 mt-1 font-medium">{s.label}</p>
-                </motion.div>
+                </FadeUp>
               );
             })}
           </div>
         </div>
       </section>
 
-      {/* ─── Testimonials ─── */}
-      <section className="py-24 lg:py-32 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">Real creators</p>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-              What creators are{" "}
-              <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-                building and earning
-              </span>
-            </h2>
-            <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">
-              Early access creators are already selling digital products and building audiences.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {TESTIMONIALS.map((t, i) => (
-              <TestimonialCard key={t.name} t={t} delay={i * 0.07} />
-            ))}
-          </div>
-
-          {/* Overall rating */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4 text-center"
-          >
-            <div className="flex items-center gap-1.5">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-5 h-5 text-amber-400 fill-amber-400" />
+      {/* ─── Reviews — real only, or honest beta callout ─── */}
+      {reviews.length > 0 ? (
+        <section className="py-24 lg:py-32 border-t border-white/[0.05]">
+          <div className="max-w-7xl mx-auto px-6">
+            <FadeUp className="text-center mb-16">
+              <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">From our users</p>
+              <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
+                What creators are{" "}
+                <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
+                  saying
+                </span>
+              </h2>
+            </FadeUp>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {reviews.map((r, i) => (
+                <ReviewCard key={`${r.name}-${i}`} review={r} delay={i * 0.07} />
               ))}
             </div>
-            <p className="text-white/60 text-sm">
-              <span className="font-bold text-white">4.9 / 5</span> from early access creators
-            </p>
-            <span className="hidden sm:block text-white/20">·</span>
-            <p className="text-white/40 text-sm">
-              Join <span className="text-white font-semibold">1,200+</span> creators in early access
-            </p>
-          </motion.div>
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : (
+        <section className="py-24 lg:py-32 border-t border-white/[0.05]">
+          <div className="max-w-3xl mx-auto px-6">
+            <FadeUp>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-10 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-orange-500/15 border border-orange-500/20 flex items-center justify-center mx-auto mb-6">
+                  <Sparkles className="w-7 h-7 text-orange-400" />
+                </div>
+                <h3 className="text-2xl font-extrabold text-white mb-3">We&apos;re in early access</h3>
+                <p className="text-white/50 leading-relaxed max-w-md mx-auto mb-2">
+                  Content Flywheel is a new product. We&apos;re building it in public and improving it every week based on real feedback.
+                </p>
+                <p className="text-white/40 text-sm leading-relaxed max-w-md mx-auto mb-8">
+                  The 7-day free trial means you can test every feature yourself — no commitment required — and decide if it&apos;s right for you.
+                </p>
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-2 rounded-full bg-orange-500 hover:bg-orange-400 px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition-colors"
+                >
+                  Start your free trial
+                </Link>
+                <p className="mt-3 text-xs text-white/20">No credit card required</p>
+              </div>
+            </FadeUp>
+          </div>
+        </section>
+      )}
     </>
   );
 }
