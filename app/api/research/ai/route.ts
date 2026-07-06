@@ -233,6 +233,203 @@ If the user asks "what should I build", give a direct recommendation with reason
 
 import type { SourceCitation } from "@/lib/research-sources/types";
 
+// ─── Intent analysis ─────────────────────────────────────────────────────────
+
+interface IntentAnalysis {
+  /** Short slug, e.g. "saas-discoverability" */
+  intent: string;
+  /** Human-readable label, e.g. "SaaS Platform Discovery" */
+  intentLabel: string;
+  /** 1–2 sentences explaining the real research need */
+  reasoning: string;
+  /** Per-analyst optimised search queries */
+  analystQueries: Record<string, string>;
+  /** 4–6 semantic variants of the query capturing different angles */
+  generalExpanded: string[];
+}
+
+/**
+ * Classifies the user's raw query into an intent and generates per-analyst
+ * expanded queries so every analyst searches for what the user ACTUALLY needs,
+ * not just the literal keywords they typed.
+ *
+ * e.g. "How can I see Content Flywheel?" →
+ *   intent: "saas-discoverability"
+ *   analystQueries.web: "SaaS platform discoverability strategies 2024"
+ *   analystQueries.community: "how to get discovered as a SaaS startup reddit"
+ */
+async function classifyIntent(
+  query: string,
+  researchType: string,
+  apiKey: string,
+): Promise<IntentAnalysis> {
+  const fallback: IntentAnalysis = {
+    intent: "general-research",
+    intentLabel: "General Research",
+    reasoning: "Comprehensive research on the given topic.",
+    analystQueries: {},
+    generalExpanded: [query],
+  };
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert research analyst. Your job is to determine the user's TRUE underlying research intent and generate optimised search queries for 9 specialist analysts.
+
+Research type hint: "${researchType}"
+
+CRITICAL RULES:
+- Do NOT search for the user's literal words if they imply a deeper question
+- If the user asks "How can I see Content Flywheel?" → intent is SaaS discovery/marketing, NOT "Content Flywheel"
+- If the user asks "best way to grow" → intent is growth strategies, not just "grow"
+- Each analystQuery must be semantically relevant to the REAL intent, not the raw keywords
+- Think like a research analyst: what does this person ACTUALLY need to know?
+
+Return ONLY valid JSON:
+{
+  "intent": "short-kebab-slug",
+  "intentLabel": "3-5 word human-readable intent",
+  "reasoning": "1-2 sentences: what the user is ACTUALLY asking about and why",
+  "analystQueries": {
+    "web": "optimised query for general web research on the real intent",
+    "news": "optimised query for current news about the real intent",
+    "community": "optimised query for Reddit/forum discussions about the real intent",
+    "hackernews": "optimised query for tech community discussions about the real intent",
+    "wikipedia": "optimised query for encyclopedic background on the real intent",
+    "academic": "optimised query for peer-reviewed research on the real intent",
+    "seo": "optimised query for keyword/search intent research",
+    "social": "optimised query for social media trends about the real intent",
+    "marketplace": "optimised query for digital product marketplace research"
+  },
+  "generalExpanded": [
+    "4-6 distinct semantic search queries that capture different angles of the user's real intent"
+  ]
+}`,
+          },
+          {
+            role: "user",
+            content: `Raw query: "${query}"`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 700,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+
+    if (!res.ok) return fallback;
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const raw = data.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(raw) as Partial<IntentAnalysis>;
+
+    return {
+      intent:          parsed.intent          ?? "general-research",
+      intentLabel:     parsed.intentLabel     ?? "General Research",
+      reasoning:       parsed.reasoning       ?? "",
+      analystQueries:  parsed.analystQueries  ?? {},
+      generalExpanded: Array.isArray(parsed.generalExpanded) && parsed.generalExpanded.length > 0
+        ? parsed.generalExpanded
+        : [query],
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Scores each citation for relevance to the user's actual intent.
+ * Returns the same array with `relevance` (High/Medium/Low) and `reason` added.
+ * Filters out citations with no URL before scoring.
+ */
+async function scoreCitations(
+  citations: SourceCitation[],
+  intentAnalysis: IntentAnalysis,
+  apiKey: string,
+): Promise<SourceCitation[]> {
+  if (citations.length === 0) return citations;
+
+  // Cap at 30 to stay within token budget
+  const toScore = citations.slice(0, 30);
+
+  try {
+    const citationList = toScore
+      .map((c, i) => `${i + 1}. [${c.source}] ${c.title}`)
+      .join("\n");
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `You are a research relevance analyst. Score each citation for how relevant it is to the user's actual research intent. Return ONLY valid JSON.`,
+          },
+          {
+            role: "user",
+            content: `User's real intent: ${intentAnalysis.intentLabel}
+Intent reasoning: ${intentAnalysis.reasoning}
+
+Citations to score (${toScore.length} total):
+${citationList}
+
+Return JSON:
+{
+  "scores": [
+    { "index": 1, "relevance": "High|Medium|Low", "reason": "One sentence: why this source is or is not relevant to the intent" }
+  ]
+}
+
+Scoring criteria:
+- "High" = directly answers or informs the user's real intent; highly specific and useful
+- "Medium" = related to the topic area but doesn't directly address the intent
+- "Low" = contains the keywords but misses the actual question; tangential or generic`,
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!res.ok) return citations;
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const raw = data.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(raw) as { scores?: Array<{ index: number; relevance: string; reason: string }> };
+
+    // Build 0-indexed map from the 1-indexed scores
+    const scoreMap = new Map<number, { relevance: string; reason: string }>();
+    for (const s of (parsed.scores ?? [])) {
+      scoreMap.set(s.index - 1, { relevance: s.relevance, reason: s.reason });
+    }
+
+    const scored = toScore.map((c, i) => {
+      const s = scoreMap.get(i);
+      return {
+        ...c,
+        relevance: (["High", "Medium", "Low"].includes(s?.relevance ?? "")
+          ? s!.relevance
+          : "Medium") as "High" | "Medium" | "Low",
+        reason: s?.reason ?? "",
+      };
+    });
+
+    // Append any citations beyond the 30 cap unscored
+    return [...scored, ...citations.slice(30)];
+  } catch {
+    return citations;
+  }
+}
+
 interface ProviderResult {
   summary: string;
   usedFallback: boolean;
@@ -808,6 +1005,7 @@ async function synthesizeReport(
   researchType: string,
   providerData: Record<string, ProviderResult>,
   apiKey: string,
+  intentAnalysis?: IntentAnalysis,
 ): Promise<Record<string, unknown>> {
   // Build a concise summary of all gathered intelligence
   const contextParts = Object.entries(providerData)
@@ -817,6 +1015,11 @@ async function synthesizeReport(
       return `${label.toUpperCase()} (${v.usedFallback ? "AI Analysis" : "Live Data"}):\n${JSON.stringify(v.data, null, 1).slice(0, 1500)}`;
     })
     .join("\n\n");
+
+  // Include intent context so the synthesiser focuses on the real need
+  const intentBlock = intentAnalysis
+    ? `\n─── INTENT ANALYSIS ───\nUser's real intent: ${intentAnalysis.intentLabel}\n${intentAnalysis.reasoning}\nExpanded angles: ${intentAnalysis.generalExpanded.slice(0, 4).join(" | ")}\n─────────────────────`
+    : "";
 
   const systemPrompt = buildSystemPrompt(researchType);
 
@@ -830,12 +1033,13 @@ async function synthesizeReport(
         {
           role: "user",
           content: `Research query: "${query}"
+${intentBlock}
 
 ─── SPECIALIST ANALYST RESEARCH DATA ───
 ${contextParts}
 ─────────────────────────────────────────
 
-Use the above real research data to generate a comprehensive, specific, and grounded report. Reference specific findings from the analysts where relevant. All prices in GBP (£).`,
+Use the above real research data to generate a comprehensive, specific, and grounded report. Focus on the user's REAL intent: ${intentAnalysis?.intentLabel ?? query}. Reference specific findings from the analysts where relevant. All prices in GBP (£).`,
         },
       ],
       temperature: 0.7,
@@ -870,6 +1074,28 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
   // Run research pipeline asynchronously (fire-and-forget, streams to client)
   void (async () => {
     try {
+      // 0. Intent classification — runs before anything else so every analyst
+      //    receives a semantically appropriate query rather than raw keywords.
+      const intentAnalysis = await classifyIntent(query, researchType, apiKey).catch(
+        (): IntentAnalysis => ({
+          intent: "general-research",
+          intentLabel: "General Research",
+          reasoning: "",
+          analystQueries: {},
+          generalExpanded: [query],
+        }),
+      );
+
+      // Stream the intent classification so the UI can show "What we understood"
+      await send({
+        type: "intent-classified",
+        intent:          intentAnalysis.intent,
+        intentLabel:     intentAnalysis.intentLabel,
+        reasoning:       intentAnalysis.reasoning,
+        expandedQueries: intentAnalysis.generalExpanded,
+        analystQueries:  intentAnalysis.analystQueries,
+      });
+
       // 1. Init — tell client which analysts are coming
       await send({
         type: "init",
@@ -877,7 +1103,8 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
         analysts: RESEARCH_ANALYSTS.map(a => ({ id: a.id, displayName: a.displayName, emoji: a.emoji, description: a.description })),
       });
 
-      // 2. Run all 5 analysts in parallel — each streams its result as it finishes
+      // 2. Run all analysts in parallel — each gets its intent-optimised query.
+      //    Falls back to the original query if no expanded query exists for that analyst.
       const collectedData: Record<string, ProviderResult> = {};
 
       const analystRunners: Array<[string, (q: string, k: string) => Promise<ProviderResult>]> = [
@@ -894,10 +1121,12 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
 
       await Promise.allSettled(
         analystRunners.map(async ([id, runner]) => {
+          // Use the intent-optimised query for this analyst if available
+          const analystQuery = intentAnalysis.analystQueries[id]?.trim() || query;
           await send({ type: "analyst-update", id, status: "working" });
           const t0 = Date.now();
           try {
-            const result = await runner(query, apiKey);
+            const result = await runner(analystQuery, apiKey);
             collectedData[id] = result;
             await send({
               type: "analyst-update",
@@ -915,10 +1144,9 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
         }),
       );
 
-      // 3. Collect all citations from every source
+      // 3. Collect all citations, deduplicate by URL, then score relevance
       const allCitations: SourceCitation[] = Object.values(collectedData)
         .flatMap(r => r.citations ?? []);
-      // Deduplicate by URL
       const seenUrls = new Set<string>();
       const dedupedCitations = allCitations.filter(c => {
         if (!c.url || seenUrls.has(c.url)) return false;
@@ -926,14 +1154,19 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
         return true;
       });
 
+      // Score citations for relevance to the user's actual intent
+      const scoredCitations = await scoreCitations(dedupedCitations, intentAnalysis, apiKey).catch(
+        () => dedupedCitations,
+      );
+
       // 4. Synthesis — combine all into final report
       await send({ type: "synthesis-start" });
-      const report = await synthesizeReport(query, researchType, collectedData, apiKey);
+      const report = await synthesizeReport(query, researchType, collectedData, apiKey, intentAnalysis);
 
       await send({
         type: "synthesis-done",
         report,
-        citations: dedupedCitations,
+        citations: scoredCitations,
         providerData: Object.fromEntries(
           Object.entries(collectedData).map(([k, v]) => [k, v.data]),
         ),
@@ -944,6 +1177,12 @@ function streamResearch(query: string, researchType: string, apiKey: string): Re
           dataPoints: Object.keys(collectedData[a.id]?.data ?? {}).length,
           liveData: !(collectedData[a.id]?.usedFallback ?? true),
         })),
+        intentAnalysis: {
+          intent:          intentAnalysis.intent,
+          intentLabel:     intentAnalysis.intentLabel,
+          reasoning:       intentAnalysis.reasoning,
+          expandedQueries: intentAnalysis.generalExpanded,
+        },
         generatedAt: new Date().toISOString(),
       });
     } catch (err) {

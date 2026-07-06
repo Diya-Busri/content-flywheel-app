@@ -1543,6 +1543,14 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
   const [sourceMeta, setSourceMeta]     = useState<SourceMeta[]>([]);
   const [citations, setCitations]       = useState<SourceCitation[]>([]);
 
+  // Intent classification state — set by the intent-classified stream event
+  const [intentClassified, setIntentClassified] = useState<{
+    intent: string;
+    intentLabel: string;
+    reasoning: string;
+    expandedQueries: string[];
+  } | null>(null);
+
   // Read note → research prefill on mount
   useEffect(() => {
     try {
@@ -1610,6 +1618,7 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
     setProviderData({});
     setSourceMeta([]);
     setCitations([]);
+    setIntentClassified(null);
     setState("loading");
 
     try {
@@ -1638,7 +1647,14 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
             const event = JSON.parse(trimmed) as Record<string, unknown>;
             const evType = event.type as string;
 
-            if (evType === "init") {
+            if (evType === "intent-classified") {
+              setIntentClassified({
+                intent:          String(event.intent ?? ""),
+                intentLabel:     String(event.intentLabel ?? ""),
+                reasoning:       String(event.reasoning ?? ""),
+                expandedQueries: Array.isArray(event.expandedQueries) ? (event.expandedQueries as string[]) : [],
+              });
+            } else if (evType === "init") {
               const rawAnalysts = (event.analysts as Array<{id: string; displayName: string; emoji: string; description: string}> ?? []);
               setAnalysts(rawAnalysts.map(a => ({
                 ...a,
@@ -2228,6 +2244,41 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
           )}
         </div>
 
+        {/* Intent classification card — shows what the engine understood */}
+        {intentClassified && (
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3.5 space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                <Brain className="w-3.5 h-3.5 text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[12px] font-bold text-blue-600 dark:text-blue-400">Intent understood</span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[10px] font-bold">
+                    {intentClassified.intentLabel}
+                  </span>
+                </div>
+                <p className="text-[11px] text-foreground/65 mt-0.5 leading-relaxed">{intentClassified.reasoning}</p>
+              </div>
+            </div>
+            {intentClassified.expandedQueries.length > 0 && (
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-blue-500/50 mb-1.5">Searching across {intentClassified.expandedQueries.length} semantic angles</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {intentClassified.expandedQueries.map((q, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded-md bg-blue-500/8 border border-blue-500/15 text-blue-600 dark:text-blue-400 text-[10px] font-medium"
+                    >
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Analyst cards */}
         {analysts.length > 0 ? (
           <div className="space-y-2.5">
@@ -2381,6 +2432,29 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
         onSave={() => {}}
       />
 
+      {/* ── Intent Understanding Panel ────────────────────────────────────── */}
+      {intentClassified && (
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Brain className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">What the engine understood</span>
+            <span className="ml-auto px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[10px] font-bold shrink-0">
+              {intentClassified.intentLabel}
+            </span>
+          </div>
+          <p className="text-[12px] text-foreground/70 leading-relaxed">{intentClassified.reasoning}</p>
+          {intentClassified.expandedQueries.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {intentClassified.expandedQueries.map((q, i) => (
+                <span key={i} className="px-2 py-0.5 rounded-md bg-blue-500/8 border border-blue-500/15 text-blue-500 dark:text-blue-400 text-[10px] font-medium">
+                  {q}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Report header ─────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 py-2">
         <div className="space-y-1">
@@ -2487,40 +2561,101 @@ export function ResearchTab({ onTabChange }: ResearchTabProps) {
       </div>
 
       {/* ── Live Citations Strip ──────────────────────────────────────────── */}
-      {citations.length > 0 && (
-        <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
-          <div className="flex items-center gap-2 mb-2.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Live Sources</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-bold border border-green-500/20">
-              {citations.length} references
-            </span>
+      {citations.length > 0 && (() => {
+        const highCitations   = citations.filter(c => c.relevance === "High");
+        const mediumCitations = citations.filter(c => c.relevance === "Medium");
+        const lowCitations    = citations.filter(c => c.relevance === "Low");
+        // If none are scored yet (legacy reports), show all ungrouped
+        const isScored = citations.some(c => c.relevance !== undefined);
+
+        const RELEVANCE_BADGE: Record<string, string> = {
+          "High":   "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+          "Medium": "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+          "Low":    "bg-muted/60 text-muted-foreground/50 border-border/60",
+        };
+        const SOURCE_EMOJI: Record<string, string> = {
+          "Wikipedia":    "📖",
+          "Hacker News":  "🔶",
+          "Reddit":       "🔴",
+          "News":         "📰",
+          "Semantic Scholar": "🎓",
+          "Web":          "🌐",
+        };
+
+        const CitationPill = ({ c }: { c: SourceCitation }) => (
+          <a
+            href={c.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={c.reason ? `${c.source}: ${c.reason}` : `${c.source}: ${c.title}`}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background border border-border hover:border-orange-500/30 hover:bg-orange-500/5 text-[11px] text-foreground/70 hover:text-foreground transition-all no-underline group max-w-[240px]"
+          >
+            <span className="text-[11px] leading-none shrink-0">{SOURCE_EMOJI[c.source] ?? "🔗"}</span>
+            <span className="font-medium truncate">{c.title}</span>
+            {c.relevance && (
+              <span className={cn("text-[9px] font-bold px-1 py-0.5 rounded border shrink-0", RELEVANCE_BADGE[c.relevance])}>
+                {c.relevance}
+              </span>
+            )}
+            <ExternalLink className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 transition-colors" />
+          </a>
+        );
+
+        return (
+          <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Live Sources</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-bold border border-green-500/20">
+                {citations.length} references
+              </span>
+              {isScored && highCitations.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-semibold border border-green-500/20">
+                  {highCitations.length} high relevance
+                </span>
+              )}
+            </div>
+
+            {isScored ? (
+              <div className="space-y-2.5">
+                {highCitations.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400">
+                      High relevance — directly on-intent
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {highCitations.map((c, i) => <CitationPill key={`h-${i}`} c={c} />)}
+                    </div>
+                  </div>
+                )}
+                {mediumCitations.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-yellow-600 dark:text-yellow-400">
+                      Medium relevance — related context
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mediumCitations.map((c, i) => <CitationPill key={`m-${i}`} c={c} />)}
+                    </div>
+                  </div>
+                )}
+                {lowCitations.length > 0 && (
+                  <details className="group">
+                    <summary className="cursor-pointer text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors select-none">
+                      {lowCitations.length} low relevance (keyword matches only) ▸
+                    </summary>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {lowCitations.map((c, i) => <CitationPill key={`l-${i}`} c={c} />)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {citations.map((c, i) => <CitationPill key={i} c={c} />)}
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {citations.map((c, i) => {
-              const sourceEmojis: Record<string, string> = {
-                "Wikipedia": "📖",
-                "Hacker News": "🔶",
-                "Reddit": "🔴",
-              };
-              const emoji = sourceEmojis[c.source] ?? "🔗";
-              return (
-                <a
-                  key={i}
-                  href={c.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={`${c.source}: ${c.title}`}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background border border-border hover:border-orange-500/30 hover:bg-orange-500/5 text-[11px] text-foreground/70 hover:text-foreground transition-all no-underline group"
-                >
-                  <span className="text-[11px] leading-none">{emoji}</span>
-                  <span className="font-medium truncate max-w-[140px]">{c.title}</span>
-                  <ExternalLink className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 transition-colors" />
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Business Scorecard ────────────────────────────────────────────── */}
       {report.scorecard && (

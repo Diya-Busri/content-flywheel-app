@@ -49,6 +49,14 @@ export interface SourceCitation {
   url: string;
   /** Which connector produced this citation, e.g. "Wikipedia", "Hacker News", "Reddit" */
   source: string;
+  /**
+   * Relevance of this citation to the user's actual research intent.
+   * Scored by the intent-classification layer after all sources return.
+   * High = directly on-intent; Medium = related; Low = keyword match only.
+   */
+  relevance?: "High" | "Medium" | "Low";
+  /** One-sentence explanation of why this source was included or rated as it was */
+  reason?: string;
 }
 
 // ─── Run Result ──────────────────────────────────────────────────────────────
@@ -105,8 +113,9 @@ export interface SourceDef {
 
 /** Events streamed from the research pipeline to the client */
 export type PipelineEvent =
+  | { type: "intent-classified"; intent: string; intentLabel: string; reasoning: string; expandedQueries: string[]; analystQueries: Record<string, string> }
   | { type: "init";            query: string; analysts: Array<{ id: string; displayName: string; emoji: string; description: string }> }
   | { type: "analyst-update"; id: string; status: "working" | "done" | "error"; summary?: string; usedFallback?: boolean; data?: Record<string, unknown>; citations?: SourceCitation[]; duration?: number }
   | { type: "synthesis-start" }
-  | { type: "synthesis-done"; report: Record<string, unknown>; citations: SourceCitation[]; providerData: Record<string, Record<string, unknown>>; sourceMeta: Array<{ id: string; displayName: string; usedFallback: boolean; dataPoints: number; liveData: boolean }>; generatedAt: string }
+  | { type: "synthesis-done"; report: Record<string, unknown>; citations: SourceCitation[]; providerData: Record<string, Record<string, unknown>>; sourceMeta: Array<{ id: string; displayName: string; usedFallback: boolean; dataPoints: number; liveData: boolean }>; intentAnalysis?: { intent: string; intentLabel: string; reasoning: string; expandedQueries: string[] }; generatedAt: string }
   | { type: "error";           message: string };
