@@ -20,6 +20,7 @@ import { useState, useEffect } from "react";
 import { useDashboardTheme } from "@/components/dashboard-theme-provider";
 import { useSidebar } from "@/components/sidebar-context";
 import { HelpPanel, HelpButton } from "@/components/help/HelpPanel";
+import { AdminToolbar } from "@/components/dev/AdminToolbar";
 
 interface SidebarProps {
   profile: SelectProfile | null;
@@ -72,86 +73,86 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
   const isActive = (path: string, activeWhenStartsWith?: boolean) =>
     activeWhenStartsWith ? pathname.startsWith(path) : pathname === path;
 
-  type NavItem = { href: string; icon: React.ReactNode; label: string; emoji: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean; featureKey?: string; parentToggle?: string; parentKey?: string };
+  type NavItem = { href: string; icon: React.ReactNode; label: string; subItem?: boolean; badge?: string; activeWhenStartsWith?: boolean; featureKey?: string; parentToggle?: string; parentKey?: string };
   type NavGroup = { label: string; items: NavItem[] };
 
   const navGroups: NavGroup[] = [
     {
       label: "Create",
       items: [
-        { href: "/dashboard/academy", icon: <GraduationCap size={18} />, label: "Academy", emoji: "🎓", activeWhenStartsWith: true },
-        { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", emoji: "🤖", featureKey: "ai_coach" },
-        { href: "/dashboard/design-studio", icon: <Palette size={18} />, label: "Design Studio", emoji: "✏️", activeWhenStartsWith: true, featureKey: "design_studio" },
-        { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", emoji: "🎨", activeWhenStartsWith: true, featureKey: "template_studio" },
-        { href: "/dashboard/video-timeline", icon: <Video size={18} />, label: "Video Timeline", emoji: "🎞️", featureKey: "video_timeline" },
-        { href: "/dashboard/ugc-lab", icon: <Clapperboard size={18} />, label: "UGC Lab", emoji: "🎬", activeWhenStartsWith: true, featureKey: "ugc_lab" },
-        { href: "/dashboard/brand-builder", icon: <Brush size={18} />, label: "Brand Builder", emoji: "✨", activeWhenStartsWith: true, featureKey: "brand_builder" },
-        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", emoji: "🛍️", activeWhenStartsWith: true, featureKey: "tiktok_shop" },
-        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", emoji: "📦", activeWhenStartsWith: true, featureKey: "digital_products" },
-        { href: "/dashboard/video-guide/new", icon: <Clapperboard size={18} />, label: "Video Guide", emoji: "🎬", activeWhenStartsWith: true, featureKey: "digital_products" },
-        { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", emoji: "🎥", featureKey: "video_credits" },
+        { href: "/dashboard/academy", icon: <GraduationCap size={18} />, label: "Academy", activeWhenStartsWith: true },
+        { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", featureKey: "ai_coach" },
+        { href: "/dashboard/design-studio", icon: <Palette size={18} />, label: "Design Studio", activeWhenStartsWith: true, featureKey: "design_studio" },
+        { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", activeWhenStartsWith: true, featureKey: "template_studio" },
+        { href: "/dashboard/video-timeline", icon: <Video size={18} />, label: "Video Timeline", featureKey: "video_timeline" },
+        { href: "/dashboard/ugc-lab", icon: <Clapperboard size={18} />, label: "UGC Lab", activeWhenStartsWith: true, featureKey: "ugc_lab" },
+        { href: "/dashboard/brand-builder", icon: <Brush size={18} />, label: "Brand Builder", activeWhenStartsWith: true, featureKey: "brand_builder" },
+        { href: "/dashboard/tiktok-shop", icon: <ShoppingBag size={18} />, label: "TikTok Shop", activeWhenStartsWith: true, featureKey: "tiktok_shop" },
+        { href: "/dashboard/digital-products", icon: <Package size={18} />, label: "Digital Products", activeWhenStartsWith: true, featureKey: "digital_products" },
+        { href: "/dashboard/video-guide/new", icon: <Clapperboard size={18} />, label: "Video Guide", activeWhenStartsWith: true, featureKey: "digital_products" },
+        { href: "/dashboard/video-credits", icon: <Film size={18} />, label: "Video Credits", featureKey: "video_credits" },
       ],
     },
     {
       label: "Content",
       items: [
-        { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", emoji: "📚", featureKey: "my_library" },
-        { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", emoji: "💬", activeWhenStartsWith: true, featureKey: "caption_library" },
-        { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", emoji: "📅", featureKey: "content_calendar" },
-        { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", emoji: "✅", featureKey: "script_checker" },
-        { href: "/dashboard/workspace", icon: <ListTodo size={18} />, label: "Workspace", emoji: "🗂️", activeWhenStartsWith: true },
+        { href: "/dashboard/library", icon: <Library size={18} />, label: "My Library", featureKey: "my_library" },
+        { href: "/dashboard/caption-library", icon: <BookMarked size={18} />, label: "Caption Library", activeWhenStartsWith: true, featureKey: "caption_library" },
+        { href: "/dashboard/content-calendar", icon: <Calendar size={18} />, label: "Content Calendar", featureKey: "content_calendar" },
+        { href: "/dashboard/script-checker", icon: <CheckSquare size={18} />, label: "Script Checker", featureKey: "script_checker" },
+        { href: "/dashboard/workspace", icon: <ListTodo size={18} />, label: "Workspace", activeWhenStartsWith: true },
       ],
     },
     {
       label: "Sell",
       items: [
-        { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", emoji: "🛒", activeWhenStartsWith: true },
-        { href: "/dashboard/marketplace", icon: <ShoppingBag size={18} />, label: "Marketplace", emoji: "🛍️", activeWhenStartsWith: true },
-        { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", emoji: "👕", activeWhenStartsWith: true, featureKey: "print_on_demand" },
-        { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", emoji: "🎁", activeWhenStartsWith: true, featureKey: "drop_campaign" },
+        { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", activeWhenStartsWith: true },
+        { href: "/dashboard/marketplace", icon: <ShoppingBag size={18} />, label: "Marketplace", activeWhenStartsWith: true },
+        { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", activeWhenStartsWith: true, featureKey: "print_on_demand" },
+        { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", activeWhenStartsWith: true, featureKey: "drop_campaign" },
       ],
     },
     {
       label: "Grow",
       items: [
-        { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧", activeWhenStartsWith: true, featureKey: "email_marketing" },
-        { href: "/dashboard/email-sequences", icon: <Zap size={18} />, label: "Email Sequences", emoji: "⚡", activeWhenStartsWith: true, featureKey: "email_marketing" },
-        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", emoji: "🎯", activeWhenStartsWith: true, featureKey: "goal_tracker" },
-        { href: "/dashboard/campaign-mode", icon: <Zap size={18} />, label: "Campaign Mode", emoji: "🚀", activeWhenStartsWith: true, featureKey: "campaign_mode" },
-        { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", emoji: "📈", featureKey: "grow_hub" },
+        { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", activeWhenStartsWith: true, featureKey: "email_marketing" },
+        { href: "/dashboard/email-sequences", icon: <Zap size={18} />, label: "Email Sequences", activeWhenStartsWith: true, featureKey: "email_marketing" },
+        { href: "/dashboard/goals", icon: <Target size={18} />, label: "Goal Tracker", activeWhenStartsWith: true, featureKey: "goal_tracker" },
+        { href: "/dashboard/campaign-mode", icon: <Zap size={18} />, label: "Campaign Mode", activeWhenStartsWith: true, featureKey: "campaign_mode" },
+        { href: "/dashboard/grow", icon: <TrendingUp size={18} />, label: "Grow Hub", featureKey: "grow_hub" },
       ],
     },
   ].map((group) => ({ ...group, items: group.items.filter((item) => !item.featureKey || !disabled.has(item.featureKey)) }));
 
   if (isAdminUser) {
     navGroups.push({ label: "Admin", items: [
-      { href: "/dashboard/admin", icon: <LayoutDashboard size={18} />, label: "Admin Overview", emoji: "🛡️", activeWhenStartsWith: false },
-      { href: "/dashboard/admin/users", icon: <Users size={18} />, label: "Users", emoji: "👥", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/revenue", icon: <TrendingUp size={18} />, label: "Revenue", emoji: "💰", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/applications", icon: <Star size={18} />, label: "Applications", emoji: "📋", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/feature-flags", icon: <Flag size={18} />, label: "Feature Flags", emoji: "🚩", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/analytics", icon: <BarChart2 size={18} />, label: "Analytics", emoji: "📊", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/feedback", icon: <Inbox size={18} />, label: "Feedback Inbox", emoji: "💬", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/support", icon: <Inbox size={18} />, label: "Support Inbox", emoji: "🛟", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/reports", icon: <Flag size={18} />, label: "Reports", emoji: "🚩", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/community-analytics", icon: <BarChart2 size={18} />, label: "Community Analytics", emoji: "📊", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/health", icon: <Activity size={18} />, label: "Platform Health", emoji: "❤️", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/announcements", icon: <Megaphone size={18} />, label: "Announcements", emoji: "📣", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/notifications", icon: <Bell size={18} />, label: "Push Notifications", emoji: "🔔", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/retention", icon: <TrendingDown size={18} />, label: "Retention", emoji: "📉", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/promo-codes", icon: <Tag size={18} />, label: "Promo Codes", emoji: "🎟️", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/email-blast", icon: <Send size={18} />, label: "Email Blast", emoji: "✉️", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/ab-tests", icon: <FlaskConical size={18} />, label: "A/B Tests", emoji: "🧪", activeWhenStartsWith: true },
-      { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing", emoji: "📧" },
-      { href: "/dashboard/admin/finances", icon: <Wallet size={18} />, label: "Finance Tracker", emoji: "💰", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/video-agent", icon: <Clapperboard size={18} />, label: "Video Agent", emoji: "🎬", activeWhenStartsWith: true },
-      { href: "/dashboard/admin/notes", icon: <NotebookPen size={18} />, label: "Notes", emoji: "📝", activeWhenStartsWith: true },
+      { href: "/dashboard/admin", icon: <LayoutDashboard size={18} />, label: "Admin Overview", activeWhenStartsWith: false },
+      { href: "/dashboard/admin/users", icon: <Users size={18} />, label: "Users", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/revenue", icon: <TrendingUp size={18} />, label: "Revenue", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/applications", icon: <Star size={18} />, label: "Applications", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/feature-flags", icon: <Flag size={18} />, label: "Feature Flags", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/analytics", icon: <BarChart2 size={18} />, label: "Analytics", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/feedback", icon: <Inbox size={18} />, label: "Feedback Inbox", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/support", icon: <Inbox size={18} />, label: "Support Inbox", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/reports", icon: <Flag size={18} />, label: "Reports", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/community-analytics", icon: <BarChart2 size={18} />, label: "Community Analytics", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/health", icon: <Activity size={18} />, label: "Platform Health", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/announcements", icon: <Megaphone size={18} />, label: "Announcements", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/notifications", icon: <Bell size={18} />, label: "Push Notifications", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/retention", icon: <TrendingDown size={18} />, label: "Retention", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/promo-codes", icon: <Tag size={18} />, label: "Promo Codes", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/email-blast", icon: <Send size={18} />, label: "Email Blast", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/ab-tests", icon: <FlaskConical size={18} />, label: "A/B Tests", activeWhenStartsWith: true },
+      { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing" },
+      { href: "/dashboard/admin/finances", icon: <Wallet size={18} />, label: "Finance Tracker", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/video-agent", icon: <Clapperboard size={18} />, label: "Video Agent", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/notes", icon: <NotebookPen size={18} />, label: "Notes", activeWhenStartsWith: true },
     ]});
   }
 
   const comingSoonNavItems: NavItem[] = [];
 
-  const settingsItem: NavItem = { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings", emoji: "⚙️" };
+  const settingsItem: NavItem = { href: "/dashboard/settings", icon: <Settings size={18} />, label: "Settings" };
 
   const renderNavItem = (item: NavItem, onToggle?: () => void, isExpanded?: boolean) => {
     const isSub = "subItem" in item && item.subItem;
@@ -181,7 +182,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
               {item.icon}
             </div>
             <span className="ml-3 text-sm font-medium hidden md:block flex-1 min-w-0 truncate">
-              {item.emoji} {item.label}
+              {item.label}
             </span>
             {item.badge && (
               <span className={`hidden md:inline-flex shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${active ? "bg-white/20 text-white" : "bg-orange-500 text-white"}`}>
@@ -210,7 +211,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       <Link key={item.href} href={item.href} onClick={() => setMobileNavOpen(false)} className="block">
         <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${active ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
           {item.icon}
-          <span className="text-sm font-medium">{item.emoji} {item.label}</span>
+          <span className="text-sm font-medium">{item.label}</span>
         </div>
       </Link>
     );
@@ -275,10 +276,13 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
           </motion.button>
         </div>
 
+        {/* Admin Toolbar — Test Wizard, Restore, and future admin tools */}
+        <AdminToolbar isAdmin={isAdmin} />
+
         {/* Navigation Items */}
         <nav className="flex-1 px-3 relative z-10 overflow-y-auto min-h-0">
           <div className="space-y-1.5 mb-2">
-            {renderNavItem({ href: "/dashboard", icon: <Home size={18} />, label: "Home", emoji: "🏠" })}
+            {renderNavItem({ href: "/dashboard", icon: <Home size={18} />, label: "Home" })}
           </div>
           <div className="space-y-4">
             {navGroups.filter((group) => group.items.length > 0).map((group) => (
@@ -480,18 +484,18 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
                   <Link href="/dashboard/settings" onClick={() => setMobileNavOpen(false)} className="block">
                     <div className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${pathname === "/dashboard/settings" ? "bg-orange-500 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"}`}>
                       <Settings size={18} />
-                      <span className="text-sm font-medium">⚙️ Settings</span>
+                      <span className="text-sm font-medium">Settings</span>
                     </div>
                   </Link>
                   <Link href="/pricing" onClick={() => setMobileNavOpen(false)} className="block">
                     <div className="flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
                       <CreditCard size={18} />
-                      <span className="text-sm font-medium">💳 Billing</span>
+                      <span className="text-sm font-medium">Billing</span>
                     </div>
                   </Link>
                   <button onClick={() => { toggleTheme(); setMobileNavOpen(false); }} className="w-full flex items-center gap-3 py-3 px-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
                     {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-                    <span className="text-sm font-medium">{theme === "dark" ? "☀️ Light mode" : "🌙 Dark mode"}</span>
+                    <span className="text-sm font-medium">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
                   </button>
                 </div>
               </div>
