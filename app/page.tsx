@@ -55,7 +55,7 @@ export default async function HomePage() {
                 Content<span className="text-orange-500">Flywheel</span>
               </span>
               <p className="mt-3 text-sm text-white/40 max-w-xs leading-relaxed">
-                The all-in-one platform for creators who want to build, sell, and market digital products with AI — without the faff of five separate tools.
+                Build, sell, and market digital products with AI. One platform, one price, everything connected.
               </p>
               {/* Social links */}
               <div className="flex items-center gap-3 mt-6">
@@ -83,11 +83,11 @@ export default async function HomePage() {
               <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-5">Product</h4>
               <ul className="space-y-3 text-sm">
                 {[
-                  ["Features", "/#features"],
-                  ["How it Works", "/#journey"],
+                  ["Features", "/features"],
+                  ["How it Works", "/journey"],
                   ["Pricing", "/pricing"],
                   ["Marketplace", "/marketplace"],
-                  ["Blog", "/blog/faceless-creator"],
+                  ["Blog", "/blog"],
                 ].map(([label, href]) => (
                   <li key={label}>
                     <Link href={href} className="text-white/45 hover:text-white transition-colors">
@@ -103,10 +103,10 @@ export default async function HomePage() {
               <h4 className="text-xs font-bold uppercase tracking-widest text-white/30 mb-5">Support</h4>
               <ul className="space-y-3 text-sm">
                 {[
-                  ["FAQ", "/#faq"],
-                  ["Contact Us", "mailto:contentflywheel@gmail.com"],
-                  ["Selling Guide", "/dashboard/digital-products/selling-guide"],
-                  ["Affiliate Programme", "/dashboard/affiliates"],
+                  ["FAQ", "/faq"],
+                  ["Contact Us", "/contact"],
+                  ["Selling Guide", "/selling-guide"],
+                  ["Affiliate Programme", "/affiliates"],
                 ].map(([label, href]) => (
                   <li key={label}>
                     <Link href={href} className="text-white/45 hover:text-white transition-colors">
@@ -125,7 +125,7 @@ export default async function HomePage() {
                   ["Terms & Conditions", "/terms"],
                   ["Privacy Policy", "/privacy"],
                   ["Refund Policy", "/refund-policy"],
-                  ["Cookie Policy", "/privacy#cookies"],
+                  ["Cookie Policy", "/cookie-policy"],
                 ].map(([label, href]) => (
                   <li key={label}>
                     <Link href={href} className="text-white/45 hover:text-white transition-colors">
@@ -138,7 +138,7 @@ export default async function HomePage() {
               {/* CTA */}
               <div className="mt-8">
                 <Link
-                  href="/signup"
+                  href="/sign-up"
                   className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-orange-500/20"
                 >
                   Start free →
