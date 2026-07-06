@@ -7,8 +7,8 @@ import { OnboardingModal } from "@/components/onboarding/onboarding-modal";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import type { OnboardingSteps } from "@/app/api/onboarding/route";
 
-type OnboardingContextValue = { modalActive: boolean };
-const OnboardingContext = createContext<OnboardingContextValue>({ modalActive: false });
+type OnboardingContextValue = { modalActive: boolean; refetch: () => Promise<void> };
+const OnboardingContext = createContext<OnboardingContextValue>({ modalActive: false, refetch: async () => {} });
 export function useOnboarding() { return useContext(OnboardingContext); }
 
 const BRAND_ORANGE = "#F59E0B";
@@ -48,6 +48,13 @@ export function OnboardingProvider({
   const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Read localStorage once on mount — returning users who already dismissed the modal
+  // don't need to wait for the API fetch before seeing the dashboard.
+  const [locallyKnownDone] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("cf_onboarding_ok") === "true";
+  });
+
   const fetchOnboarding = useCallback(async () => {
     try {
       // Fetch onboarding status + user's selected features in parallel
@@ -85,6 +92,13 @@ export function OnboardingProvider({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  // Cache the "done" state so returning users skip the loading overlay on next visit
+  useEffect(() => {
+    if (!loading && (onboardingCompleted || steps?.modalDismissed === true)) {
+      try { localStorage.setItem("cf_onboarding_ok", "true"); } catch { /* ignore */ }
+    }
+  }, [loading, onboardingCompleted, steps]);
 
   // Mark steps when dashboard is seen, user has a product, or digital products wasn't selected
   useEffect(() => {
@@ -137,6 +151,13 @@ export function OnboardingProvider({
 
   const showModal = !loading && !onboardingCompleted && steps?.modalDismissed !== true && hasActiveSubscription;
 
+  // Show a blocking overlay while we're still fetching onboarding status, but ONLY if:
+  // 1. User has an active subscription (otherwise no modal would ever appear anyway)
+  // 2. We don't already know from localStorage that the modal was previously dismissed
+  // This prevents new users seeing the dashboard flash before the onboarding modal appears,
+  // while returning users (localStorage cache hit) see the dashboard instantly.
+  const showLoadingOverlay = loading && hasActiveSubscription && !locallyKnownDone;
+
   const handleStepComplete = useCallback((step: number) => {
     if (step === 2) {
       setSteps((prev) => ({ ...prev, watchDemo: true }));
@@ -149,7 +170,13 @@ export function OnboardingProvider({
   }, [steps]);
 
   return (
-    <OnboardingContext.Provider value={{ modalActive: showModal }}>
+    <OnboardingContext.Provider value={{ modalActive: showModal, refetch: fetchOnboarding }}>
+      {/* Overlay for new users: hides the dashboard until we know whether to show the modal */}
+      {showLoadingOverlay && (
+        <div className="fixed inset-0 z-[9999] bg-[#0a0a0a] flex items-center justify-center">
+          <div className="h-10 w-10 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
+        </div>
+      )}
       <OnboardingModal show={showModal} onComplete={handleModalComplete} onStepComplete={handleStepComplete} />
       {children}
       {!loading && !onboardingCompleted && !showModal && (

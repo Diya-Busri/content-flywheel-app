@@ -48,6 +48,9 @@ import {
   Palette,
   Layers,
   Megaphone,
+  Archive,
+  Link2,
+  Share2,
 } from "lucide-react";
 import { PromoteThisSheet } from "@/components/PromoteThisSheet";
 import { useToast } from "@/components/ui/use-toast";
@@ -74,7 +77,7 @@ import TemplatesClient from "@/app/dashboard/templates/TemplatesClient";
 import HistoryClient from "@/app/dashboard/history/HistoryClient";
 import { FeaturePreviewGate } from "@/components/feature-preview-gate";
 
-type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "designs";
+type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "archived" | "designs";
 
 type TemplatePackItem = {
   id: string;
@@ -129,6 +132,8 @@ type LibraryItem = {
   pageViews?: number;
   /** Total completed orders (native store only). */
   orderCount?: number;
+  /** When set, the product is archived — ISO string. */
+  archivedAt?: string | null;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -438,10 +443,13 @@ export default function LibraryFlow() {
     setLoading(true);
     try {
       const isTrash = tab === "trash";
-      const typeParam = isTrash ? "all" : tab === "bundles" ? "bundles" : tab === "timeline" ? "timeline" : tab === "all" ? "all" : tab;
+      const isArchived = tab === "archived";
+      const typeParam = (isTrash || isArchived) ? "all" : tab === "bundles" ? "bundles" : tab === "timeline" ? "timeline" : tab === "all" ? "all" : tab;
       const url = isTrash
         ? `/api/library?type=all&deleted=true`
-        : `/api/library?type=${typeParam}`;
+        : isArchived
+          ? `/api/library?type=all&archived=true`
+          : `/api/library?type=${typeParam}`;
       const controller = new AbortController();
       // 20s timeout; auto-retry up to 2 times on slow DB cold-start
       const timeoutId = setTimeout(() => controller.abort(), 20000);
@@ -627,6 +635,7 @@ export default function LibraryFlow() {
   };
 
   const isTrashView = tab === "trash";
+  const isArchivedView = tab === "archived";
   const isTimelineView = tab === "timeline";
 
   const handleRetryGeneration = async (item: LibraryItem) => {
@@ -725,6 +734,71 @@ export default function LibraryFlow() {
     }
   };
 
+  const handleArchive = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    try {
+      const res = await fetch(`/api/products/${item.id}/archive`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to archive");
+      toast({ title: "Product archived", description: "Removed from your library and marketplace." });
+      fetchItems();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not archive", variant: "destructive" });
+    }
+  };
+
+  const handleUnarchive = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    try {
+      const res = await fetch(`/api/products/${item.id}/archive`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to unarchive");
+      toast({ title: "Product restored", description: "Back in your library." });
+      fetchItems();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not restore", variant: "destructive" });
+    }
+  };
+
+  const handleTogglePublish = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    if (item.isNativePublished) {
+      // Unpublish
+      try {
+        const res = await fetch(`/api/products/${item.id}/native-publish`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to unpublish");
+        toast({ title: "Unpublished", description: "Product removed from the marketplace." });
+        fetchItems();
+      } catch (err) {
+        toast({ title: "Error", description: err instanceof Error ? err.message : "Could not unpublish", variant: "destructive" });
+      }
+    } else {
+      // Go to edit page to publish (price required)
+      router.push(`/dashboard/digital-products/${item.id}/edit?tab=publish`);
+    }
+  };
+
+  const handleCopyLink = (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    const url = `${window.location.origin}/product/${item.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast({ title: "Link copied!", description: url });
+    }).catch(() => {
+      toast({ title: "Copy failed", description: "Could not access clipboard.", variant: "destructive" });
+    });
+  };
+
+  const handleShare = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    const url = `${window.location.origin}/product/${item.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: item.title, url });
+      } catch { /* user cancelled */ }
+    } else {
+      // Fallback — copy to clipboard
+      handleCopyLink(item);
+    }
+  };
+
   const handleDeleteAll = async () => {
     setDeletingAll(true);
     try {
@@ -793,9 +867,18 @@ export default function LibraryFlow() {
           </span>
         )}
       </div>
-      <p className="text-gray-600 dark:text-gray-400 mb-8">
+      <p className="text-gray-600 dark:text-gray-400 mb-4">
         Your digital products, video guides, and scripts in one place
       </p>
+
+      {items.some(i => i.type === "product" && i.status === "generating") && (
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          <span className="mt-0.5 shrink-0 text-base leading-none">⏳</span>
+          <span>
+            Products usually take <strong>2–4 minutes</strong> to generate. If a product appears stuck after that, press the <strong>retry button</strong> on its card to restart.
+          </span>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 mb-6">
@@ -814,6 +897,10 @@ export default function LibraryFlow() {
             <TabsTrigger value="images" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Images</TabsTrigger>
             <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
             <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
+            <TabsTrigger value="archived" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+              <Archive className="w-3.5 h-3.5" />
+              Archived
+            </TabsTrigger>
             <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
           </TabsList>
           </div>
@@ -1201,6 +1288,14 @@ export default function LibraryFlow() {
                       Deleted items appear here. Restore them or delete permanently.
                     </p>
                   </>
+                ) : isArchivedView ? (
+                  <>
+                    <Archive className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">No archived products</p>
+                    <p className="text-sm text-gray-500">
+                      Archived products are hidden from your library and the marketplace. Unarchive to restore them.
+                    </p>
+                  </>
                 ) : tab === "timeline" ? (
                   <>
                     <Video className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
@@ -1522,6 +1617,24 @@ export default function LibraryFlow() {
                                     Duplicate
                                   </DropdownMenuItem>
                                 )}
+                                {item.type === "product" && (
+                                  <DropdownMenuItem onClick={() => handleTogglePublish(item)}>
+                                    <span className="w-4 h-4 mr-2 text-center text-xs">{item.isNativePublished ? "⊘" : "▶"}</span>
+                                    {item.isNativePublished ? "Unpublish" : "Publish"}
+                                  </DropdownMenuItem>
+                                )}
+                                {item.type === "product" && (
+                                  <DropdownMenuItem onClick={() => handleCopyLink(item)}>
+                                    <Link2 className="w-4 h-4 mr-2" />
+                                    Copy Link
+                                  </DropdownMenuItem>
+                                )}
+                                {item.type === "product" && (
+                                  <DropdownMenuItem onClick={() => handleShare(item)}>
+                                    <Share2 className="w-4 h-4 mr-2" />
+                                    Share
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem
                                   onClick={() => {
                                     setPromoteUrl("");
@@ -1534,6 +1647,19 @@ export default function LibraryFlow() {
                                   Promote This
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
+                                {item.type === "product" && (
+                                  isArchivedView ? (
+                                    <DropdownMenuItem onClick={() => handleUnarchive(item)}>
+                                      <RotateCcw className="w-4 h-4 mr-2 text-green-500" />
+                                      Unarchive
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem onClick={() => handleArchive(item)}>
+                                      <Archive className="w-4 h-4 mr-2 text-amber-500" />
+                                      Archive
+                                    </DropdownMenuItem>
+                                  )
+                                )}
                                 <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(item, false)}>
                                   <Trash2 className="w-4 h-4 mr-2" />
                                   Move to Trash
@@ -1699,6 +1825,24 @@ export default function LibraryFlow() {
                                   Duplicate
                                 </DropdownMenuItem>
                               )}
+                              {item.type === "product" && (
+                                <DropdownMenuItem onClick={() => handleTogglePublish(item)}>
+                                  <span className="w-4 h-4 mr-2 text-center text-xs">{item.isNativePublished ? "⊘" : "▶"}</span>
+                                  {item.isNativePublished ? "Unpublish" : "Publish"}
+                                </DropdownMenuItem>
+                              )}
+                              {item.type === "product" && (
+                                <DropdownMenuItem onClick={() => handleCopyLink(item)}>
+                                  <Link2 className="w-4 h-4 mr-2" />
+                                  Copy Link
+                                </DropdownMenuItem>
+                              )}
+                              {item.type === "product" && (
+                                <DropdownMenuItem onClick={() => handleShare(item)}>
+                                  <Share2 className="w-4 h-4 mr-2" />
+                                  Share
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={() => {
                                   setPromoteUrl(`/dashboard/digital-products/${item.id}`);
@@ -1709,6 +1853,19 @@ export default function LibraryFlow() {
                                 Promote This
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
+                              {item.type === "product" && (
+                                isArchivedView ? (
+                                  <DropdownMenuItem onClick={() => handleUnarchive(item)}>
+                                    <RotateCcw className="w-4 h-4 mr-2 text-green-500" />
+                                    Unarchive
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => handleArchive(item)}>
+                                    <Archive className="w-4 h-4 mr-2 text-amber-500" />
+                                    Archive
+                                  </DropdownMenuItem>
+                                )
+                              )}
                               <DropdownMenuItem
                                 className="text-red-600 dark:text-red-400"
                                 onClick={() => handleDelete(item, false)}

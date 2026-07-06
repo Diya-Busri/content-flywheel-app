@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, CreditCard, Flag, Activity, FileCheck, TrendingUp, AlertCircle, Loader2, BarChart2, Inbox, Timer } from "lucide-react";
+import { Users, CreditCard, Flag, Activity, FileCheck, TrendingUp, AlertCircle, Loader2, BarChart2, Inbox, Timer, Shield } from "lucide-react";
 
 type QuickStats = {
   totalUsers: number;
@@ -83,6 +83,14 @@ export default function AdminOverviewPage() {
       icon: <Timer className="w-6 h-6" />,
       label: "Trial Analytics",
       description: "Who cancels, when they cancel, conversion rates, active trials",
+      stat: null,
+      color: "text-orange-500",
+    },
+    {
+      href: "/dashboard/admin/marketplace",
+      icon: <Shield className="w-6 h-6" />,
+      label: "Marketplace Moderation",
+      description: "Hide, suspend, remove, feature, Staff Pick, and edit product metadata across the whole marketplace",
       stat: null,
       color: "text-orange-500",
     },

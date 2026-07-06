@@ -5,7 +5,6 @@ import type { Metadata } from "next";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getSettingsForPage } from "@/actions/settings-actions";
 import SettingsContent from "./SettingsContent";
-import { SyncOnboardingStepsOnMount } from "@/components/onboarding/sync-onboarding-steps";
 
 export const metadata: Metadata = {
   title: "Settings | Content Flywheel",
@@ -23,7 +22,6 @@ export default async function SettingsPage() {
 
   return (
     <main className="p-6 md:p-10">
-      <SyncOnboardingStepsOnMount steps={{ brandProfile: true }} />
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Settings
       </h1>

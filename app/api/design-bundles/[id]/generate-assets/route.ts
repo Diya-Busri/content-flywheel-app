@@ -36,7 +36,97 @@ function extractSlideText(data: DesignData): string {
     .join(" · ");
 }
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+// ── Section-level regeneration helpers ────────────────────────────────────
+
+const SECTION_KEYS = ["mainCaption", "hooks", "ctaSuggestions", "hashtagSets", "platformVariants"] as const;
+type SectionKey = (typeof SECTION_KEYS)[number];
+
+function buildSectionSystemPrompt(section: SectionKey, tone: string, style: string): string {
+  const base = `You are a social media content strategist who writes platform-native copy for creators and brands.
+Tone: ${tone}
+Visual style: ${style.replace(/-/g, " ")}
+
+Critical writing rules:
+- NEVER mention the product name in quotes
+- NEVER use filler phrases like "Imagine a life where", "Say goodbye to", "Transform your relationship with"
+- Write like a real human creator — conversational, specific, authentic
+- Return ONLY valid JSON — no markdown, no extra keys`;
+
+  if (section === "mainCaption") {
+    return `${base}
+Return JSON matching EXACTLY: { "mainCaption": { "tiktok": "<TikTok caption, 80-150 words, hook first, conversational, ends with CTA>", "instagram": "<Instagram caption, 120-200 words, hook + value + CTA, line-break friendly>" } }`;
+  }
+  if (section === "hooks") {
+    return `${base}
+Return JSON matching EXACTLY: { "hooks": ["<5 scroll-stopping hooks. Each MUST include a specific number, situation or relatable pain point. NEVER generic motivation.>"] }`;
+  }
+  if (section === "ctaSuggestions") {
+    return `${base}
+Return JSON matching EXACTLY: { "ctaSuggestions": ["<6 action-oriented CTAs, 3-6 words each, varied and punchy>"] }`;
+  }
+  if (section === "hashtagSets") {
+    return `${base}
+Return JSON matching EXACTLY: { "hashtagSets": { "broad": ["<10 broad hashtags with # prefix>"], "niche": ["<10 niche hashtags with # prefix>"], "lowCompetition": ["<10 low-competition hashtags with # prefix, under 500k posts>"] } }`;
+  }
+  // platformVariants
+  return `${base}
+Return JSON matching EXACTLY: { "platformVariants": { "tiktok": "<50-80 words, trend-aware, call to stitch/duet optional>", "instagram": "<80-120 words, storytelling hook>", "threads": "<150-280 chars, punchy and direct>", "twitter": "<under 240 chars, punchy, no hashtags in body>" } }`;
+}
+
+// ── Full generation system prompt ──────────────────────────────────────────
+
+function buildFullSystemPrompt(tone: string, style: string): string {
+  return `You are a social media content strategist who writes platform-native copy for creators and brands.
+Tone: ${tone}
+Visual style: ${style.replace(/-/g, " ")}
+
+You will receive a summary of carousel slides and must generate a complete social media content package.
+
+Critical writing rules:
+- NEVER mention the product name in quotes (e.g. never write "Our 'X Ebook'" or "The 'X Guide'")
+- Write like a real human creator talking to their audience — conversational, specific, authentic
+- NEVER use filler phrases like "Imagine a life where", "Say goodbye to", "Transform your relationship with"
+- Hooks must reference specific numbers, outcomes or relatable situations — not generic motivation
+- Captions should feel like they were written by the creator themselves, not an AI
+
+Return ONLY valid JSON matching this exact shape — no extra keys, no markdown:
+{
+  "mainCaption": {
+    "tiktok": "<TikTok caption, 80-150 words, hook first, conversational, ends with CTA>",
+    "instagram": "<Instagram caption, 120-200 words, hook + value + CTA, line-break friendly>"
+  },
+  "hooks": [
+    "<hook 1 — MUST include a specific number, situation or relatable pain point>",
+    "<hook 2 — different angle, still specific and scroll-stopping>",
+    "<hook 3 — curiosity or story-driven, makes them want to know more>",
+    "<hook 4 — problem/pain point they recognise immediately>",
+    "<hook 5 — contrarian or surprising take>"
+  ],
+  "ctaSuggestions": [
+    "<CTA 1 — action-oriented, 3-6 words>",
+    "<CTA 2>",
+    "<CTA 3>",
+    "<CTA 4>",
+    "<CTA 5>",
+    "<CTA 6>"
+  ],
+  "hashtagSets": {
+    "broad": ["<10 broad hashtags with # prefix>"],
+    "niche": ["<10 niche hashtags with # prefix>"],
+    "lowCompetition": ["<10 low-competition hashtags with # prefix, under 500k posts>"]
+  },
+  "platformVariants": {
+    "tiktok": "<TikTok-optimized copy, 50-80 words, trend-aware, call to stitch/duet optional>",
+    "instagram": "<Instagram-optimized, 80-120 words, storytelling hook>",
+    "threads": "<Threads-optimized, 150-280 chars, punchy and direct>",
+    "twitter": "<X/Twitter, under 240 chars, punchy, no hashtags in body>"
+  }
+}`;
+}
+
+// ── Route handler ─────────────────────────────────────────────────────────
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -47,6 +137,14 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "AI not configured" }, { status: 503 });
+
+  // Parse optional section from request body
+  const body = await req.json().catch(() => ({})) as { section?: string };
+  const rawSection = typeof body.section === "string" ? body.section.trim() : null;
+  const sectionKey: SectionKey | null =
+    rawSection && (SECTION_KEYS as readonly string[]).includes(rawSection)
+      ? (rawSection as SectionKey)
+      : null;
 
   // Load bundle + slides
   const [bundle] = await db
@@ -73,52 +171,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const style = bundle.style ?? "minimal-luxury";
   const tone = TONE_GUIDE[style] ?? TONE_GUIDE["minimal-luxury"];
 
-  const systemPrompt = `You are a social media content strategist who writes platform-native copy for creators and brands.
-Tone: ${tone}
-Visual style: ${style.replace(/-/g, " ")}
-
-You will receive a summary of carousel slides and must generate a complete social media content package.
-
-Critical writing rules:
-- NEVER mention the product name in quotes (e.g. never write "Our 'X Ebook'" or "The 'X Guide'")
-- Write like a real human creator talking to their audience — conversational, specific, authentic
-- NEVER use filler phrases like "Imagine a life where", "Say goodbye to", "Transform your relationship with"
-- Hooks must reference specific numbers, outcomes or relatable situations — not generic motivation
-- Captions should feel like they were written by the creator themselves, not an AI
-
-Return ONLY valid JSON matching this exact shape — no extra keys, no markdown:
-{
-  "mainCaption": {
-    "tiktok": "<TikTok caption, 80-150 words, hook first, conversational, ends with CTA>",
-    "instagram": "<Instagram caption, 120-200 words, hook + value + CTA, line-break friendly>"
-  },
-  "hooks": [
-    "<hook 1 — MUST include a specific number, situation or relatable pain point. E.g. 'I was £200 overdrawn every month until I did this' or 'Nobody taught us this in school and it costs thousands'. NEVER generic motivation like 'Take control of your finances'>",
-    "<hook 2 — different angle, still specific and scroll-stopping>",
-    "<hook 3 — curiosity or story-driven, makes them want to know more>",
-    "<hook 4 — problem/pain point they recognise immediately>",
-    "<hook 5 — contrarian or surprising take on personal finance>"
-  ],
-  "ctaSuggestions": [
-    "<CTA 1 — action-oriented, 3-6 words>",
-    "<CTA 2>",
-    "<CTA 3>",
-    "<CTA 4>",
-    "<CTA 5>",
-    "<CTA 6>"
-  ],
-  "hashtagSets": {
-    "broad": ["<10 broad hashtags with # prefix>"],
-    "niche": ["<10 niche hashtags with # prefix>"],
-    "lowCompetition": ["<10 low-competition hashtags with # prefix, under 500k posts>"]
-  },
-  "platformVariants": {
-    "tiktok": "<TikTok-optimized copy, 50-80 words, trend-aware, call to stitch/duet optional>",
-    "instagram": "<Instagram-optimized, 80-120 words, storytelling hook>",
-    "threads": "<Threads-optimized, 150-280 chars, punchy and direct>",
-    "twitter": "<X/Twitter, under 240 chars, punchy, no hashtags in body>"
-  }
-}`;
+  const systemPrompt = sectionKey
+    ? buildSectionSystemPrompt(sectionKey, tone, style)
+    : buildFullSystemPrompt(tone, style);
 
   const userPrompt = `Bundle title: "${bundle.title}"
 Style: ${style}
@@ -137,6 +192,7 @@ Carousel slides:\n${slideSummary}`;
         ],
         response_format: { type: "json_object" },
         temperature: 0.8,
+        max_tokens: sectionKey ? 800 : 2000,
       }),
     });
 
@@ -149,30 +205,63 @@ Carousel slides:\n${slideSummary}`;
     const content = data?.choices?.[0]?.message?.content;
     if (!content) return NextResponse.json({ error: "No AI response" }, { status: 502 });
 
-    let parsed: Omit<ContentAssets, "generatedAt" | "topic">;
+    const stripMd = (s: string) => s.replace(/\*\*/g, "").replace(/\*/g, "").trim();
+    const stripArr = (arr: string[]) => Array.isArray(arr) ? arr.map(stripMd) : arr;
+
+    // ── Section-level response (client handles patching to DB) ────────────
+    if (sectionKey) {
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(content) as Record<string, unknown>;
+      } catch {
+        return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
+      }
+
+      const raw = parsed[sectionKey];
+      let value: unknown = raw;
+
+      if (sectionKey === "mainCaption" && typeof raw === "object" && raw !== null) {
+        const mc = raw as { tiktok?: string; instagram?: string };
+        value = { tiktok: stripMd(mc.tiktok ?? ""), instagram: stripMd(mc.instagram ?? "") };
+      } else if (sectionKey === "hooks" && Array.isArray(raw)) {
+        value = stripArr(raw as string[]);
+      } else if (sectionKey === "ctaSuggestions" && Array.isArray(raw)) {
+        value = stripArr(raw as string[]);
+      } else if (sectionKey === "platformVariants" && typeof raw === "object" && raw !== null) {
+        const pv = raw as { tiktok?: string; instagram?: string; threads?: string; twitter?: string };
+        value = {
+          tiktok: stripMd(pv.tiktok ?? ""),
+          instagram: stripMd(pv.instagram ?? ""),
+          threads: stripMd(pv.threads ?? ""),
+          twitter: stripMd(pv.twitter ?? ""),
+        };
+      }
+      // hashtagSets object is returned as-is
+
+      return NextResponse.json({ section: sectionKey, value });
+    }
+
+    // ── Full generation ────────────────────────────────────────────────────
+    let parsedFull: Omit<ContentAssets, "generatedAt" | "topic">;
     try {
-      parsed = JSON.parse(content);
+      parsedFull = JSON.parse(content);
     } catch {
       return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
     }
 
-    // Strip markdown bold/italic markers the model sometimes leaks into plain-text fields
-    const stripMd = (s: string) => s.replace(/\*\*/g, "").replace(/\*/g, "").trim();
-    const stripArr = (arr: string[]) => Array.isArray(arr) ? arr.map(stripMd) : arr;
-
     const assets: ContentAssets = {
-      ...parsed,
+      ...parsedFull,
       mainCaption: {
-        tiktok: stripMd(parsed.mainCaption?.tiktok ?? ""),
-        instagram: stripMd(parsed.mainCaption?.instagram ?? ""),
+        tiktok: stripMd(parsedFull.mainCaption?.tiktok ?? ""),
+        instagram: stripMd(parsedFull.mainCaption?.instagram ?? ""),
       },
-      hooks: stripArr(parsed.hooks),
-      ctaSuggestions: stripArr(parsed.ctaSuggestions),
+      hooks: stripArr(parsedFull.hooks),
+      ctaSuggestions: stripArr(parsedFull.ctaSuggestions),
       platformVariants: {
-        tiktok: stripMd(parsed.platformVariants?.tiktok ?? ""),
-        instagram: stripMd(parsed.platformVariants?.instagram ?? ""),
-        threads: stripMd(parsed.platformVariants?.threads ?? ""),
-        twitter: stripMd(parsed.platformVariants?.twitter ?? ""),
+        tiktok: stripMd(parsedFull.platformVariants?.tiktok ?? ""),
+        instagram: stripMd(parsedFull.platformVariants?.instagram ?? ""),
+        threads: stripMd(parsedFull.platformVariants?.threads ?? ""),
+        twitter: stripMd(parsedFull.platformVariants?.twitter ?? ""),
       },
       generatedAt: new Date().toISOString(),
       topic: bundle.title,
