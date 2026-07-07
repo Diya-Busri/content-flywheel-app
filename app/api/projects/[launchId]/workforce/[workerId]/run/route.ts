@@ -574,7 +574,3 @@ export async function POST(
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
-
-function buildInitialWorker(): WorkerState {
-  return { isPaused: false, isRunning: false, history: [] };
-}
