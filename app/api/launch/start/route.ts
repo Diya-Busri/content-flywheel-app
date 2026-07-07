@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     const [project] = await db
       .insert(launchProjectsTable)
-      .values({ userId, goal, status: "running", currentStage: "research" })
+      .values({ userId, goal, status: "queued", currentStage: "research", progress: 0 })
       .returning({ id: launchProjectsTable.id });
 
     if (!project?.id) return NextResponse.json({ error: "Failed to create project" }, { status: 500 });

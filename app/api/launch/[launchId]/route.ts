@@ -47,6 +47,7 @@ export async function PATCH(
     const body = await request.json().catch(() => ({})) as {
       status?: LaunchStatus;
       currentStage?: LaunchStageId;
+      progress?: number;
       memory?: LaunchMemory;
       stageResults?: LaunchStageResults;
     };
@@ -66,8 +67,9 @@ export async function PATCH(
     const [updated] = await db
       .update(launchProjectsTable)
       .set({
-        ...(body.status        && { status: body.status }),
-        ...(body.currentStage  && { currentStage: body.currentStage }),
+        ...(body.status                          && { status: body.status }),
+        ...(body.currentStage                    && { currentStage: body.currentStage }),
+        ...(typeof body.progress === "number"    && { progress: Math.max(0, Math.min(100, body.progress)) }),
         memory:       mergedMemory,
         stageResults: mergedResults,
         updatedAt:    new Date(),

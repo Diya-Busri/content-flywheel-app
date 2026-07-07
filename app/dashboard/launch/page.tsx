@@ -1,43 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Loader2, ArrowRight, Zap, Package, Palette, Video, Megaphone } from "lucide-react";
+import { Rocket, ArrowRight, Loader2, Sparkles } from "lucide-react";
 
 const EXAMPLES = [
-  "I want to sell a budgeting planner for university students",
-  "I want to launch a fitness meal prep guide",
-  "I want to create an AI prompt bundle for content creators",
-  "I want to sell a Notion productivity template",
-  "I want to launch a digital cookbook for busy parents",
+  { label: "Budgeting planner for students", goal: "I want to build a budgeting planner for university students" },
+  { label: "Fitness meal prep guide",        goal: "I want to build a fitness meal prep guide" },
+  { label: "AI prompt bundle for creators",  goal: "I want to build an AI prompt bundle for content creators" },
+  { label: "Notion productivity template",   goal: "I want to build a Notion productivity template" },
+  { label: "Digital cookbook for parents",   goal: "I want to build a digital cookbook for busy parents" },
+  { label: "Social media content calendar",  goal: "I want to build a social media content calendar template" },
 ];
 
-const PIPELINE_STEPS = [
-  { icon: <Sparkles className="w-4 h-4" />, label: "Research market", desc: "Audience, competitors, opportunities" },
-  { icon: <Package className="w-4 h-4" />, label: "Create product", desc: "Full digital product with content" },
-  { icon: <Palette className="w-4 h-4" />, label: "Design assets", desc: "Carousel slides & social graphics" },
-  { icon: <Video className="w-4 h-4" />, label: "Write video script", desc: "TikTok/Reels ready script" },
-  { icon: <Megaphone className="w-4 h-4" />, label: "Launch marketing", desc: "Captions, email subject, hashtags" },
+const PIPELINE_STAGES = [
+  { label: "Research",   desc: "Market analysis, audience, competitors" },
+  { label: "Product",    desc: "Full digital product with content" },
+  { label: "Design",     desc: "Carousel slides & visual assets" },
+  { label: "Marketing",  desc: "Captions, email, hashtags" },
+  { label: "Store",      desc: "List, price, and publish" },
 ];
 
 export default function LaunchPage() {
   const router = useRouter();
-  const [goal, setGoal] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [goal, setGoal]       = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
 
-  const handleLaunch = async (g?: string) => {
-    const goalText = (g ?? goal).trim();
-    if (!goalText) return;
+  const handleStart = async (overrideGoal?: string) => {
+    const text = (overrideGoal ?? goal).trim();
+    if (!text || loading) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/launch/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: goalText }),
+        body: JSON.stringify({ goal: text }),
       });
-      if (!res.ok) throw new Error("Failed to start launch");
+      if (!res.ok) throw new Error("Failed to create execution");
       const { launchId } = await res.json() as { launchId: string };
       router.push(`/dashboard/launch/${launchId}`);
     } catch {
@@ -46,98 +48,110 @@ export default function LaunchPage() {
     }
   };
 
+  const pickExample = (ex: typeof EXAMPLES[0]) => {
+    setGoal(ex.goal);
+    textareaRef.current?.focus();
+  };
+
   return (
-    <main className="min-h-dvh bg-background">
-      <div className="max-w-2xl mx-auto px-4 py-16 sm:py-24">
+    <main className="min-h-dvh bg-background flex flex-col">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-16">
+        <div className="w-full max-w-xl">
 
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[11px] font-bold uppercase tracking-wider mb-5">
-            <Zap className="w-3 h-3 fill-current" />
-            AI Execution Mode · Beta
+          {/* Badge */}
+          <div className="flex justify-center mb-8">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[11px] font-bold uppercase tracking-widest">
+              <Sparkles className="w-3 h-3" />
+              AI Execution Mode · Beta
+            </span>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-black text-foreground leading-[1.05] tracking-tight mb-4">
+
+          {/* Heading */}
+          <h1 className="text-[2.4rem] sm:text-5xl font-black text-foreground text-center leading-[1.08] tracking-tight mb-3">
             What do you want<br />
-            <span className="text-orange-500">to launch?</span>
+            <span className="text-orange-500">to build today?</span>
           </h1>
-          <p className="text-[15px] text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            Tell us your goal. The AI handles Research → Product → Design → Marketing — everything, automatically.
+          <p className="text-center text-[14px] text-muted-foreground mb-10 leading-relaxed">
+            Describe your idea. The AI handles every step — Research → Product → Design → Marketing → Store.
           </p>
-        </div>
 
-        {/* Goal input */}
-        <div className="bg-card border border-border rounded-2xl p-5 shadow-sm mb-6">
-          <textarea
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleLaunch(); }}
-            placeholder="e.g. I want to sell a budgeting planner for university students"
-            className="w-full h-24 resize-none bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none leading-relaxed"
-            disabled={loading}
-          />
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-            <p className="text-[11px] text-muted-foreground">⌘ + Enter to launch</p>
-            <button
-              onClick={() => handleLaunch()}
-              disabled={loading || !goal.trim()}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold text-[14px] transition-all shadow-sm"
-            >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Starting…</>
-              ) : (
-                <><Sparkles className="w-4 h-4" />Launch with AI<ArrowRight className="w-4 h-4" /></>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <p className="text-center text-[13px] text-red-500 mb-4">{error}</p>
-        )}
-
-        {/* Examples */}
-        <div className="mb-12">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 text-center mb-3">Try an example</p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {EXAMPLES.map((ex) => (
+          {/* Goal input card */}
+          <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm mb-3">
+            <textarea
+              ref={textareaRef}
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleStart();
+              }}
+              placeholder="e.g. I want to build a budgeting planner for university students"
+              rows={4}
+              disabled={loading}
+              className="w-full resize-none bg-transparent px-5 pt-5 pb-3 text-[15px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none leading-relaxed"
+            />
+            <div className="flex items-center justify-between px-4 pb-4 pt-1">
+              <span className="text-[11px] text-muted-foreground/50 hidden sm:block">
+                ⌘ + Enter to start
+              </span>
               <button
-                key={ex}
-                onClick={() => { setGoal(ex); handleLaunch(ex); }}
-                disabled={loading}
-                className="text-[12px] px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-accent hover:border-orange-500/30 text-muted-foreground hover:text-foreground transition-all disabled:opacity-50"
+                onClick={() => handleStart()}
+                disabled={loading || !goal.trim()}
+                className="ml-auto flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-[14px] transition-all"
               >
-                {ex.replace("I want to sell a ", "").replace("I want to launch a ", "").replace("I want to create an ", "").replace("I want a ", "")}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Pipeline preview */}
-        <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-4">What happens when you launch</p>
-          <div className="space-y-3">
-            {PIPELINE_STEPS.map((step, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center shrink-0">
-                  {step.icon}
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">{step.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{step.desc}</p>
-                </div>
-                {i < PIPELINE_STEPS.length - 1 && (
-                  <div className="ml-auto text-muted-foreground/30 text-[10px]">↓</div>
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Starting…</>
+                ) : (
+                  <><Rocket className="w-4 h-4" />Start AI Execution<ArrowRight className="w-3.5 h-3.5" /></>
                 )}
-              </div>
-            ))}
+              </button>
+            </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-border">
-            <p className="text-[11px] text-muted-foreground text-center">
-              Everything is saved to your library. You review and approve before anything goes live.
-            </p>
-          </div>
-        </div>
 
+          {error && (
+            <p className="text-center text-[13px] text-red-500 mb-3">{error}</p>
+          )}
+
+          {/* Example prompts */}
+          <div className="mb-10">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 text-center mb-3">
+              Try an example
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {EXAMPLES.map((ex) => (
+                <button
+                  key={ex.label}
+                  onClick={() => pickExample(ex)}
+                  disabled={loading}
+                  className="text-[12px] px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-accent hover:border-orange-500/30 text-muted-foreground hover:text-foreground transition-all disabled:opacity-40"
+                >
+                  {ex.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Pipeline preview */}
+          <div className="border border-border rounded-2xl p-5 bg-card/50">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-4 text-center">
+              What gets built automatically
+            </p>
+            <div className="flex items-start gap-0">
+              {PIPELINE_STAGES.map((s, i) => (
+                <div key={s.label} className="flex-1 flex flex-col items-center text-center relative">
+                  {i < PIPELINE_STAGES.length - 1 && (
+                    <div className="absolute top-3 left-1/2 w-full h-px bg-border" />
+                  )}
+                  <div className="relative z-10 w-6 h-6 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center mb-2">
+                    <span className="text-[9px] font-black text-orange-500">{i + 1}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-foreground leading-tight">{s.label}</p>
+                  <p className="text-[9px] text-muted-foreground/60 leading-tight mt-0.5 hidden sm:block">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
       </div>
     </main>
   );

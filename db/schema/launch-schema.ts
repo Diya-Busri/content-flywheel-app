@@ -1,7 +1,7 @@
-import { pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, integer } from "drizzle-orm/pg-core";
 
-export type LaunchStatus = "running" | "awaiting_approval" | "completed" | "failed";
-export type LaunchStageId = "research" | "product" | "design" | "video" | "marketing" | "complete";
+export type LaunchStatus = "queued" | "running" | "awaiting_approval" | "completed" | "failed";
+export type LaunchStageId = "research" | "product" | "design" | "marketing" | "store" | "complete";
 
 export type LaunchMemory = {
   audience?: string;
@@ -37,14 +37,20 @@ export type LaunchStageResults = {
     emailSubject: string;
     hashtags: string[];
   };
+  store?: {
+    productId: string;
+    storeUrl?: string;
+    publishedAt?: string;
+  };
 };
 
 export const launchProjectsTable = pgTable("launch_projects", {
   id:           uuid("id").defaultRandom().primaryKey(),
   userId:       text("user_id").notNull(),
   goal:         text("goal").notNull(),
-  status:       text("status").$type<LaunchStatus>().default("running").notNull(),
+  status:       text("status").$type<LaunchStatus>().default("queued").notNull(),
   currentStage: text("current_stage").$type<LaunchStageId>().default("research").notNull(),
+  progress:     integer("progress").default(0).notNull(),
   memory:       jsonb("memory").$type<LaunchMemory>(),
   stageResults: jsonb("stage_results").$type<LaunchStageResults>(),
   createdAt:    timestamp("created_at").defaultNow().notNull(),
