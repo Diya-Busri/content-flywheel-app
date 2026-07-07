@@ -108,16 +108,20 @@ export async function GET() {
         : r.store?.productId
         ? "draft"
         : "not_built",
-      storeUrl:     r.store?.storeUrl ?? null,
-      productId:    r.product?.productId ?? null,
-      hasResearch:  !!r.research,
-      hasProduct:   !!r.product,
-      hasDesign:    !!r.design,
-      hasMarketing: !!r.marketing,
-      hasStore:     !!r.store,
-      hasBrain:     !!r.brain,
-      createdAt:    row.createdAt.toISOString(),
-      updatedAt:    row.updatedAt.toISOString(),
+      storeUrl:      r.store?.storeUrl ?? null,
+      productId:     r.product?.productId ?? null,
+      hasResearch:   !!r.research,
+      hasProduct:    !!r.product,
+      hasDesign:     !!r.design,
+      hasMarketing:  !!r.marketing,
+      hasStore:      !!r.store,
+      hasBrain:      !!r.brain,
+      /* Growth Mode fields */
+      pendingTasks:  (r.growth?.aiTasks ?? []).filter(t => t.status === "pending").length,
+      healthScore:   r.growth?.report?.healthScore ?? null,
+      lastCheckedAt: r.growth?.lastCheckedAt ?? null,
+      createdAt:     row.createdAt.toISOString(),
+      updatedAt:     row.updatedAt.toISOString(),
     };
   });
 

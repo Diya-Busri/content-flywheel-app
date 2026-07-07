@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
+import { GrowthDashboard } from "@/components/growth/GrowthDashboard";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -464,6 +465,13 @@ export default function ProjectDashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* ── Growth Mode ── */}
+        <GrowthDashboard
+          launchId={launchId}
+          initialData={r.growth}
+          productId={productId}
+        />
 
         {/* ── Project Timeline ── */}
         {timeline.length > 0 && (
