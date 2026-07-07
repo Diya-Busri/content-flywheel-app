@@ -306,7 +306,7 @@ function ProjectFirstRun({ goal, launchId }: { goal: string; launchId: string })
       </div>
       <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Your workspace is ready</h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-xs mx-auto">
-        Run your first AI execution to build everything for <span className="font-medium text-gray-700 dark:text-gray-300 italic">"{goal}"</span>
+        Run your first AI execution to build everything for <span className="font-medium text-gray-700 dark:text-gray-300 italic">&quot;{goal}&quot;</span>
       </p>
 
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-6">
