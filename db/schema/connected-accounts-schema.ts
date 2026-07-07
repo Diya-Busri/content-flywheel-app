@@ -1,6 +1,13 @@
 import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
-export type ConnectedPlatform = "tiktok" | "youtube" | "instagram" | "facebook";
+export type ConnectedPlatform =
+  | "tiktok"
+  | "youtube"
+  | "instagram"
+  | "facebook"
+  | "x"
+  | "linkedin"
+  | "email";
 
 export const connectedAccountsTable = pgTable(
   "connected_accounts",

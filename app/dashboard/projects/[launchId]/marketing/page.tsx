@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { MarketingDepartment } from "@/components/marketing-dept/MarketingDepartment";
+import { PlatformConnections } from "@/components/marketing-dept/PlatformConnections";
 
 export default function MarketingDeptPage() {
   const { launchId } = useParams<{ launchId: string }>();
@@ -21,6 +22,11 @@ export default function MarketingDeptPage() {
             <ChevronLeft className="w-4 h-4" />
             Project
           </Link>
+        </div>
+
+        {/* Platform connections — command-centre top bar */}
+        <div className="mb-8 p-4 rounded-2xl border border-border/50 bg-card/20">
+          <PlatformConnections />
         </div>
 
         <MarketingDepartment launchId={launchId} />

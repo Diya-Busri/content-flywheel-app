@@ -363,7 +363,80 @@ export type MarketingManagerId =
   | "email"
   | "seo";
 
-export type ManagerStatus = "idle" | "running" | "paused" | "error";
+export type ManagerStatus =
+  | "idle"           // Planning — ready to create
+  | "running"        // Creating — generating content
+  | "waiting_approval" // Waiting for user to approve a queue item
+  | "publishing"     // Publishing — uploading to platform
+  | "monitoring"     // Monitoring results
+  | "paused"         // Paused by user
+  | "error";         // Last run errored
+
+/* ── Publishing system types ── */
+
+export type ApprovalMode = "manual" | "balanced" | "autopilot";
+
+export type PublishScheduleMode = "immediate" | "scheduled" | "recurring" | "mission_control";
+
+export type PublishingSchedule = {
+  mode:            PublishScheduleMode;
+  /** ISO datetime — used when mode = "scheduled" */
+  scheduledAt?:    string;
+  /** cron expression — used when mode = "recurring" */
+  recurringCron?:  string;
+  /** Human label e.g. "Every weekday at 9am" */
+  recurringLabel?: string;
+  timezone?:       string;
+};
+
+export type ManagerPublishingConfig = {
+  approvalMode: ApprovalMode;
+  schedule:     PublishingSchedule;
+};
+
+export type QueueItemStatus =
+  | "queued"         // Waiting for approval or schedule
+  | "rendering"      // Preparing content for upload
+  | "uploading"      // Calling platform API
+  | "published"      // Successfully live
+  | "failed"         // Upload errored
+  | "scheduled";     // Approved, waiting for scheduled time
+
+export type PublishQueueItem = {
+  id:            string;
+  managerId:     MarketingManagerId;
+  outputId:      string;
+  outputType:    string;
+  /** Formatted content ready to publish */
+  content:       string;
+  status:        QueueItemStatus;
+  approvalMode:  ApprovalMode;
+  approvedAt?:   string;
+  approvedBy?:   "user" | "ai";
+  scheduledAt?:  string;
+  publishedAt?:  string;
+  publishedUrl?: string;
+  errorMessage?: string;
+  retryCount:    number;
+  createdAt:     string;
+};
+
+export type PublishedItem = {
+  id:            string;
+  managerId:     MarketingManagerId;
+  outputId:      string;
+  content:       string;
+  publishedAt:   string;
+  publishedUrl?: string;
+  analytics?: {
+    views?:      number;
+    likes?:      number;
+    shares?:     number;
+    clicks?:     number;
+    engagement?: number;
+    lastChecked?: string;
+  };
+};
 
 export type ManagerOutput = {
   id:         string;
@@ -396,22 +469,37 @@ export type ManagerSuggestion = {
 };
 
 export type MarketingManager = {
-  id:            MarketingManagerId;
-  status:        ManagerStatus;
+  id:               MarketingManagerId;
+  status:           ManagerStatus;
   /** Live step description while running */
-  currentTask?:  string;
-  queue:         ManagerTask[];
-  history:       ManagerTask[];
+  currentTask?:     string;
+  /** AI task queue (from Mission Control / manual) */
+  queue:            ManagerTask[];
+  history:          ManagerTask[];
   /** All content outputs produced by this manager */
-  outputs:       ManagerOutput[];
-  suggestions:   ManagerSuggestion[];
-  lastRunAt?:    string;
-  runCount:      number;
+  outputs:          ManagerOutput[];
+  suggestions:      ManagerSuggestion[];
+  lastRunAt?:       string;
+  runCount:         number;
+  /** Publishing configuration (approval mode + schedule) */
+  publishingConfig?: ManagerPublishingConfig;
+  /** Items queued/in-progress/published */
+  publishQueue?:    PublishQueueItem[];
+  /** Successfully published items with analytics */
+  publishedItems?:  PublishedItem[];
+};
+
+export type PlatformConnectionStatus = {
+  connected:    boolean;
+  accountName?: string;
+  connectedAt?: string;
 };
 
 export type MarketingDepartment = {
-  managers:      Partial<Record<MarketingManagerId, MarketingManager>>;
-  lastUpdated?:  string;
+  managers:     Partial<Record<MarketingManagerId, MarketingManager>>;
+  /** Denormalised connection status cache (source of truth is connected_accounts table) */
+  connections?: Partial<Record<MarketingManagerId, PlatformConnectionStatus>>;
+  lastUpdated?: string;
 };
 
 /* ─── Mission Control types ──────────────────────────────────────────────────── */

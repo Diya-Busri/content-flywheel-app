@@ -4,11 +4,14 @@
  * Manage a marketing manager's state.
  *
  * Actions:
- *   { action: "pause" }          — pause this manager
- *   { action: "resume" }         — resume this manager
+ *   { action: "pause" }           — pause this manager
+ *   { action: "resume" }          — resume this manager
  *   { action: "add_task", instruction: string } — add MC task to queue
- *   { action: "clear_outputs" }  — clear all outputs
- *   { action: "clear_history" }  — clear history
+ *   { action: "clear_outputs" }   — clear all outputs
+ *   { action: "clear_history" }   — clear history
+ *   { action: "set_approval_mode", approvalMode: "manual"|"balanced"|"autopilot" }
+ *   { action: "set_schedule", schedule: PublishingSchedule }
+ *   { action: "clear_queue" }     — clear published/failed queue items
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,6 +23,8 @@ import type {
   MarketingManagerId,
   MarketingManager,
   ManagerTask,
+  ApprovalMode,
+  PublishingSchedule,
 } from "@/db/schema/launch-schema";
 import { eq, and } from "drizzle-orm";
 
@@ -44,9 +49,11 @@ export async function PATCH(
   const mid = managerId as MarketingManagerId;
 
   const body = await req.json().catch(() => ({})) as {
-    action: "pause" | "resume" | "add_task" | "clear_outputs" | "clear_history";
-    instruction?: string;
-    label?: string;
+    action: "pause" | "resume" | "add_task" | "clear_outputs" | "clear_history" | "set_approval_mode" | "set_schedule" | "clear_queue";
+    instruction?:  string;
+    label?:        string;
+    approvalMode?: ApprovalMode;
+    schedule?:     PublishingSchedule;
   };
 
   const [project] = await db
@@ -90,6 +97,37 @@ export async function PATCH(
 
     case "clear_history":
       updated = { ...manager, history: [] };
+      break;
+
+    case "set_approval_mode":
+      if (!body.approvalMode) return NextResponse.json({ error: "approvalMode required" }, { status: 400 });
+      updated = {
+        ...manager,
+        publishingConfig: {
+          ...(manager.publishingConfig ?? { schedule: { mode: "immediate" } }),
+          approvalMode: body.approvalMode,
+        },
+      };
+      break;
+
+    case "set_schedule":
+      if (!body.schedule) return NextResponse.json({ error: "schedule required" }, { status: 400 });
+      updated = {
+        ...manager,
+        publishingConfig: {
+          ...(manager.publishingConfig ?? { approvalMode: "manual" }),
+          schedule: body.schedule,
+        },
+      };
+      break;
+
+    case "clear_queue":
+      updated = {
+        ...manager,
+        publishQueue: (manager.publishQueue ?? []).filter(
+          i => i.status === "queued" || i.status === "scheduled",
+        ),
+      };
       break;
 
     default:
