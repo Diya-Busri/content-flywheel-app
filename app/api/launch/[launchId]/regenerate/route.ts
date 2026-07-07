@@ -68,7 +68,6 @@ export async function POST(
     const cleared: LaunchStageResults = { ...existing };
 
     for (const s of toClear) {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete (cleared as Record<string, unknown>)[s];
     }
 
