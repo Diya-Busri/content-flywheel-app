@@ -42,8 +42,9 @@ import {
   shouldAutoApprove,
 } from "@/lib/publishing-queue";
 import { mergeMemoryFacts } from "@/lib/memory-context";
+import { runPostPublishPipeline } from "@/lib/post-publish-pipeline";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const VALID_IDS = new Set<MarketingManagerId>([
   "tiktok", "instagram", "youtube", "x", "linkedin", "email", "seo",
@@ -154,6 +155,13 @@ export async function POST(
   const updatedMem  = { ...existingMem, facts: mergedFacts, lastExtractedAt: new Date().toISOString() };
 
   await saveProject(launchId, { ...results, marketingDept: finalDept, memory: updatedMem }, finalDept);
+
+  // Trigger post-publish feedback loop (analytics + learning + notifications) — best-effort
+  if (publishedItem) {
+    try {
+      await runPostPublishPipeline(launchId, userId, publishedItem, mid);
+    } catch { /* pipeline failure must never break the publish response */ }
+  }
 
   return NextResponse.json({
     queueItem:     updatedItem,

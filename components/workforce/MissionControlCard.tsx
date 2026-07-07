@@ -16,8 +16,8 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Play, RefreshCw, CheckCircle2, X, Clock, Zap, Target, ArrowRight } from "lucide-react";
-import type { MissionControlData, MissionPlan, MissionTask, MissionFocus } from "@/db/schema/launch-schema";
+import { Loader2, Play, RefreshCw, CheckCircle2, X, Clock, Zap, Target, ArrowRight, Upload, BarChart2, BookOpen, Trophy } from "lucide-react";
+import type { MissionControlData, MissionPlan, MissionTask, MissionFocus, MarketingDepartment, AnalyticsDepartment } from "@/db/schema/launch-schema";
 import { LearningCard } from "@/components/analytics/AnalyticsDepartment";
 
 /* ─── Props ──────────────────────────────────────────────────────────────────── */
@@ -144,6 +144,156 @@ function TaskRow({ task, isActive, onSkip, disabled }: TaskRowProps) {
         >
           <X className="w-3.5 h-3.5" />
         </button>
+      )}
+    </div>
+  );
+}
+
+/* ─── Pipeline Status sub-component ─────────────────────────────────────────── */
+
+interface PipelineStatusProps {
+  launchId: string;
+}
+
+type PipelineStats = {
+  pendingApproval: number;
+  publishedToday:  number;
+  analysedToday:   number;
+  totalLessons:    number;
+  bestWin?:        string;
+  biggestProblem?: string;
+};
+
+function PipelineStatus({ launchId }: PipelineStatusProps) {
+  const [stats,   setStats]   = useState<PipelineStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [mktRes, anlRes] = await Promise.all([
+          fetch(`/api/projects/${launchId}/marketing-dept`),
+          fetch(`/api/projects/${launchId}/analytics`),
+        ]);
+        const mkt = await mktRes.json()  as { marketingDept: MarketingDepartment | null };
+        const anl = await anlRes.json()  as { analyticsDept: AnalyticsDepartment | null };
+
+        const dept    = mkt.marketingDept;
+        const anlDept = anl.analyticsDept;
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        // Queue: items waiting for approval across all managers
+        let pendingApproval = 0;
+        let publishedToday  = 0;
+        if (dept) {
+          for (const mgr of Object.values(dept.managers)) {
+            if (!mgr) continue;
+            pendingApproval += (mgr.publishQueue ?? []).filter(q => q.status === "queued").length;
+            publishedToday  += (mgr.publishedItems ?? []).filter(p => p.publishedAt.startsWith(todayStr)).length;
+          }
+        }
+
+        // Analytics
+        const analysedToday = anlDept?.posts.filter(
+          p => p.analysedAt?.startsWith(todayStr),
+        ).length ?? 0;
+        const totalLessons  = anlDept?.lessons?.length ?? 0;
+
+        // Latest report highlights
+        const latestReport = anlDept?.reports?.[0];
+        const bestWin      = latestReport?.biggestWin?.reason ?? undefined;
+        const biggestProblem = latestReport?.biggestProblem?.description ?? undefined;
+
+        setStats({ pendingApproval, publishedToday, analysedToday, totalLessons, bestWin, biggestProblem });
+      } catch { /* silent */ }
+      setLoading(false);
+    })();
+  }, [launchId]);
+
+  if (loading) {
+    return (
+      <div className="px-5 py-3 border-b border-border/20">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/30">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Loading pipeline status…
+        </div>
+      </div>
+    );
+  }
+
+  if (!stats) return null;
+
+  const statItems = [
+    {
+      icon: <Upload className="w-3.5 h-3.5" />,
+      label: "Pending approval",
+      value: stats.pendingApproval,
+      color: stats.pendingApproval > 0 ? "text-orange-400" : "text-muted-foreground/40",
+      bg:    stats.pendingApproval > 0 ? "bg-orange-500/10" : "bg-muted/10",
+    },
+    {
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+      label: "Published today",
+      value: stats.publishedToday,
+      color: stats.publishedToday > 0 ? "text-green-400" : "text-muted-foreground/40",
+      bg:    stats.publishedToday > 0 ? "bg-green-500/10" : "bg-muted/10",
+    },
+    {
+      icon: <BarChart2 className="w-3.5 h-3.5" />,
+      label: "Analysed today",
+      value: stats.analysedToday,
+      color: stats.analysedToday > 0 ? "text-blue-400" : "text-muted-foreground/40",
+      bg:    stats.analysedToday > 0 ? "bg-blue-500/10" : "bg-muted/10",
+    },
+    {
+      icon: <BookOpen className="w-3.5 h-3.5" />,
+      label: "Total lessons",
+      value: stats.totalLessons,
+      color: stats.totalLessons > 0 ? "text-purple-400" : "text-muted-foreground/40",
+      bg:    stats.totalLessons > 0 ? "bg-purple-500/10" : "bg-muted/10",
+    },
+  ];
+
+  return (
+    <div className="px-5 py-3 border-b border-border/20">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-2">
+        Pipeline Status
+      </p>
+      <div className="grid grid-cols-4 gap-2">
+        {statItems.map(item => (
+          <div key={item.label} className={`rounded-lg p-2 ${item.bg}`}>
+            <div className={`flex items-center gap-1 mb-1 ${item.color}`}>
+              {item.icon}
+            </div>
+            <p className={`text-[16px] font-bold leading-none ${item.color}`}>{item.value}</p>
+            <p className="text-[9px] text-muted-foreground/40 mt-0.5 leading-tight">{item.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Best win / biggest problem */}
+      {(stats.bestWin || stats.biggestProblem) && (
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {stats.bestWin && (
+            <div className="flex items-start gap-1.5 rounded-lg bg-green-500/5 border border-green-500/10 px-2.5 py-2">
+              <Trophy className="w-3 h-3 text-green-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-green-400/70">Best win</p>
+                <p className="text-[10px] text-muted-foreground/60 leading-snug">{stats.bestWin.slice(0, 80)}</p>
+              </div>
+            </div>
+          )}
+          {stats.biggestProblem && (
+            <div className="flex items-start gap-1.5 rounded-lg bg-red-500/5 border border-red-500/10 px-2.5 py-2">
+              <Zap className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-red-400/70">Opportunity</p>
+                <p className="text-[10px] text-muted-foreground/60 leading-snug">{stats.biggestProblem.slice(0, 80)}</p>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -407,6 +557,9 @@ export function MissionControlCard({ launchId }: Props) {
           </div>
         </div>
       )}
+
+      {/* ── Pipeline Status ── */}
+      <PipelineStatus launchId={launchId} />
 
       {/* ── Learning Card ── */}
       <div className="px-5 py-3 border-b border-border/20">

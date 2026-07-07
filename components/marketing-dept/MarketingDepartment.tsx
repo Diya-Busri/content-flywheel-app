@@ -18,7 +18,10 @@ import type {
   PublishQueueItem,
   PublishedItem,
   ApprovalMode,
+  PostAnalytics,
+  ScheduleRecommendation,
 } from "@/db/schema/launch-schema";
+import { ContentTimeline } from "@/components/analytics/ContentTimeline";
 
 /* ─── Static config ──────────────────────────────────────────────────────────── */
 
@@ -91,53 +94,113 @@ function OutputRow({
   managerId: MarketingManagerId;
   onPublished: () => void;
 }) {
-  const [publishing, setPublishing] = useState(false);
-  const [done, setDone]             = useState(false);
+  const [publishing,      setPublishing]      = useState(false);
+  const [done,            setDone]            = useState(false);
+  const [loadingSched,    setLoadingSched]    = useState(false);
+  const [schedRec,        setSchedRec]        = useState<ScheduleRecommendation | null>(null);
+  const [schedError,      setSchedError]      = useState(false);
 
-  async function handlePublish() {
+  async function handlePublish(scheduledAt?: string) {
     setPublishing(true);
     try {
       await fetch(`/api/projects/${launchId}/marketing-dept/${managerId}/publish`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          outputId:    output.id,
-          outputType:  output.type,
-          content:     output.content,
-          scheduleMode: "immediate",
+          outputId:     output.id,
+          outputType:   output.type,
+          content:      output.content,
+          scheduleMode: scheduledAt ? "scheduled" : "immediate",
+          scheduledAt,
         }),
       });
       setDone(true);
+      setSchedRec(null);
       onPublished();
     } finally { setPublishing(false); }
   }
 
+  async function getScheduleRec() {
+    setLoadingSched(true);
+    setSchedError(false);
+    try {
+      const res  = await fetch(`/api/projects/${launchId}/analytics/schedule-recommendation`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ content: output.content, managerId }),
+      });
+      const json = await res.json() as { recommendation: ScheduleRecommendation };
+      setSchedRec(json.recommendation);
+    } catch { setSchedError(true); }
+    setLoadingSched(false);
+  }
+
   return (
-    <div className="group flex items-start gap-2.5 p-3 rounded-lg border border-border/50 bg-card/30 hover:border-border/80 transition-colors">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground uppercase tracking-wide">
-            {typeLabel(output.type)}
-          </span>
-          {output.angle && (
-            <span className="text-[10px] text-muted-foreground/40 italic truncate">{output.angle}</span>
+    <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/50 bg-card/30 hover:border-border/80 transition-colors">
+      <div className="flex items-start gap-2.5">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground uppercase tracking-wide">
+              {typeLabel(output.type)}
+            </span>
+            {output.angle && (
+              <span className="text-[10px] text-muted-foreground/40 italic truncate">{output.angle}</span>
+            )}
+          </div>
+          <p className="text-[12px] text-foreground/80 line-clamp-3 leading-relaxed">
+            {contentPreview(output)}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            onClick={() => handlePublish()}
+            disabled={publishing || done}
+            className={`text-[10px] px-2.5 py-1.5 rounded-lg font-semibold transition-all ${
+              done
+                ? "bg-green-500/20 text-green-400 cursor-default"
+                : "bg-primary/10 text-primary/80 hover:bg-primary/20 disabled:opacity-50"
+            }`}
+          >
+            {publishing ? "…" : done ? "Queued ✓" : "Publish now"}
+          </button>
+          {!done && (
+            <button
+              onClick={getScheduleRec}
+              disabled={loadingSched || publishing}
+              className="text-[10px] px-2.5 py-1 rounded-lg font-medium text-muted-foreground/60 hover:text-foreground hover:bg-muted/20 transition-colors disabled:opacity-40"
+              title="Get AI schedule recommendation"
+            >
+              {loadingSched ? "…" : schedError ? "Retry AI" : "AI schedule"}
+            </button>
           )}
         </div>
-        <p className="text-[12px] text-foreground/80 line-clamp-3 leading-relaxed">
-          {contentPreview(output)}
-        </p>
       </div>
-      <button
-        onClick={handlePublish}
-        disabled={publishing || done}
-        className={`shrink-0 text-[10px] px-2.5 py-1.5 rounded-lg font-semibold transition-all ${
-          done
-            ? "bg-green-500/20 text-green-400 cursor-default"
-            : "bg-primary/10 text-primary/80 hover:bg-primary/20 disabled:opacity-50"
-        }`}
-      >
-        {publishing ? "…" : done ? "Queued ✓" : "Publish"}
-      </button>
+
+      {/* AI schedule recommendation */}
+      {schedRec && !done && (
+        <div className="rounded-lg bg-orange-500/5 border border-orange-500/15 px-3 py-2">
+          <p className="text-[10px] font-bold text-orange-400/80 mb-0.5">AI Schedule Recommendation</p>
+          <p className="text-[11px] text-foreground/70">
+            {schedRec.bestDay} at {schedRec.bestTime} on {schedRec.bestPlatform}
+          </p>
+          <p className="text-[10px] text-muted-foreground/50 mt-0.5 leading-relaxed">{schedRec.reasoning}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              onClick={() => handlePublish(schedRec.scheduledAt)}
+              disabled={publishing}
+              className="text-[10px] px-2.5 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 hover:bg-orange-500/25 font-semibold disabled:opacity-50 transition-colors"
+            >
+              Schedule for {schedRec.bestDay} {schedRec.bestTime}
+            </button>
+            <button
+              onClick={() => setSchedRec(null)}
+              className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -206,34 +269,66 @@ function QueueRow({
 
 /* ─── Published item row ─────────────────────────────────────────────────────── */
 
-function PublishedRow({ item }: { item: PublishedItem }) {
+function PublishedRow({
+  item, managerId, postAnalytics, hasLessons, hasMemory,
+}: {
+  item:          PublishedItem;
+  managerId:     MarketingManagerId;
+  postAnalytics?: PostAnalytics;
+  hasLessons:    boolean;
+  hasMemory:     boolean;
+}) {
+  const [showTimeline, setShowTimeline] = useState(false);
+
   return (
-    <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border/40 bg-card/20">
-      <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-green-500" />
-      <div className="flex-1 min-w-0">
-        <p className="text-[11px] text-foreground/80 line-clamp-2">
-          {item.content.slice(0, 150)}
-        </p>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-[10px] text-muted-foreground/50">
-            {new Date(item.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-          </span>
-          {item.publishedUrl && (
-            <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer"
-               className="text-[10px] text-primary/60 hover:text-primary transition-colors">
-              View →
-            </a>
+    <div className="p-2.5 rounded-lg border border-border/40 bg-card/20 space-y-2">
+      {/* Content preview + url */}
+      <div className="flex items-start gap-2.5">
+        <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-green-500" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-foreground/80 line-clamp-2">
+            {item.content.slice(0, 150)}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[10px] text-muted-foreground/50">
+              {new Date(item.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+            {item.publishedUrl && (
+              <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer"
+                 className="text-[10px] text-primary/60 hover:text-primary transition-colors">
+                View →
+              </a>
+            )}
+          </div>
+          {/* Metrics row */}
+          {postAnalytics && (
+            <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground/50">
+              {postAnalytics.metrics.views    ? <span>👁 {postAnalytics.metrics.views.toLocaleString()}</span> : null}
+              {postAnalytics.metrics.likes    ? <span>♥ {postAnalytics.metrics.likes.toLocaleString()}</span> : null}
+              {postAnalytics.metrics.shares   ? <span>⤴ {postAnalytics.metrics.shares.toLocaleString()}</span> : null}
+              {postAnalytics.metrics.retention ? <span>⏱ {postAnalytics.metrics.retention}%</span> : null}
+            </div>
           )}
         </div>
-        {item.analytics && (
-          <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground/50">
-            {item.analytics.views    && <span>👁 {item.analytics.views}</span>}
-            {item.analytics.likes    && <span>♥ {item.analytics.likes}</span>}
-            {item.analytics.shares   && <span>⤴ {item.analytics.shares}</span>}
-            {item.analytics.clicks   && <span>🔗 {item.analytics.clicks}</span>}
-          </div>
-        )}
+        {/* Toggle timeline */}
+        <button
+          onClick={() => setShowTimeline(p => !p)}
+          className="shrink-0 text-[9px] font-semibold px-2 py-1 rounded bg-muted/20 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
+          title="View content lifecycle"
+        >
+          {showTimeline ? "Hide" : "Timeline"}
+        </button>
       </div>
+
+      {/* Compact timeline pills (always visible) */}
+      <ContentTimeline
+        publishedItem={item}
+        postAnalytics={postAnalytics}
+        managerId={managerId}
+        hasLessons={hasLessons}
+        hasMemoryUpdate={hasMemory}
+        compact={!showTimeline}
+      />
     </div>
   );
 }
@@ -241,14 +336,17 @@ function PublishedRow({ item }: { item: PublishedItem }) {
 /* ─── Manager card ───────────────────────────────────────────────────────────── */
 
 function ManagerCard({
-  managerId, manager, launchId, onRun, onRefresh, isRunningAll,
+  managerId, manager, launchId, onRun, onRefresh, isRunningAll, analyticsPosts, hasLessons, hasMemory,
 }: {
-  managerId:   MarketingManagerId;
-  manager:     MarketingManager | undefined;
-  launchId:    string;
-  onRun:       (id: MarketingManagerId) => void;
-  onRefresh:   () => void;
-  isRunningAll: boolean;
+  managerId:     MarketingManagerId;
+  manager:       MarketingManager | undefined;
+  launchId:      string;
+  onRun:         (id: MarketingManagerId) => void;
+  onRefresh:     () => void;
+  isRunningAll:  boolean;
+  analyticsPosts: PostAnalytics[];
+  hasLessons:    boolean;
+  hasMemory:     boolean;
 }) {
   const cfg       = MANAGER_CONFIGS[managerId];
   const isRunning = manager?.status === "running";
@@ -420,9 +518,19 @@ function ManagerCard({
               {publishedCount === 0 ? (
                 <p className="text-[12px] text-muted-foreground/40 italic">Nothing published yet</p>
               ) : (
-                [...(manager?.publishedItems ?? [])].reverse().slice(0, 20).map(item => (
-                  <PublishedRow key={item.id} item={item} />
-                ))
+                [...(manager?.publishedItems ?? [])].reverse().slice(0, 20).map(item => {
+                  const pa = analyticsPosts.find(p => p.publishedItemId === item.id);
+                  return (
+                    <PublishedRow
+                      key={item.id}
+                      item={item}
+                      managerId={managerId}
+                      postAnalytics={pa}
+                      hasLessons={hasLessons}
+                      hasMemory={hasMemory}
+                    />
+                  );
+                })
               )}
             </div>
           )}
@@ -458,18 +566,31 @@ function ManagerCard({
 /* ─── Main component ─────────────────────────────────────────────────────────── */
 
 export function MarketingDepartment({ launchId }: { launchId: string }) {
-  const [managers, setManagers]         = useState<Partial<Record<MarketingManagerId, MarketingManager>>>({});
-  const [loading, setLoading]           = useState(true);
-  const [runningAll, setRunningAll]     = useState(false);
-  const [runAllStatus, setRunAllStatus] = useState("");
+  const [managers,       setManagers]       = useState<Partial<Record<MarketingManagerId, MarketingManager>>>({});
+  const [analyticsPosts, setAnalyticsPosts] = useState<PostAnalytics[]>([]);
+  const [hasLessons,     setHasLessons]     = useState(false);
+  const [hasMemory,      setHasMemory]      = useState(false);
+  const [loading,        setLoading]        = useState(true);
+  const [runningAll,     setRunningAll]     = useState(false);
+  const [runAllStatus,   setRunAllStatus]   = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDept = useCallback(async () => {
     try {
-      const res = await fetch(`/api/projects/${launchId}/marketing-dept`);
-      if (!res.ok) return;
-      const data = await res.json() as { marketingDept: { managers: Partial<Record<MarketingManagerId, MarketingManager>> } };
-      setManagers(data.marketingDept?.managers ?? {});
+      const [mktRes, anlRes] = await Promise.all([
+        fetch(`/api/projects/${launchId}/marketing-dept`),
+        fetch(`/api/projects/${launchId}/analytics`),
+      ]);
+      if (mktRes.ok) {
+        const data = await mktRes.json() as { marketingDept: { managers: Partial<Record<MarketingManagerId, MarketingManager>> } };
+        setManagers(data.marketingDept?.managers ?? {});
+      }
+      if (anlRes.ok) {
+        const anl = await anlRes.json() as { analyticsDept: { posts: PostAnalytics[]; lessons?: unknown[]; lastLearnedAt?: string } | null };
+        setAnalyticsPosts(anl.analyticsDept?.posts ?? []);
+        setHasLessons((anl.analyticsDept?.lessons?.length ?? 0) > 0);
+        setHasMemory(!!anl.analyticsDept?.lastLearnedAt);
+      }
     } catch { /* ignore */ }
   }, [launchId]);
 
@@ -580,6 +701,9 @@ export function MarketingDepartment({ launchId }: { launchId: string }) {
             onRun={runManager}
             onRefresh={fetchDept}
             isRunningAll={runningAll}
+            analyticsPosts={analyticsPosts.filter(p => p.managerId === mid)}
+            hasLessons={hasLessons}
+            hasMemory={hasMemory}
           />
         ))}
       </div>

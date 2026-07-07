@@ -182,6 +182,11 @@ export type LaunchStageResults = {
    */
   brain?: BrainResult;
   /**
+   * In-app notifications — publish events, analytics complete, new lessons, viral.
+   * Capped at 100 items (oldest pruned). Read via GET /api/projects/[launchId]/notifications.
+   */
+  notifications?: AppNotification[];
+  /**
    * Optional post-pipeline content pack — "Behind the Build".
    * Not a pipeline stage. Generated on demand by the creator.
    * Never auto-published. Stores 5 authentic creator content pieces.
@@ -688,6 +693,52 @@ export type AnalyticsDepartment = {
   lastAnalysedAt?:  string;
   lastReportAt?:    string;
   lastLearnedAt?:   string;
+};
+
+/* ─── Phase 5.3: Notifications + Pipeline types ─────────────────────────────── */
+
+export type NotificationEvent =
+  | "publish_success"     // Content published successfully
+  | "publish_failed"      // Publishing failed
+  | "analytics_complete"  // AI analysis finished for a post
+  | "new_lesson"          // Learning cycle extracted new lessons
+  | "viral_post"          // Post crossed a viral-views threshold
+  | "learning_complete";  // Full learning cycle finished
+
+export type AppNotification = {
+  id:         string;
+  event:      NotificationEvent;
+  title:      string;
+  message:    string;
+  read:       boolean;
+  /** Deep link to the relevant section */
+  href?:      string;
+  /** Which manager/platform triggered this, if applicable */
+  managerId?: MarketingManagerId;
+  createdAt:  string;
+};
+
+export type ScheduleRecommendation = {
+  /** e.g. "Tuesday" */
+  bestDay:       string;
+  /** e.g. "18:00" */
+  bestTime:      string;
+  /** Primary platform recommendation */
+  bestPlatform:  MarketingManagerId;
+  /** Ordered platform list (best first) */
+  platformOrder: MarketingManagerId[];
+  /** Short qualitative reason grounded in Business Memory / analytics */
+  reasoning:     string;
+  /** ISO datetime of the recommended next slot */
+  scheduledAt:   string;
+};
+
+export type ContentTimelineEvent = {
+  id:        string;
+  stage:     "created" | "queued" | "approved" | "scheduled" | "published" | "analysed" | "lessons" | "memory";
+  label:     string;
+  detail?:   string;
+  timestamp: string;
 };
 
 /* ─── Mission Control types ──────────────────────────────────────────────────── */

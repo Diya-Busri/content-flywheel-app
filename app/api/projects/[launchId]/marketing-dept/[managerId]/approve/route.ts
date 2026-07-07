@@ -19,8 +19,9 @@ import type { ConnectedPlatform } from "@/db/schema/connected-accounts-schema";
 import { eq, and } from "drizzle-orm";
 import { executePublish, createPublishedItem, extractPublishMemoryFacts } from "@/lib/publishing-queue";
 import { mergeMemoryFacts } from "@/lib/memory-context";
+import { runPostPublishPipeline } from "@/lib/post-publish-pipeline";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const VALID_IDS = new Set<MarketingManagerId>([
   "tiktok", "instagram", "youtube", "x", "linkedin", "email", "seo",
@@ -122,6 +123,13 @@ export async function POST(
     .update(launchProjectsTable)
     .set({ stageResults: { ...results, marketingDept: finalDept, memory: updatedMem }, updatedAt: new Date() })
     .where(eq(launchProjectsTable.id, launchId));
+
+  // Trigger post-publish feedback loop (analytics + learning + notifications) — best-effort
+  if (publishedItemRecord) {
+    try {
+      await runPostPublishPipeline(launchId, userId, publishedItemRecord, mid);
+    } catch { /* pipeline failure must never break the approve response */ }
+  }
 
   return NextResponse.json({ queueItem: finalItem, publishedItem: publishedItemRecord });
 }

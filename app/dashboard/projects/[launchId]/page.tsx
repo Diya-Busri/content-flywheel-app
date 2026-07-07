@@ -26,6 +26,7 @@ import type { LaunchStageResults } from "@/db/schema/launch-schema";
 import { GrowthDashboard } from "@/components/growth/GrowthDashboard";
 import { WorkforcePanel } from "@/components/workforce/WorkforcePanel";
 import { MissionControlCard } from "@/components/workforce/MissionControlCard";
+import { NotificationPanel } from "@/components/notifications/NotificationPanel";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -420,6 +421,10 @@ export default function ProjectDashboardPage() {
           >
             New Execution
           </Link>
+          {/* Notification bell */}
+          <div className="ml-auto">
+            <NotificationPanel launchId={launchId} />
+          </div>
         </div>
 
         {/* ── Project header ── */}
