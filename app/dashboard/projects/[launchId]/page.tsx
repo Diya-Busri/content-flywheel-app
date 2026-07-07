@@ -28,6 +28,10 @@ import { WorkforcePanel } from "@/components/workforce/WorkforcePanel";
 import { MissionControlCard } from "@/components/workforce/MissionControlCard";
 import { NotificationPanel } from "@/components/notifications/NotificationPanel";
 import { BusinessOSDashboard } from "@/components/business-os/BusinessOSDashboard";
+import { AutonomousModeDashboard } from "@/components/autonomous/AutonomousModeDashboard";
+import { ApprovalInbox } from "@/components/autonomous/ApprovalInbox";
+import { CompanyActivityFeed } from "@/components/autonomous/CompanyActivityFeed";
+import { CEOBriefingCard } from "@/components/autonomous/CEOBriefingCard";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -476,6 +480,18 @@ export default function ProjectDashboardPage() {
 
         {/* ── Business OS — morning briefing ── */}
         <BusinessOSDashboard launchId={launchId} />
+
+        {/* ── Autonomous Company ── */}
+        <AutonomousModeDashboard launchId={launchId} />
+
+        {/* ── CEO Briefing + Activity Feed (2-col) ── */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <CEOBriefingCard launchId={launchId} />
+          <CompanyActivityFeed launchId={launchId} />
+        </div>
+
+        {/* ── Approval Inbox ── */}
+        <ApprovalInbox launchId={launchId} />
 
         {/* ── Mission Control ── */}
         <MissionControlCard launchId={launchId} />
