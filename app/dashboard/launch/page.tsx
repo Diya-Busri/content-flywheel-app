@@ -84,27 +84,39 @@ export default function LaunchPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleStart();
               }}
-              placeholder="e.g. I want to build a budgeting planner for university students"
+              placeholder="e.g. I want to build a budgeting planner for university students who struggle with money"
               rows={4}
               disabled={loading}
               className="w-full resize-none bg-transparent px-5 pt-5 pb-3 text-[15px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none leading-relaxed"
             />
-            <div className="flex items-center justify-between px-4 pb-4 pt-1">
-              <span className="text-[11px] text-muted-foreground/50 hidden sm:block">
-                ⌘ + Enter to start
-              </span>
+            <div className="flex items-center justify-between px-4 pb-4 pt-1 gap-3">
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground/50">
+                <span className="hidden sm:block">⌘ + Enter to start</span>
+                {goal.trim().length > 0 && goal.trim().length < 20 && (
+                  <span className="text-amber-500">Add more detail for better results</span>
+                )}
+              </div>
               <button
                 onClick={() => handleStart()}
                 disabled={loading || !goal.trim()}
-                className="ml-auto flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-[14px] transition-all"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-[14px] transition-all shrink-0"
               >
                 {loading ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Starting…</>
                 ) : (
-                  <><Rocket className="w-4 h-4" />Start AI Execution<ArrowRight className="w-3.5 h-3.5" /></>
+                  <><Rocket className="w-4 h-4" />Launch<ArrowRight className="w-3.5 h-3.5" /></>
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Time estimate — sets expectations before the pipeline starts */}
+          <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground/50 mb-3">
+            <span>⏱ Takes 3–5 minutes</span>
+            <span>·</span>
+            <span>🤖 Fully automated</span>
+            <span>·</span>
+            <span>✨ No design skills needed</span>
           </div>
 
           {error && (

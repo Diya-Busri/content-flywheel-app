@@ -22,7 +22,7 @@ import {
   Sparkles, Package, Palette, Megaphone, Store,
   CheckCircle2, XCircle, Loader2, ChevronLeft,
   Clock, PlugZap, ChevronDown, ChevronUp,
-  AlertTriangle, Rocket, RefreshCw,
+  AlertTriangle, Rocket, RefreshCw, ArrowRight,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
@@ -963,23 +963,35 @@ export default function LaunchExecutionPage() {
           })}
         </div>
 
-        {/* ── Pipeline complete — redirect to workspace ── */}
+        {/* ── Pipeline complete — success panel ── */}
         {overallStatus === "completed" && (
-          <div className="mt-6 rounded-2xl border border-green-500/20 bg-green-500/[0.03] p-5 text-center">
-            <div className="text-2xl mb-2">🎉</div>
-            <p className="text-[14px] font-bold text-foreground mb-1">All agents finished.</p>
-            <p className="text-[12px] text-muted-foreground mb-4">
-              {redirectCountdown !== null
-                ? `Taking you to your workspace in ${redirectCountdown}s...`
-                : "Redirecting..."}
+          <div className="mt-6 rounded-2xl border border-green-500/30 bg-gradient-to-br from-green-500/8 via-emerald-500/5 to-orange-500/5 p-6 text-center">
+            <div className="text-4xl mb-3">🚀</div>
+            <h2 className="text-[18px] font-black text-foreground mb-1">Your product is live!</h2>
+            <p className="text-[13px] text-muted-foreground mb-2 max-w-xs mx-auto leading-relaxed">
+              Research, product, design assets, and marketing copy are all ready in your workspace.
             </p>
-            <button
-              onClick={() => router.push(`/dashboard/launch/${launchId}/workspace`)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-[13px] font-bold text-white transition-colors"
-            >
-              <Rocket className="w-4 h-4" />
-              View Workspace
-            </button>
+            <p className="text-[11px] font-semibold text-green-600 dark:text-green-400 mb-5">
+              {redirectCountdown !== null
+                ? `Opening workspace in ${redirectCountdown}s…`
+                : "Opening workspace…"}
+            </p>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <button
+                onClick={() => router.push(`/dashboard/launch/${launchId}/workspace`)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-[14px] font-bold text-white transition-colors shadow-lg shadow-orange-500/20"
+              >
+                <Rocket className="w-4 h-4" />
+                Open Workspace
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => router.push("/dashboard/projects")}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border text-[13px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+              >
+                View all projects
+              </button>
+            </div>
           </div>
         )}
 
