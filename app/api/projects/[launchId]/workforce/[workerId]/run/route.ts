@@ -30,7 +30,7 @@ import type {
 } from "@/db/schema/launch-schema";
 import { eq, and } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
-import { deriveNextTask } from "../route";
+import { deriveNextTask } from "../../route";
 import {
   buildMemoryContext,
   extractMemoryFacts,
