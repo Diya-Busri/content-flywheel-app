@@ -391,14 +391,14 @@ export default function ExecutionWorkspacePage() {
             className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
-            Execution
+            Pipeline
           </button>
           <div className="h-3 w-px bg-border/40" />
           <button
             onClick={() => router.push("/dashboard/launch")}
             className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
           >
-            New execution
+            Launch new idea
           </button>
         </div>
 
