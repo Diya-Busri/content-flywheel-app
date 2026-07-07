@@ -26,6 +26,11 @@ import type {
 } from "@/db/schema/launch-schema";
 import { eq, and } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  buildFullMemoryContext,
+  extractMemoryFacts,
+  mergeMemoryFacts,
+} from "@/lib/memory-context";
 
 export const maxDuration = 120;
 
@@ -140,8 +145,9 @@ async function generatePlan(
   goal: string,
   previousPlanDates: string[],
 ): Promise<{ plan: MissionPlan; briefing: MissionBriefing }> {
-  const context  = buildContext(results, goal);
+  const context        = buildContext(results, goal);
   const recentActivity = buildYesterdayContext(results);
+  const memCtx         = buildFullMemoryContext(results.memory);
 
   const raw = await ai.messages.create({
     model:      "claude-sonnet-4-6",
@@ -152,7 +158,7 @@ async function generatePlan(
 
 BUSINESS CONTEXT:
 ${context}
-
+${memCtx}
 RECENT ACTIVITY (last 24h):
 ${recentActivity}
 
@@ -307,10 +313,21 @@ export async function POST(
     lastRunAt:   new Date().toISOString(),
   };
 
+  /* Merge new MC decisions into memory */
+  const newResults = { ...results, missionControl: updated };
+  const extractedFacts = extractMemoryFacts(newResults, project.goal);
+  const existingMemory = results.memory ?? { facts: [] };
+  const mergedFacts    = mergeMemoryFacts(existingMemory.facts, extractedFacts);
+  const updatedMemory  = {
+    ...existingMemory,
+    facts:           mergedFacts,
+    lastExtractedAt: new Date().toISOString(),
+  };
+
   await db
     .update(launchProjectsTable)
     .set({
-      stageResults: { ...results, missionControl: updated },
+      stageResults: { ...newResults, memory: updatedMemory },
       updatedAt:    new Date(),
     })
     .where(eq(launchProjectsTable.id, launchId));

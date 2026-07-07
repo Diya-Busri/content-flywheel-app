@@ -144,6 +144,13 @@ export type LaunchStageResults = {
    */
   growth?: GrowthData;
   /**
+   * Business Memory — permanent knowledge base for this project.
+   * Auto-updated every time a worker runs or analysis completes.
+   * Injected into every AI prompt so each generation is smarter than the last.
+   * Users can view and edit any fact at /dashboard/projects/[launchId]/memory.
+   */
+  memory?: BusinessMemory;
+  /**
    * Mission Control — CEO AI that coordinates the workforce daily.
    * Generates a strategic plan with specific task assignments for workers.
    * Updated by POST /api/projects/[launchId]/mission-control/run.
@@ -289,6 +296,54 @@ export type WorkerState = {
 
 export type WorkforceData = {
   workers: Partial<Record<WorkerId, WorkerState>>;
+};
+
+/* ─── Business Memory types ──────────────────────────────────────────────────── */
+
+export type MemoryCategory =
+  | "brand"
+  | "audience"
+  | "products"
+  | "marketing"
+  | "launches"
+  | "analytics"
+  | "ideas"
+  | "lessons"
+  | "knowledge";
+
+export type MemoryFact = {
+  id:              string;
+  category:        MemoryCategory;
+  /** Stable machine key, e.g. "target_audience", "top_keywords" */
+  key:             string;
+  /** Human-readable label shown in the Memory Viewer */
+  label:           string;
+  value:           string;
+  /** Where this fact came from */
+  source:          string; // "auto" | "brain" | "mission_control" | "user" | "worker:marketing" etc.
+  confidence:      "high" | "medium" | "low";
+  /** User explicitly confirmed or wrote this — never auto-overwritten */
+  confirmedByUser: boolean;
+  addedAt:         string;
+  updatedAt:       string;
+};
+
+export type MemorySuggestion = {
+  id:          string;
+  category:    MemoryCategory;
+  key:         string;
+  label:       string;
+  value:       string;
+  source:      string;
+  /** Why the AI thinks this is worth remembering */
+  reason:      string;
+  suggestedAt: string;
+};
+
+export type BusinessMemory = {
+  facts:              MemoryFact[];
+  suggestions?:       MemorySuggestion[];
+  lastExtractedAt?:   string;
 };
 
 /* ─── Mission Control types ──────────────────────────────────────────────────── */

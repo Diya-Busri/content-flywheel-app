@@ -584,6 +584,23 @@ export default function ProjectDashboardPage() {
           </div>
         </div>
 
+        {/* ── Business Memory link ── */}
+        <div className="mt-5">
+          <Link
+            href={`/dashboard/projects/${launchId}/memory`}
+            className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-purple-500/20 bg-purple-500/[0.03] hover:bg-purple-500/[0.07] transition-colors"
+          >
+            <span className="text-lg shrink-0">🧠</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-foreground">Business Memory</p>
+              <p className="text-[11px] text-muted-foreground/50 mt-0.5">
+                Everything the AI knows about your business — view and edit
+              </p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-muted-foreground/30 shrink-0" />
+          </Link>
+        </div>
+
         {/* ── View full workspace ── */}
         <div className="mt-5 text-center">
           <Link
