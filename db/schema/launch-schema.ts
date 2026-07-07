@@ -21,6 +21,8 @@ export type LaunchStageResults = {
     keywords?: Array<{ term: string; intent: string; opportunity: string; note: string }>;
     actionPlan?: Array<{ step: number; action: string; detail: string; cta?: string }>;
     competitorInsights?: Array<{ name: string; strength: string; gap: string }>;
+    /** Complete synthesis report — used by Product, Design, Marketing agents */
+    fullReport?: Record<string, unknown>;
   };
   product?: {
     productId: string;
