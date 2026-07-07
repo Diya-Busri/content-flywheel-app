@@ -584,8 +584,25 @@ export default function ProjectDashboardPage() {
           </div>
         </div>
 
-        {/* ── Business Memory link ── */}
+        {/* ── Marketing Department link ── */}
         <div className="mt-5">
+          <Link
+            href={`/dashboard/projects/${launchId}/marketing`}
+            className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.03] hover:bg-blue-500/[0.07] transition-colors"
+          >
+            <span className="text-lg shrink-0">📣</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-foreground">Marketing Department</p>
+              <p className="text-[11px] text-muted-foreground/50 mt-0.5">
+                7 AI managers — TikTok, Instagram, YouTube, X, LinkedIn, Email, SEO
+              </p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-muted-foreground/30 shrink-0" />
+          </Link>
+        </div>
+
+        {/* ── Business Memory link ── */}
+        <div className="mt-3">
           <Link
             href={`/dashboard/projects/${launchId}/memory`}
             className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-purple-500/20 bg-purple-500/[0.03] hover:bg-purple-500/[0.07] transition-colors"

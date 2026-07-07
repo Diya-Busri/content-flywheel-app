@@ -164,6 +164,12 @@ export type LaunchStageResults = {
    */
   workforce?: WorkforceData;
   /**
+   * Marketing Department — 7 AI managers owning every marketing channel.
+   * Each manager works independently, builds on existing content, and reports
+   * to Mission Control. All outputs feed into Business Memory.
+   */
+  marketingDept?: MarketingDepartment;
+  /**
    * Business Brain — post-pipeline founder review.
    * Auto-generated when workspace first loads after completion.
    * Critiques all pipeline output and surfaces prioritised recommendations.
@@ -344,6 +350,68 @@ export type BusinessMemory = {
   facts:              MemoryFact[];
   suggestions?:       MemorySuggestion[];
   lastExtractedAt?:   string;
+};
+
+/* ─── Marketing Department types ────────────────────────────────────────────── */
+
+export type MarketingManagerId =
+  | "tiktok"
+  | "instagram"
+  | "youtube"
+  | "x"
+  | "linkedin"
+  | "email"
+  | "seo";
+
+export type ManagerStatus = "idle" | "running" | "paused" | "error";
+
+export type ManagerOutput = {
+  id:         string;
+  /** e.g. "hook" | "video_script" | "caption" | "carousel" | "tweet_thread" | "email" | etc. */
+  type:       string;
+  /** Plain string for simple outputs; JSON.stringify for complex (scripts, threads, etc.) */
+  content:    string;
+  /** What angle or approach this batch took */
+  angle?:     string;
+  createdAt:  string;
+};
+
+export type ManagerTask = {
+  id:            string;
+  label:         string;
+  instruction?:  string;
+  status:        "pending" | "running" | "done" | "failed";
+  createdAt:     string;
+  completedAt?:  string;
+  result?:       string;
+  outputCount?:  number;
+};
+
+export type ManagerSuggestion = {
+  id:          string;
+  label:       string;
+  reason:      string;
+  priority:    "high" | "medium" | "low";
+  suggestedAt: string;
+};
+
+export type MarketingManager = {
+  id:            MarketingManagerId;
+  status:        ManagerStatus;
+  /** Live step description while running */
+  currentTask?:  string;
+  queue:         ManagerTask[];
+  history:       ManagerTask[];
+  /** All content outputs produced by this manager */
+  outputs:       ManagerOutput[];
+  suggestions:   ManagerSuggestion[];
+  lastRunAt?:    string;
+  runCount:      number;
+};
+
+export type MarketingDepartment = {
+  managers:      Partial<Record<MarketingManagerId, MarketingManager>>;
+  lastUpdated?:  string;
 };
 
 /* ─── Mission Control types ──────────────────────────────────────────────────── */
