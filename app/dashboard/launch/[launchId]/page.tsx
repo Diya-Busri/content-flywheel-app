@@ -1,17 +1,18 @@
 /**
  * /dashboard/launch/[launchId] — AI Execution Dashboard
  * ───────────────────────────────────────────────────────
- * Phase 1.5: Research, Product, Design, and Marketing agents live.
+ * Phase 1.6: All 5 agents live — Research, Product, Design, Marketing, Store.
  *
  * Architecture:
  *   • PIPELINE_STAGES config defines every agent slot.
- *   • `execute` is null for un-wired stages (Phase 1.6+).
+ *   • All slots are wired — the pipeline is complete.
  *   • The pipeline runner iterates stages, skips null slots,
  *     and passes an ExecutionContext to each agent.
  *   • Agent Cards show live steps + per-stage progress.
  *   • Design steps carry imageUrl — images appear live as each renders.
  *   • Marketing streams folder-asset events — campaign folder view updates live.
- *   • Future phases: fill `execute` for Store.
+ *   • Store Agent streams validation checks + readiness score live.
+ *   • On completion: Business Summary + Next Actions panel appears.
  */
 "use client";
 
@@ -21,14 +22,17 @@ import {
   Sparkles, Package, Palette, Megaphone, Store,
   CheckCircle2, XCircle, Loader2, ChevronLeft,
   Clock, PlugZap, ChevronDown, ChevronUp,
+  AlertTriangle, ExternalLink, Copy, Rocket,
 } from "lucide-react";
 
 import { runLaunchResearchAgent }   from "@/lib/agents/launch-research-agent";
 import { runLaunchProductAgent }    from "@/lib/agents/launch-product-agent";
 import { runLaunchDesignAgent }     from "@/lib/agents/launch-design-agent";
 import { runLaunchMarketingAgent }  from "@/lib/agents/launch-marketing-agent";
+import { runLaunchStoreAgent }      from "@/lib/agents/launch-store-agent";
 import type {
-  ExecutionContext, AgentStep, AgentStatus, SaveProgressPatch, FolderAssetItem,
+  ExecutionContext, AgentStep, AgentStatus, SaveProgressPatch,
+  FolderAssetItem, ValidationCheck,
 } from "@/lib/agents/types";
 import type {
   LaunchStatus, LaunchStageId, LaunchStageResults,
@@ -93,9 +97,9 @@ const PIPELINE_STAGES: StageConfig[] = [
     emoji:       "🛍️",
     label:       "Store",
     agentLabel:  "Store Agent",
-    description: "List the product, configure pricing, and publish to your store",
+    description: "Assemble store listing, validate readiness, and prepare for launch",
     icon:        Store,
-    execute:     null,  // Phase 1.6
+    execute:     runLaunchStoreAgent,  // ← Phase 1.6: wired
   },
 ];
 
@@ -249,6 +253,233 @@ function MarketingFolderView({ items }: { items: FolderAssetItem[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STORE READINESS PANEL
+   Live validation checklist + animated score circle.
+══════════════════════════════════════════════════════════ */
+
+function ReadinessScorePanel({ score, checks }: { score: number; checks: ValidationCheck[] }) {
+  const statusIcon = (s: ValidationCheck["status"]) => {
+    if (s === "ok"   || s === "fixed")   return <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />;
+    if (s === "warning")                  return <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />;
+    return <XCircle className="w-3 h-3 text-red-400 shrink-0" />;
+  };
+
+  const scoreColor =
+    score >= 90 ? "text-green-500"
+    : score >= 70 ? "text-amber-400"
+    :               "text-red-400";
+
+  const ringColor =
+    score >= 90 ? "#22c55e"
+    : score >= 70 ? "#fbbf24"
+    :               "#f87171";
+
+  const circumference = 2 * Math.PI * 28; // r=28
+  const offset = circumference - (score / 100) * circumference;
+
+  return (
+    <div className="mt-2 rounded-lg border border-border/40 overflow-hidden">
+      {/* Score header */}
+      <div className="flex items-center gap-4 px-4 py-3 bg-muted/10">
+        {/* Score circle */}
+        <div className="relative shrink-0 w-16 h-16">
+          <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor"
+              className="text-muted/30" strokeWidth="5" />
+            <circle cx="32" cy="32" r="28" fill="none"
+              stroke={ringColor} strokeWidth="5"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              strokeLinecap="round"
+              style={{ transition: "stroke-dashoffset 0.6s ease" }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`text-[13px] font-black tabular-nums ${scoreColor}`}>{score}%</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-[13px] font-bold text-foreground">Store Readiness</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {score >= 90
+              ? "Ready to publish 🚀"
+              : score >= 70
+                ? "Almost there — a few things to fix"
+                : "Needs attention before publishing"}
+          </p>
+        </div>
+      </div>
+
+      {/* Check list */}
+      {checks.length > 0 && (
+        <div className="divide-y divide-border/30">
+          {checks.map(check => (
+            <div key={check.id} className="flex items-start gap-2.5 px-4 py-2">
+              <div className="mt-0.5">{statusIcon(check.status)}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-foreground/80">{check.label}</p>
+                {check.detail && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">{check.detail}</p>
+                )}
+              </div>
+              <span className={[
+                "text-[9px] font-bold uppercase tracking-wide shrink-0 mt-0.5",
+                check.status === "ok"      ? "text-green-500"
+                : check.status === "fixed"   ? "text-blue-400"
+                : check.status === "warning" ? "text-amber-400"
+                :                              "text-red-400",
+              ].join(" ")}>
+                {check.status === "fixed" ? "Auto-fixed" : check.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Streaming placeholder */}
+      {checks.length === 0 && (
+        <div className="px-4 py-3 flex items-center gap-2">
+          <Loader2 className="w-3 h-3 text-muted-foreground/30 animate-spin shrink-0" />
+          <span className="text-[11px] text-muted-foreground/40">Validating...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUSINESS SUMMARY PANEL
+   Shown when all agents complete.
+══════════════════════════════════════════════════════════ */
+
+interface BusinessSummaryProps {
+  stageResults:  Record<string, unknown>;
+  storeScore:    number;
+  storeProductId: string;
+  storeUrl:      string;
+  router:        ReturnType<typeof import("next/navigation").useRouter>;
+}
+
+function BusinessSummaryPanel({
+  stageResults, storeScore, storeProductId, storeUrl, router,
+}: BusinessSummaryProps) {
+  const research  = stageResults.research  as Record<string, unknown> | undefined;
+  const product   = stageResults.product   as { productName?: string; productId?: string } | undefined;
+  const design    = stageResults.design    as { assetsCount?: number } | undefined;
+  const marketing = stageResults.marketing as Record<string, unknown> | undefined;
+
+  const insights  = (research?.insights as unknown[] | undefined)?.length ?? 0;
+  const opps      = (research?.productOpportunities as unknown[] | undefined)?.length ?? 0;
+  const carousels = (marketing?.carousels as unknown[] | undefined)?.length ?? 0;
+  const emails    = (marketing?.emails    as unknown[] | undefined)?.length ?? 0;
+  const xPosts    = (marketing?.xPosts    as unknown[] | undefined)?.length ?? 0;
+  const tiktoks   = (marketing?.tiktokHooks as unknown[] | undefined)?.length ?? 0;
+  const marketingTotal = carousels + emails + xPosts + tiktoks + 9;
+
+  const summaryItems = [
+    { emoji: "🔍", label: "Research",          detail: `${insights} insights · ${opps} opportunities found` },
+    { emoji: "✍️", label: "Product",           detail: `"${product?.productName ?? "Digital Product"}" created` },
+    { emoji: "🎨", label: "Design Assets",     detail: `${design?.assetsCount ?? 4} images generated` },
+    { emoji: "📣", label: "Marketing Campaign",detail: `${marketingTotal}+ assets — launch copy, social, email` },
+    { emoji: "🛍️",label: "Store",             detail: `Readiness ${storeScore}% · all fields populated` },
+  ];
+
+  const productId = storeProductId || (product?.productId ?? "");
+
+  const copyLink = () => {
+    if (storeUrl) void navigator.clipboard.writeText(storeUrl);
+  };
+
+  return (
+    <div className="mt-8 space-y-4">
+      {/* Celebration header */}
+      <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.03] p-5 text-center">
+        <div className="text-3xl mb-2">🎉</div>
+        <h2 className="text-[16px] font-black text-foreground mb-1">Your business is ready to launch.</h2>
+        <p className="text-[12px] text-muted-foreground">
+          Every agent has finished. Your product, design, marketing, and store are all assembled.
+        </p>
+      </div>
+
+      {/* Summary items */}
+      <div className="rounded-xl border border-border/40 overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border/40 bg-muted/10">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
+            What was built
+          </p>
+        </div>
+        <div className="divide-y divide-border/30">
+          {summaryItems.map(item => (
+            <div key={item.label} className="flex items-center gap-3 px-4 py-2.5">
+              <span className="text-base shrink-0">{item.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold text-foreground">{item.label}</p>
+                <p className="text-[11px] text-muted-foreground/70 truncate">{item.detail}</p>
+              </div>
+              <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Next Actions */}
+      <div className="rounded-xl border border-border/40 overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border/40 bg-muted/10">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
+            Next actions
+          </p>
+        </div>
+        <div className="p-3 grid grid-cols-2 gap-2">
+          {productId && (
+            <button
+              onClick={() => router.push(`/dashboard/products/${productId}`)}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
+            >
+              <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-[12px] font-semibold text-foreground">Review Product</span>
+            </button>
+          )}
+          {productId && (
+            <button
+              onClick={() => router.push(`/dashboard/products/${productId}#publish`)}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-orange-500/30 bg-orange-500/[0.05] hover:bg-orange-500/[0.08] transition-colors text-left"
+            >
+              <Rocket className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+              <span className="text-[12px] font-semibold text-orange-500">Publish to Store</span>
+            </button>
+          )}
+          {storeUrl && (
+            <button
+              onClick={() => window.open(storeUrl, "_blank")}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-[12px] font-semibold text-foreground">Preview Store Page</span>
+            </button>
+          )}
+          {storeUrl && (
+            <button
+              onClick={copyLink}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
+            >
+              <Copy className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-[12px] font-semibold text-foreground">Copy Link</span>
+            </button>
+          )}
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
+          >
+            <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span className="text-[12px] font-semibold text-foreground">Go to Dashboard</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -413,6 +644,12 @@ export default function LaunchExecutionPage() {
   /* ── Marketing campaign folder items (streamed live) ── */
   const [marketingFolderItems, setMarketingFolderItems] = useState<FolderAssetItem[]>([]);
 
+  /* ── Store Agent: validation checks + readiness score (streamed live) ── */
+  const [storeChecks,    setStoreChecks]    = useState<ValidationCheck[]>([]);
+  const [storeScore,     setStoreScore]     = useState<number>(0);
+  const [storeProductId, setStoreProductId] = useState<string>("");
+  const [storeUrl,       setStoreUrl]       = useState<string>("");
+
   /* ── Overall progress ── */
   const [overallPct, setOverallPct] = useState<number>(0);
   const [overallStatus, setOverallStatus] = useState<LaunchStatus>("queued");
@@ -492,6 +729,16 @@ export default function LaunchExecutionPage() {
               setMarketingFolderItems(prev => [...prev, item]);
             },
           } : {}),
+          // Store Agent: stream validation checks + score live
+          ...(stage.id === "store" ? {
+            onValidationCheck: (check: ValidationCheck) => {
+              setStoreChecks(prev => [...prev, check]);
+            },
+            onReadinessScore: (score: number, checks: ValidationCheck[]) => {
+              setStoreScore(score);
+              setStoreChecks(checks);
+            },
+          } : {}),
         },
         saveProgress,
       };
@@ -529,10 +776,18 @@ export default function LaunchExecutionPage() {
           const emails    = results.marketing.emails?.length ?? 0;
           const xPosts    = results.marketing.xPosts?.length ?? 0;
           const tiktoks   = results.marketing.tiktokHooks?.length ?? 0;
-          const total     = carousels + emails + xPosts + tiktoks + 9; // +9 for launch assets
+          const total     = carousels + emails + xPosts + tiktoks + 9;
           setCompletedSummaries(prev => ({
             ...prev,
             [i]: `${total}+ assets · launch copy, ${carousels} carousels, ${emails} emails, ${xPosts + tiktoks} posts`,
+          }));
+        } else if (stage.id === "store" && results.store) {
+          const score = results.store.readinessScore ?? 0;
+          setStoreProductId(results.store.productId ?? "");
+          setStoreUrl(results.store.storeUrl ?? "");
+          setCompletedSummaries(prev => ({
+            ...prev,
+            [i]: `Store Readiness ${score}% · ready to publish`,
           }));
         }
       } catch (err) {
@@ -671,6 +926,10 @@ export default function LaunchExecutionPage() {
               (status === "working" || status === "complete") &&
               marketingFolderItems.length > 0;
 
+            const showReadiness =
+              stage.id === "store" &&
+              (status === "working" || status === "complete");
+
             return (
               <div key={stage.id}>
                 <AgentCard
@@ -685,28 +944,23 @@ export default function LaunchExecutionPage() {
                 {showFolders && (
                   <MarketingFolderView items={marketingFolderItems} />
                 )}
+                {showReadiness && (
+                  <ReadinessScorePanel score={storeScore} checks={storeChecks} />
+                )}
               </div>
             );
           })}
         </div>
 
-        {/* ── Phase note ── */}
-        {agentStatuses.some(s => s === "complete") &&
-          agentStatuses.some(s => s === "waiting") && (
-          <div className="rounded-xl border border-border bg-muted/20 p-4">
-            <div className="flex items-start gap-3">
-              <PlugZap className="w-4 h-4 text-muted-foreground/40 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-[12px] font-semibold text-foreground mb-0.5">
-                  Phase 1.5 — Research, Product, Design & Marketing agents live
-                </p>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Research, Product, Design, and Marketing assets are saved to the pipeline.
-                  The Store agent connects in the next phase — no UI changes needed.
-                </p>
-              </div>
-            </div>
-          </div>
+        {/* ── Business Summary — shown when all agents finish ── */}
+        {overallStatus === "completed" && (
+          <BusinessSummaryPanel
+            stageResults={project.stageResults as Record<string, unknown> ?? {}}
+            storeScore={storeScore}
+            storeProductId={storeProductId}
+            storeUrl={storeUrl}
+            router={router}
+          />
         )}
 
       </div>

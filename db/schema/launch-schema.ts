@@ -77,8 +77,15 @@ export type LaunchStageResults = {
     hashtags?:     string[];
   };
   store?: {
-    productId: string;
-    storeUrl?: string;
+    productId:       string;
+    storeUrl?:       string;
+    readinessScore?: number;
+    validationChecks?: Array<{
+      id:      string;
+      label:   string;
+      status:  "ok" | "fixed" | "warning" | "missing";
+      detail?: string;
+    }>;
     publishedAt?: string;
   };
 };

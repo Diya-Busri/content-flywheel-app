@@ -34,6 +34,15 @@ export interface FolderAssetItem {
   preview:  string;
 }
 
+/** A single store readiness check (Store Agent). */
+export interface ValidationCheck {
+  id:      string;
+  label:   string;
+  /** ok = passed, fixed = auto-repaired, warning = needs attention, missing = absent */
+  status:  "ok" | "fixed" | "warning" | "missing";
+  detail?: string;
+}
+
 /* ─── Callbacks ─────────────────────────────────────────────────────────────── */
 
 export interface AgentCallbacks {
@@ -55,6 +64,18 @@ export interface AgentCallbacks {
    * The execution page groups these into the campaign folder view.
    */
   onFolderAsset?: (item: FolderAssetItem) => void;
+
+  /**
+   * Store Agent only — called for each validation check as it completes.
+   * The page shows the Store Readiness panel updating live.
+   */
+  onValidationCheck?: (check: ValidationCheck) => void;
+
+  /**
+   * Store Agent only — called after all validation checks to report the
+   * final readiness score (0–100) and full check list.
+   */
+  onReadinessScore?: (score: number, checks: ValidationCheck[]) => void;
 }
 
 /* ─── Save patch ─────────────────────────────────────────────────────────────── */
