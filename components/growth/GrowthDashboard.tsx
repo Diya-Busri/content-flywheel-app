@@ -21,6 +21,7 @@ import {
   Check, X, Clock, TrendingUp, Flag,
 } from "lucide-react";
 import type { GrowthData, GrowthAITask, ProjectGoal } from "@/db/schema/launch-schema";
+import { GrowthModePanel } from "./GrowthModePanel";
 
 /* ─── Props ─────────────────────────────────────────────────────────────────── */
 
@@ -428,6 +429,9 @@ export function GrowthDashboard({ launchId, initialData, productId }: GrowthDash
           )}
         </div>
       )}
+
+      {/* ── Phase 6: Autonomous Growth Tasks ── */}
+      <GrowthModePanel launchId={launchId} />
 
     </div>
   );

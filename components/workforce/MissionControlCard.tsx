@@ -16,8 +16,8 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Play, RefreshCw, CheckCircle2, X, Clock, Zap, Target, ArrowRight, Upload, BarChart2, BookOpen, Trophy } from "lucide-react";
-import type { MissionControlData, MissionPlan, MissionTask, MissionFocus, MarketingDepartment, AnalyticsDepartment } from "@/db/schema/launch-schema";
+import { Loader2, Play, RefreshCw, CheckCircle2, X, Clock, Zap, Target, ArrowRight, Upload, BarChart2, BookOpen, Trophy, TrendingUp, Lightbulb, FlaskConical, Edit3, TrendingDown, Compass, Megaphone, Package, Repeat2, MessageCircle } from "lucide-react";
+import type { MissionControlData, MissionPlan, MissionTask, MissionFocus, MarketingDepartment, AnalyticsDepartment, GrowthTask, GrowthTaskType } from "@/db/schema/launch-schema";
 import { LearningCard } from "@/components/analytics/AnalyticsDepartment";
 
 /* ─── Props ──────────────────────────────────────────────────────────────────── */
@@ -299,6 +299,90 @@ function PipelineStatus({ launchId }: PipelineStatusProps) {
   );
 }
 
+/* ─── Growth Tasks Strip ─────────────────────────────────────────────────────── */
+
+const GROWTH_TYPE_ICONS: Partial<Record<GrowthTaskType, React.ReactNode>> = {
+  content_idea:    <Lightbulb className="w-3 h-3" />,
+  ab_test:         <FlaskConical className="w-3 h-3" />,
+  improve_copy:    <Edit3 className="w-3 h-3" />,
+  fix_declining:   <TrendingDown className="w-3 h-3" />,
+  new_opportunity: <Compass className="w-3 h-3" />,
+  campaign:        <Megaphone className="w-3 h-3" />,
+  product_improve: <Package className="w-3 h-3" />,
+  repost:          <Repeat2 className="w-3 h-3" />,
+  engagement:      <MessageCircle className="w-3 h-3" />,
+};
+
+function GrowthTasksStrip({ launchId }: { launchId: string }) {
+  const [tasks,   setTasks]   = useState<GrowthTask[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/projects/${launchId}/growth`)
+      .then(r => r.json())
+      .then((d: { tasks?: GrowthTask[] }) => { setTasks(d.tasks ?? []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [launchId]);
+
+  if (loading) return null;
+
+  const active   = tasks.filter(t => t.status === "pending" || t.status === "in_progress");
+  const critical = active.filter(t => t.priority === "critical");
+  const high     = active.filter(t => t.priority === "high");
+  const topTasks = [...critical, ...high].slice(0, 3);
+
+  if (!topTasks.length) return null;
+
+  return (
+    <div className="px-5 py-3 border-b border-border/20">
+      <div className="flex items-center gap-2 mb-2">
+        <TrendingUp className="w-3 h-3 text-green-400 shrink-0" />
+        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40">
+          Growth Tasks
+        </p>
+        <div className="flex items-center gap-1 ml-auto">
+          {critical.length > 0 && (
+            <span className="text-[9px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-full">
+              {critical.length} critical
+            </span>
+          )}
+          {high.length > 0 && (
+            <span className="text-[9px] font-bold text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded-full">
+              {high.length} high
+            </span>
+          )}
+          {active.length > 3 && (
+            <span className="text-[9px] text-muted-foreground/40">
+              +{active.length - 3} more
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {topTasks.map(task => (
+          <div key={task.id} className="flex items-center gap-2">
+            <div className={[
+              "w-5 h-5 rounded flex items-center justify-center shrink-0",
+              task.priority === "critical" ? "bg-red-500/10 text-red-400"
+              : "bg-orange-500/10 text-orange-400",
+            ].join(" ")}>
+              {GROWTH_TYPE_ICONS[task.type] ?? <TrendingUp className="w-3 h-3" />}
+            </div>
+            <p className="flex-1 text-[11px] text-foreground/80 leading-snug truncate">{task.title}</p>
+            <span className={[
+              "text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0",
+              task.priority === "critical" ? "bg-red-500/10 text-red-400" : "bg-orange-500/10 text-orange-400",
+            ].join(" ")}>
+              {task.priority}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main component ─────────────────────────────────────────────────────────── */
 
 export function MissionControlCard({ launchId }: Props) {
@@ -565,6 +649,9 @@ export function MissionControlCard({ launchId }: Props) {
       <div className="px-5 py-3 border-b border-border/20">
         <LearningCard launchId={launchId} />
       </div>
+
+      {/* ── Growth Tasks ── */}
+      <GrowthTasksStrip launchId={launchId} />
 
       {/* ── Tasks ── */}
       {plan && (
