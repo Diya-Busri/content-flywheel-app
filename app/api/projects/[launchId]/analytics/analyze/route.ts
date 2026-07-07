@@ -15,6 +15,7 @@ import type { LaunchStageResults, AnalyticsDepartment } from "@/db/schema/launch
 import { eq, and } from "drizzle-orm";
 import { analyzePost, extractAnalyticsMemoryFacts } from "@/lib/analytics-ai";
 import { mergeMemoryFacts } from "@/lib/memory-context";
+import { runLearningCycle, buildTrends, mergeLessons } from "@/lib/learning-loop";
 
 export const maxDuration = 120;
 
@@ -87,5 +88,38 @@ export async function POST(
     })
     .where(eq(launchProjectsTable.id, launchId));
 
-  return NextResponse.json({ analyticsDept: updatedDept, analysed: analysedPosts.length });
+  // Auto-trigger learning cycle when >= 2 posts are now analysed
+  const nowAnalysed = updatedDept.posts.filter(p => p.analysedAt && p.insights.length > 0).length;
+  let finalDept     = updatedDept;
+  let finalMem      = updatedMem;
+
+  if (nowAnalysed >= 2) {
+    try {
+      const { lessons: newLessons, todaysSummary, memoryFacts: learnFacts } = await runLearningCycle(
+        updatedDept.posts.filter(p => p.analysedAt),
+        { ...results, analyticsDept: updatedDept, memory: updatedMem },
+        updatedDept.lessons ?? [],
+      );
+      const mergedLessons = mergeLessons(updatedDept.lessons ?? [], newLessons);
+      const trends        = buildTrends(updatedDept.posts);
+      const mergedLFacts  = mergeMemoryFacts(updatedMem.facts, learnFacts);
+
+      finalMem  = { ...updatedMem, facts: mergedLFacts, lastExtractedAt: new Date().toISOString() };
+      finalDept = {
+        ...updatedDept,
+        lessons:        mergedLessons,
+        trends,
+        todaysSummary,
+        learningCycles: (updatedDept.learningCycles ?? 0) + 1,
+        lastLearnedAt:  new Date().toISOString(),
+      };
+
+      await db
+        .update(launchProjectsTable)
+        .set({ stageResults: { ...results, analyticsDept: finalDept, memory: finalMem }, updatedAt: new Date() })
+        .where(eq(launchProjectsTable.id, launchId));
+    } catch { /* learning is best-effort — don't fail the whole analyze */ }
+  }
+
+  return NextResponse.json({ analyticsDept: finalDept, analysed: analysedPosts.length });
 }

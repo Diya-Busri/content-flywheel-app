@@ -240,12 +240,15 @@ export function extractMemoryFacts(
  *  — For same (category, key): newer extracted fact replaces older auto fact
  *  — Facts with source "user" are treated as confirmed
  *  — New keys are always added
+ *  — evidenceCount is incremented on each reinforcement
+ *  — Confidence auto-upgrades: 2+ evidence → medium, 5+ → high
  */
 export function mergeMemoryFacts(
   existing:  MemoryFact[],
   extracted: MemoryFact[],
 ): MemoryFact[] {
   const byKey = new Map<string, MemoryFact>();
+  const now   = new Date().toISOString();
 
   // Load existing facts keyed by category+key
   for (const fact of existing) {
@@ -254,16 +257,29 @@ export function mergeMemoryFacts(
 
   // Merge extracted — skip if user-confirmed exists
   for (const fact of extracted) {
-    const mapKey = `${fact.category}::${fact.key}`;
-    const existing = byKey.get(mapKey);
-    if (existing && (existing.confirmedByUser || existing.source === "user")) {
+    const mapKey    = `${fact.category}::${fact.key}`;
+    const prev      = byKey.get(mapKey);
+
+    if (prev && (prev.confirmedByUser || prev.source === "user")) {
       continue; // never overwrite user-confirmed facts
     }
-    // Update: keep original addedAt, update updatedAt
+
+    // Increment evidence count
+    const evidenceCount = (prev?.evidenceCount ?? 0) + 1;
+
+    // Auto-upgrade confidence based on evidence
+    let confidence = fact.confidence;
+    if (evidenceCount >= 5) confidence = "high";
+    else if (evidenceCount >= 2) confidence = "medium";
+
     byKey.set(mapKey, {
       ...fact,
-      id:      existing?.id ?? fact.id,
-      addedAt: existing?.addedAt ?? fact.addedAt,
+      id:              prev?.id ?? fact.id,
+      addedAt:         prev?.addedAt ?? fact.addedAt,
+      updatedAt:       now,
+      evidenceCount,
+      lastReinforced:  now,
+      confidence,
     });
   }
 
@@ -285,9 +301,10 @@ export function buildMemoryContext(
   const relevant = memory.facts
     .filter(f => categories.includes(f.category) && f.confidence !== "low")
     .sort((a, b) => {
-      // High confidence first, then by category
+      // High confidence first, then by evidence count (most reinforced = most reliable)
       const cScore = (c: MemoryFact) => c.confidence === "high" ? 0 : 1;
-      return cScore(a) - cScore(b) || a.category.localeCompare(b.category);
+      const eScore = (c: MemoryFact) => -(c.evidenceCount ?? 0);
+      return cScore(a) - cScore(b) || eScore(a) - eScore(b) || a.category.localeCompare(b.category);
     })
     .slice(0, 15);
 

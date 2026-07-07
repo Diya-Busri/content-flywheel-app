@@ -332,12 +332,16 @@ export type MemoryFact = {
   label:           string;
   value:           string;
   /** Where this fact came from */
-  source:          string; // "auto" | "brain" | "mission_control" | "user" | "worker:marketing" etc.
+  source:          string; // "auto" | "brain" | "mission_control" | "user" | "worker:marketing" | "learning" etc.
   confidence:      "high" | "medium" | "low";
   /** User explicitly confirmed or wrote this — never auto-overwritten */
   confirmedByUser: boolean;
   addedAt:         string;
   updatedAt:       string;
+  /** How many times this fact has been independently reinforced — used to upgrade confidence */
+  evidenceCount?:  number;
+  /** ISO of the last time this fact was seen/reinforced */
+  lastReinforced?: string;
 };
 
 export type MemorySuggestion = {
@@ -627,6 +631,45 @@ export type DailyIntelligenceReport = {
   generatedAt:  string;
 };
 
+export type LessonCategory =
+  | "hooks"      // What hooks work / don't work
+  | "cta"        // Which CTAs convert
+  | "timing"     // When to post
+  | "format"     // Video vs carousel vs text etc.
+  | "style"      // Visual / tone style findings
+  | "topic"      // Which topics resonate
+  | "platform"   // Platform-specific findings
+  | "avoid";     // Patterns that consistently underperform
+
+export type LearningLesson = {
+  id:            string;
+  category:      LessonCategory;
+  /** Specific, actionable finding — e.g. "Hooks under 8 words outperform longer ones on TikTok" */
+  lesson:        string;
+  /** The data that supports this — e.g. "3 posts with short hooks averaged 67% retention vs 31% for long hooks" */
+  evidence:      string;
+  /** How many independent data points support this lesson */
+  evidenceCount: number;
+  confidence:    "high" | "medium" | "low";
+  /** Which platforms this lesson applies to */
+  platforms:     MarketingManagerId[];
+  firstSeenAt:   string;
+  lastSeenAt:    string;
+  /** Is this pattern getting stronger or weaker over time? */
+  trend?:        "improving" | "declining" | "stable";
+};
+
+export type PerformanceTrend = {
+  metric:        string;   // "retention" | "ctr" | "reach" | "views" | "followers_gained"
+  platform:      MarketingManagerId;
+  direction:     "up" | "down" | "stable";
+  /** Percentage change — positive = improvement */
+  changePercent: number;
+  dataPoints:    Array<{ date: string; value: number }>;
+  /** Human-readable summary — "Avg TikTok retention improved 12% over last 7 days" */
+  summary:       string;
+};
+
 export type AnalyticsDepartment = {
   /** All tracked posts with their metrics and AI insights */
   posts:            PostAnalytics[];
@@ -634,8 +677,17 @@ export type AnalyticsDepartment = {
   recommendations:  AnalyticsRecommendation[];
   /** Daily intelligence reports, newest first, capped at 30 */
   reports:          DailyIntelligenceReport[];
+  /** Structured reusable lessons extracted from performance comparisons */
+  lessons?:         LearningLesson[];
+  /** Metric trends over time per platform */
+  trends?:          PerformanceTrend[];
+  /** How many learning cycles have completed */
+  learningCycles?:  number;
+  /** "What the company learned today" — 2-sentence AI summary */
+  todaysSummary?:   string;
   lastAnalysedAt?:  string;
   lastReportAt?:    string;
+  lastLearnedAt?:   string;
 };
 
 /* ─── Mission Control types ──────────────────────────────────────────────────── */

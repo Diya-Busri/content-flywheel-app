@@ -18,6 +18,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Play, RefreshCw, CheckCircle2, X, Clock, Zap, Target, ArrowRight } from "lucide-react";
 import type { MissionControlData, MissionPlan, MissionTask, MissionFocus } from "@/db/schema/launch-schema";
+import { LearningCard } from "@/components/analytics/AnalyticsDepartment";
 
 /* ─── Props ──────────────────────────────────────────────────────────────────── */
 
@@ -406,6 +407,11 @@ export function MissionControlCard({ launchId }: Props) {
           </div>
         </div>
       )}
+
+      {/* ── Learning Card ── */}
+      <div className="px-5 py-3 border-b border-border/20">
+        <LearningCard launchId={launchId} />
+      </div>
 
       {/* ── Tasks ── */}
       {plan && (
