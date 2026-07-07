@@ -34,6 +34,7 @@ import {
 import type { WorkspaceCardStatus } from "@/components/execution-workspace/WorkspaceStageCard";
 import { BehindTheBuildSection } from "@/components/execution-workspace/BehindTheBuildSection";
 import { LaunchEngine } from "@/components/execution-workspace/LaunchEngine";
+import { BusinessBrainPanel } from "@/components/execution-workspace/BusinessBrainPanel";
 import type { LaunchStageResults, LaunchStatus } from "@/db/schema/launch-schema";
 
 /* ─── Project shape (matches what GET /api/launch/[launchId] returns) ────────── */
@@ -544,6 +545,17 @@ export default function ExecutionWorkspacePage() {
             productId={productId}
             storeUrl={storeUrl}
             results={results}
+          />
+        )}
+
+        {/* ── Business Brain — auto-triggered founder review ── */}
+        {isComplete && (
+          <BusinessBrainPanel
+            launchId={launchId}
+            productId={productId}
+            storeUrl={storeUrl}
+            goal={project.goal}
+            initialBrain={results.brain}
           />
         )}
 
