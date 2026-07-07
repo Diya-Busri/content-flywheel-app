@@ -1,15 +1,16 @@
 /**
  * /dashboard/launch/[launchId] — AI Execution Dashboard
  * ───────────────────────────────────────────────────────
- * Phase 1.2: Research agent wired and running live.
+ * Phase 1.4: Research, Product, and Design agents live.
  *
  * Architecture:
  *   • PIPELINE_STAGES config defines every agent slot.
- *   • `execute` is null for un-wired stages (Phase 1.3+).
+ *   • `execute` is null for un-wired stages (Phase 1.5+).
  *   • The pipeline runner iterates stages, skips null slots,
  *     and passes an ExecutionContext to each agent.
  *   • Agent Cards show live steps + per-stage progress.
- *   • Future phases: fill `execute` for Product, Design, Marketing, Store.
+ *   • Design steps carry imageUrl — images appear live as each renders.
+ *   • Future phases: fill `execute` for Marketing, Store.
  */
 "use client";
 
@@ -23,6 +24,7 @@ import {
 
 import { runLaunchResearchAgent } from "@/lib/agents/launch-research-agent";
 import { runLaunchProductAgent }  from "@/lib/agents/launch-product-agent";
+import { runLaunchDesignAgent }   from "@/lib/agents/launch-design-agent";
 import type {
   ExecutionContext, AgentStep, AgentStatus, SaveProgressPatch,
 } from "@/lib/agents/types";
@@ -71,9 +73,9 @@ const PIPELINE_STAGES: StageConfig[] = [
     emoji:       "🎨",
     label:       "Design",
     agentLabel:  "Design Agent",
-    description: "Create carousel slides and visual social media assets",
+    description: "Generate product cover, mockup, thumbnail, and social preview",
     icon:        Palette,
-    execute:     null,  // Phase 1.4
+    execute:     runLaunchDesignAgent,  // ← Phase 1.4: wired
   },
   {
     id:          "marketing",
@@ -129,27 +131,41 @@ const LAUNCH_STATUS_META: Record<LaunchStatus, { label: string; cls: string }> =
 ══════════════════════════════════════════════════════════ */
 function StepLine({ step }: { step: AgentStep }) {
   return (
-    <div className="flex items-start gap-2 py-0.5">
-      <div className="mt-[2px] shrink-0">
-        {step.status === "done" ? (
-          <CheckCircle2 className="w-3 h-3 text-green-500" />
-        ) : step.status === "running" ? (
-          <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
-        ) : step.status === "error" ? (
-          <XCircle className="w-3 h-3 text-red-400" />
-        ) : (
-          <div className="w-3 h-3 rounded-full border border-muted-foreground/20 bg-muted/30" />
-        )}
+    <div className="py-0.5">
+      <div className="flex items-start gap-2">
+        <div className="mt-[2px] shrink-0">
+          {step.status === "done" ? (
+            <CheckCircle2 className="w-3 h-3 text-green-500" />
+          ) : step.status === "running" ? (
+            <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
+          ) : step.status === "error" ? (
+            <XCircle className="w-3 h-3 text-red-400" />
+          ) : (
+            <div className="w-3 h-3 rounded-full border border-muted-foreground/20 bg-muted/30" />
+          )}
+        </div>
+        <span className={[
+          "text-[11px] leading-snug",
+          step.status === "done"    ? "text-foreground/80"
+          : step.status === "running" ? "text-foreground font-medium"
+          : step.status === "error"   ? "text-red-400 line-through"
+          : "text-muted-foreground/40",
+        ].join(" ")}>
+          {step.label}
+        </span>
       </div>
-      <span className={[
-        "text-[11px] leading-snug",
-        step.status === "done"    ? "text-foreground/80"
-        : step.status === "running" ? "text-foreground font-medium"
-        : step.status === "error"   ? "text-red-400 line-through"
-        : "text-muted-foreground/40",
-      ].join(" ")}>
-        {step.label}
-      </span>
+      {/* Image preview — appears when Design Agent streams asset-done */}
+      {step.imageUrl && step.status === "done" && (
+        <div className="ml-5 mt-1.5 mb-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={step.imageUrl}
+            alt={step.label}
+            className="rounded-lg border border-border/40 object-cover shadow-sm"
+            style={{ maxHeight: 140, maxWidth: "100%", display: "block" }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -410,6 +426,12 @@ export default function LaunchExecutionPage() {
             ...prev,
             [i]: `"${name}" created · ready in Digital Products`,
           }));
+        } else if (stage.id === "design" && results.design) {
+          const count = results.design.assetsCount ?? 0;
+          setCompletedSummaries(prev => ({
+            ...prev,
+            [i]: `${count} marketing asset${count !== 1 ? "s" : ""} generated · cover, mockup, thumbnail, social`,
+          }));
         }
       } catch (err) {
         console.error(`[pipeline] Stage ${stage.id} failed:`, err);
@@ -565,11 +587,11 @@ export default function LaunchExecutionPage() {
               <PlugZap className="w-4 h-4 text-muted-foreground/40 mt-0.5 shrink-0" />
               <div>
                 <p className="text-[12px] font-semibold text-foreground mb-0.5">
-                  Phase 1.3 — Research & Product agents live
+                  Phase 1.4 — Research, Product & Design agents live
                 </p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Research and Product are saved to the pipeline. Design, Marketing, and
-                  Store agents connect in the next phases — no UI changes needed.
+                  Research, Product, and Design assets are saved to the pipeline.
+                  Marketing and Store agents connect in the next phases — no UI changes needed.
                 </p>
               </div>
             </div>

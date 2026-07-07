@@ -17,9 +17,11 @@ import type { LaunchStageId, LaunchStatus, LaunchStageResults } from "@/db/schem
 export type AgentStepStatus = "pending" | "running" | "done" | "error";
 
 export interface AgentStep {
-  id:     string;
-  label:  string;
-  status: AgentStepStatus;
+  id:       string;
+  label:    string;
+  status:   AgentStepStatus;
+  /** Optional: when set, renders an image thumbnail below the step label (Design Agent). */
+  imageUrl?: string;
 }
 
 /* ─── Callbacks ─────────────────────────────────────────────────────────────── */

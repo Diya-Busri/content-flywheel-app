@@ -29,7 +29,16 @@ export type LaunchStageResults = {
     productName: string;
   };
   design?: {
-    bundleId: string;
+    /** Product Cover — portrait marketing image */
+    coverUrl?: string;
+    /** 3D Mockup — product on desk scene */
+    mockupUrl?: string;
+    /** Store Thumbnail — square listing image */
+    thumbnailUrl?: string;
+    /** Social Preview — square promo image */
+    socialUrl?: string;
+    /** How many assets were successfully generated */
+    assetsCount?: number;
   };
   video?: {
     libraryScriptId: string;
