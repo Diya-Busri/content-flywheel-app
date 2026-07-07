@@ -739,9 +739,9 @@ export function StoreClient({ userId }: StoreClientProps) {
                     {unpublished.length === 0 ? (
                       <div className="text-center py-8">
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Everything in your library is already published, or your library is empty.</p>
-                        <Link href="/dashboard/digital-products">
+                        <Link href="/dashboard/launch">
                           <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
-                            <Plus className="w-3.5 h-3.5" />Create something with AI
+                            <Rocket className="w-3.5 h-3.5" />Launch with AI
                           </Button>
                         </Link>
                       </div>
