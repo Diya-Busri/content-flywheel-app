@@ -224,9 +224,9 @@ async function getVideoStats(userId: string) {
 // ─── Quick-start tools ─────────────────────────────────────────────────────────
 
 const QUICKSTART_TOOLS = [
-  { href: "/dashboard/workspace",        emoji: "🔍", label: "Research",       desc: "Validate your niche and idea"       },
-  { href: "/dashboard/digital-products", emoji: "📦", label: "Create Product", desc: "AI writes your eBook or guide"       },
-  { href: "/dashboard/ai-coach",         emoji: "🤖", label: "AI Coach",       desc: "Get strategy and copy help"          },
+  { href: "/dashboard/launch",    emoji: "🚀", label: "Launch with AI", desc: "Idea → research → product → launch" },
+  { href: "/dashboard/workspace", emoji: "🔍", label: "Research",        desc: "Validate your niche and idea"       },
+  { href: "/dashboard/ai-coach",  emoji: "🤖", label: "AI Coach",        desc: "Get strategy and copy help"         },
 ];
 
 const ALL_TOOLS = [
@@ -327,17 +327,25 @@ export default async function DashboardPage() {
                   Build your first digital product 🚀
                 </h1>
                 <p className="text-white/50 mt-2 text-base max-w-lg">
-                  Follow the roadmap below — from idea to first sale — step by step.
+                  Describe your idea — AI handles research, product creation, design, and marketing automatically.
                 </p>
               </div>
-              <Link
-                href="/dashboard/digital-products"
-                className="group inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition-all hover:scale-105 shrink-0"
-              >
-                <Sparkles className="w-4 h-4" />
-                Create My First Product
-                <ArrowRight className="w-4 h-4 transition group-hover:translate-x-0.5" />
-              </Link>
+              <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+                <Link
+                  href="/dashboard/launch"
+                  className="group inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition-all hover:scale-105"
+                >
+                  <Rocket className="w-4 h-4" />
+                  Launch with AI
+                  <ArrowRight className="w-4 h-4 transition group-hover:translate-x-0.5" />
+                </Link>
+                <Link
+                  href="/dashboard/digital-products"
+                  className="text-xs text-white/40 hover:text-white/70 transition-colors underline underline-offset-2"
+                >
+                  or create manually
+                </Link>
+              </div>
             </div>
           </div>
 
