@@ -24,6 +24,7 @@ import {
 import Link from "next/link";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
 import { GrowthDashboard } from "@/components/growth/GrowthDashboard";
+import { WorkforcePanel } from "@/components/workforce/WorkforcePanel";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -472,6 +473,9 @@ export default function ProjectDashboardPage() {
           initialData={r.growth}
           productId={productId}
         />
+
+        {/* ── AI Workforce ── */}
+        <WorkforcePanel launchId={launchId} />
 
         {/* ── Project Timeline ── */}
         {timeline.length > 0 && (

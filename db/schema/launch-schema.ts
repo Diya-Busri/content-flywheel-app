@@ -144,6 +144,13 @@ export type LaunchStageResults = {
    */
   growth?: GrowthData;
   /**
+   * AI Workforce — 6 persistent workers that own ongoing responsibilities.
+   * Each worker reads existing project data, executes targeted micro-tasks,
+   * and appends results to the relevant stageResults field.
+   * Never regenerates from scratch — always improves existing assets.
+   */
+  workforce?: WorkforceData;
+  /**
    * Business Brain — post-pipeline founder review.
    * Auto-generated when workspace first loads after completion.
    * Critiques all pipeline output and surfaces prioritised recommendations.
@@ -220,6 +227,62 @@ export type GrowthData = {
   aiTasks?:       GrowthAITask[];
   feed?:          GrowthFeedItem[];
   lastCheckedAt?: string;
+};
+
+/* ─── AI Workforce types ─────────────────────────────────────────────────────── */
+
+export type WorkerId =
+  | "research"
+  | "product"
+  | "design"
+  | "marketing"
+  | "store"
+  | "growth";
+
+export type WorkerActivity = {
+  id:           string;
+  label:        string;
+  detail?:      string;
+  /** Number of new assets added to stageResults (hooks, keywords, etc.) */
+  assetsAdded?: number;
+  completedAt:  string;
+};
+
+export type WorkerState = {
+  /** User has paused this worker — it won't auto-run */
+  isPaused:       boolean;
+  /** Currently executing — guard against double-run */
+  isRunning:      boolean;
+  /** ISO of last run */
+  lastRunAt?:     string;
+  /** Human-readable description of what it's doing / last did */
+  currentTask?:   string;
+  /** What it plans to do on next run (derived from state) */
+  nextTask?:      string;
+  /** Most recent completed activity */
+  lastActivity?:  WorkerActivity;
+  /** Chronological log — newest first, capped at 20 */
+  history:        WorkerActivity[];
+  /** Design worker: queued briefs the user hasn't generated yet */
+  designBriefs?: Array<{
+    id:          string;
+    type:        "thumbnail" | "social" | "cover" | "mockup";
+    description: string;
+    style:       string;
+    queuedAt:    string;
+  }>;
+  /** Product worker: improvement suggestions */
+  productSuggestions?: Array<{
+    id:       string;
+    area:     string;
+    priority: "high" | "medium" | "low";
+    detail:   string;
+    addedAt:  string;
+  }>;
+};
+
+export type WorkforceData = {
+  workers: Partial<Record<WorkerId, WorkerState>>;
 };
 
 export const launchProjectsTable = pgTable("launch_projects", {
