@@ -1517,44 +1517,83 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
         </div>
       )}
 
-      <div className="max-w-3xl mx-auto p-6 md:p-10 pb-24">
-        {/* Resume banner — non-blocking, replaces the old blocking modal */}
-        {showResumeModal && (
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-orange-500/40 bg-orange-500/10 px-4 py-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Play className="h-4 w-4 shrink-0 text-orange-500" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">
-                  {savedProductId ? "Product in progress" : `Discovery in progress — Step ${step} of 7`}
+      {/* Resume or Start Fresh modal */}
+      <Dialog open={showResumeModal} onOpenChange={(open) => !open && setShowResumeModal(false)}>
+        <DialogContent className="max-w-[600px] border-border bg-card text-foreground" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="text-xl text-foreground">Welcome back!</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {savedProductId
+                ? "You have a product in progress. Open it in the editor or start a new discovery."
+                : "You have an in-progress discovery session. Continue where you left off or start fresh."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <button
+              type="button"
+              onClick={handleResume}
+              className="flex w-full items-start gap-4 rounded-lg border-2 border-orange-500 bg-muted p-5 text-left transition-all hover:border-orange-500 hover:bg-orange-500/10 hover:-translate-y-0.5"
+            >
+              <Play className="h-8 w-8 shrink-0 text-orange-500" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-foreground">{savedProductId ? "Open in editor" : "Continue where you left off"}</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {savedProductId ? "Go directly to the product editor to finish designing your product." : "Resume with all your generated content and progress saved."}
                 </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {savedProductId && selectedProduct
-                    ? selectedProduct.name
-                    : selectedNiche
-                    ? `${selectedNiche.name}${selectedProduct ? ` · ${selectedProduct.name}` : ""}`
-                    : interests.trim().slice(0, 50) || "Previous session"}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  • Step {step} of 6
+                  <br />
+                  • {allNiches.length} niches explored
+                  {selectedNiche ? (
+                    <>
+                      <br />• Selected: {selectedNiche.name}
+                    </>
+                  ) : null}
+                  {selectedProduct ? (
+                    <>
+                      <br />• Product: {selectedProduct.name}
+                    </>
+                  ) : null}
+                  {productFormat ? (
+                    <>
+                      <br />• Format: {productFormat}
+                    </>
+                  ) : null}
+                  <br />• All selections preserved
+                  {interests.trim().slice(0, 30) ? (
+                    <>
+                      <br />• &ldquo;{interests.trim().slice(0, 30)}…&rdquo;
+                    </>
+                  ) : null}
                 </p>
               </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={handleResume}>
-                {savedProductId ? "Open in editor" : "Continue"}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-muted-foreground hover:text-red-400"
-                onClick={() => {
-                  if (typeof window !== "undefined" && window.confirm("Discard previous progress and start fresh?")) {
-                    handleStartFresh();
-                  }
-                }}
-              >
-                Discard
-              </Button>
-            </div>
+            </button>
+            <div className="text-center text-xs text-muted-foreground">or</div>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined" && window.confirm("Start fresh? Your previous discovery progress will be deleted.")) {
+                  handleStartFresh();
+                }
+              }}
+              className="flex w-full items-start gap-4 rounded-lg border-2 border-border bg-muted p-5 text-left transition-all hover:border-muted-foreground/50 hover:bg-muted"
+            >
+              <Sparkles className="h-8 w-8 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-foreground">Start fresh</div>
+                <p className="mt-1 text-sm text-muted-foreground">Begin a new discovery session (previous work will be deleted).</p>
+              </div>
+            </button>
           </div>
-        )}
+          <DialogFooter className="sm:justify-start">
+            <Button variant="ghost" className="text-muted-foreground" onClick={() => router.push("/dashboard/digital-products")}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="max-w-3xl mx-auto p-6 md:p-10 pb-24">
         {/* Top nav: Dashboard + Digital Products so main app nav is discoverable */}
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-sm">
           <Link href="/dashboard" className="text-muted-foreground hover:text-orange-500 transition-colors">

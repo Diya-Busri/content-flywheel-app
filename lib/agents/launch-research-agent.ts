@@ -92,13 +92,29 @@ export async function runLaunchResearchAgent(ctx: ExecutionContext): Promise<voi
   });
 
   if (!res.ok || !res.body) {
-    throw new Error(`Research API returned ${res.status}`);
+    // Extract a human-readable error from the response body
+    let errMsg = `Research service error (${res.status})`;
+    try {
+      const errText = await res.text();
+      const parsed = JSON.parse(errText) as { error?: string };
+      if (parsed.error) errMsg = parsed.error;
+    } catch { /* use default */ }
+
+    // Map common HTTP codes to actionable messages
+    if (res.status === 429) errMsg = errMsg.includes("Daily") || errMsg.includes("daily")
+      ? errMsg
+      : `Rate limit reached — please wait a moment and try again`;
+    if (res.status === 401) errMsg = "Authentication error — please refresh the page";
+    if (res.status === 503) errMsg = "AI service not available — check that OPENAI_API_KEY is set";
+
+    throw new Error(errMsg);
   }
 
   const reader  = res.body.getReader();
   const decoder = new TextDecoder();
-  let buf    = "";
+  let buf              = "";
   let report: Record<string, unknown> | null = null;
+  let synthesisStarted = false;
 
   /* ── Read NDJSON stream ── */
   streamLoop: while (true) {
@@ -152,6 +168,7 @@ export async function runLaunchResearchAgent(ctx: ExecutionContext): Promise<voi
         }
 
         case "synthesis-start": {
+          synthesisStarted = true;
           updateStep("synthesis", "running", "Generating executive summary...");
           callbacks.onProgress(83, "Synthesising all research data...");
           break;
@@ -207,6 +224,9 @@ export async function runLaunchResearchAgent(ctx: ExecutionContext): Promise<voi
   }
 
   if (!report) {
-    throw new Error("Research stream ended without completing");
+    if (synthesisStarted) {
+      throw new Error("Research synthesis timed out — the AI is taking longer than expected. Please retry.");
+    }
+    throw new Error("Research interrupted before synthesis could start. Please retry.");
   }
 }

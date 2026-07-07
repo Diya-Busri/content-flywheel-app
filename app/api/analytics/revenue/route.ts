@@ -6,10 +6,7 @@ import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { productViewsTable } from "@/db/schema/product-views-schema";
 import { emailContactsTable } from "@/db/schema/email-marketing-schema";
-import { productWishlistsTable } from "@/db/schema/product-wishlists-schema";
-import { creatorFollowsTable } from "@/db/schema/creator-follows-schema";
-import { productReviewsTable } from "@/db/schema/product-reviews-schema";
-import { eq, and, sql, desc, gte, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, desc, gte, inArray } from "drizzle-orm";
 
 function daysAgo(n: number): Date {
   const d = new Date();
@@ -148,35 +145,14 @@ export async function GET(req: NextRequest) {
 
     const recentOrders = allOrdersMapped.slice(0, 20);
 
-    // Product performance: views, orders, revenue, wishlist saves, avg rating, CVR
-    let conversionFunnel: Array<{
-      productId: string; title: string; views: number; orders: number;
-      revenueCents: number; wishlistSaves: number; avgRating: number | null;
-    }> = [];
-    let totalViews = 0;
-    let totalWishlistSaves = 0;
-    let overallAvgRating: number | null = null;
-    let followerCount = 0;
-
+    // Conversion funnel: published products with views and orders for the period
+    let conversionFunnel: Array<{ productId: string; title: string; views: number; orders: number; revenueCents: number }> = [];
     try {
-      // Follower count for this creator
-      const [followRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(creatorFollowsTable)
-        .where(eq(creatorFollowsTable.followedId, userId));
-      followerCount = followRow?.count ?? 0;
-    } catch { /* non-fatal */ }
-
-    try {
-      // All published, non-deleted, non-archived products for this creator
+      // All published products for this creator
       const creatorProducts = await db
         .select({ id: productsTable.id, title: productsTable.title })
         .from(productsTable)
-        .where(and(
-          eq(productsTable.userId, userId),
-          isNull(productsTable.deletedAt),
-          isNull(productsTable.archivedAt),
-        ));
+        .where(and(eq(productsTable.userId, userId), eq(productsTable.status, "published")));
 
       if (creatorProducts.length > 0) {
         const creatorProductIds = creatorProducts.map((p) => p.id);
@@ -192,63 +168,23 @@ export async function GET(req: NextRequest) {
               .where(inArray(productViewsTable.productId, creatorProductIds))
               .groupBy(productViewsTable.productId);
 
-        // Wishlist saves per product (all-time)
-        const wishlistQuery = db.select({
-            productId: productWishlistsTable.productId,
-            cnt: sql<number>`count(*)::int`,
-          })
-          .from(productWishlistsTable)
-          .where(inArray(productWishlistsTable.productId, creatorProductIds))
-          .groupBy(productWishlistsTable.productId);
-
-        // Avg rating per product (approved reviews only)
-        const ratingsQuery = db.select({
-            productId: productReviewsTable.productId,
-            avgRating: sql<number>`round(avg(${productReviewsTable.rating})::numeric, 1)::float`,
-            reviewCount: sql<number>`count(*)::int`,
-          })
-          .from(productReviewsTable)
-          .where(and(
-            inArray(productReviewsTable.productId, creatorProductIds),
-            eq(productReviewsTable.approved, true),
-          ))
-          .groupBy(productReviewsTable.productId);
-
-        const [viewCounts, wishlistCounts, ratingRows] = await Promise.all([viewQuery, wishlistQuery, ratingsQuery]);
-
-        const viewMap      = new Map(viewCounts.map((r) => [r.productId, Number(r.cnt)]));
-        const wishlistMap  = new Map(wishlistCounts.map((r) => [r.productId, Number(r.cnt)]));
-        const ratingsMap   = new Map(ratingRows.map((r) => [r.productId, Number(r.avgRating)]));
+        const viewCounts = await viewQuery;
+        const viewMap = new Map(viewCounts.map((r) => [r.productId, Number(r.cnt)]));
 
         conversionFunnel = creatorProducts
           .map((p) => {
             const orderData = productTotals.get(p.id) ?? { orders: 0, revenueCents: 0 };
             return {
-              productId:    p.id,
-              title:        p.title,
-              views:        viewMap.get(p.id) ?? 0,
-              orders:       orderData.orders,
+              productId: p.id,
+              title: p.title,
+              views: viewMap.get(p.id) ?? 0,
+              orders: orderData.orders,
               revenueCents: orderData.revenueCents,
-              wishlistSaves: wishlistMap.get(p.id) ?? 0,
-              avgRating:    ratingsMap.get(p.id) ?? null,
             };
           })
-          .filter((p) => p.views > 0 || p.orders > 0 || p.wishlistSaves > 0)
+          .filter((p) => p.views > 0 || p.orders > 0)
           .sort((a, b) => b.views - a.views)
-          .slice(0, 20);
-
-        // Aggregate totals
-        totalViews         = Array.from(viewMap.values()).reduce((s, v) => s + v, 0);
-        totalWishlistSaves = Array.from(wishlistMap.values()).reduce((s, v) => s + v, 0);
-
-        // Overall avg rating (weighted by review count)
-        if (ratingRows.length > 0) {
-          const totalReviews = ratingRows.reduce((s, r) => s + r.reviewCount, 0);
-          if (totalReviews > 0) {
-            const weightedSum = ratingRows.reduce((s, r) => s + r.avgRating * r.reviewCount, 0);
-            overallAvgRating = Math.round((weightedSum / totalReviews) * 10) / 10;
-          }
-        }
+          .slice(0, 10);
       }
     } catch {
       // Non-fatal — funnel is a nice-to-have
@@ -319,11 +255,6 @@ export async function GET(req: NextRequest) {
       subscriberCount,
       dailySubscribers,
       conversionFunnel,
-      // New Phase E fields
-      totalViews,
-      followerCount,
-      totalWishlistSaves,
-      overallAvgRating,
     });
   } catch (err) {
     console.error("[analytics/revenue] GET error:", err);

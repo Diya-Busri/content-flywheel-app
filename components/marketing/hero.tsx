@@ -60,7 +60,7 @@ export function Hero() {
             variants={itemVariants}
             className="text-xs font-semibold uppercase tracking-wider text-white/60"
           >
-            Private beta, built for creators and founder-led teams
+            Private beta — built for creators & founder-led teams
           </motion.p>
 
           <motion.h1
@@ -85,7 +85,7 @@ export function Hero() {
             className="mt-6 max-w-xl text-pretty text-base leading-relaxed text-white/70 sm:text-lg"
           >
             Capture insights, repurpose into platform-native posts, and ship on a
-            consistent cadence, without spreadsheets or a content calendar you’ll
+            consistent cadence—without spreadsheets or a content calendar you’ll
             abandon.
           </motion.p>
 

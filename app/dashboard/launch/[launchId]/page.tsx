@@ -22,7 +22,7 @@ import {
   Sparkles, Package, Palette, Megaphone, Store,
   CheckCircle2, XCircle, Loader2, ChevronLeft,
   Clock, PlugZap, ChevronDown, ChevronUp,
-  AlertTriangle, Rocket,
+  AlertTriangle, Rocket, RefreshCw,
 } from "lucide-react";
 
 import { runLaunchResearchAgent }   from "@/lib/agents/launch-research-agent";
@@ -363,17 +363,21 @@ function ReadinessScorePanel({ score, checks }: { score: number; checks: Validat
    AGENT CARD
 ══════════════════════════════════════════════════════════ */
 interface AgentCardProps {
-  stage:         StageConfig;
-  status:        AgentStatus;
-  steps:         AgentStep[];    // only shown when working
-  agentProgress: number;         // 0-100, only shown when working
-  progressLabel: string;
-  isNextUp:      boolean;        // slight visual hint for the next pending agent
+  stage:           StageConfig;
+  status:          AgentStatus;
+  steps:           AgentStep[];    // only shown when working
+  agentProgress:   number;         // 0-100, only shown when working
+  progressLabel:   string;
+  isNextUp:        boolean;        // slight visual hint for the next pending agent
   completeSummary?: string;
+  errorMessage?:   string;
+  onRetry?:        () => void;
+  isRetrying?:     boolean;
 }
 
 function AgentCard({
   stage, status, steps, agentProgress, progressLabel, isNextUp, completeSummary,
+  errorMessage, onRetry, isRetrying,
 }: AgentCardProps) {
   const [stepsExpanded, setStepsExpanded] = useState(true);
 
@@ -431,7 +435,22 @@ function AgentCard({
             </p>
           )}
           {isError && (
-            <p className="text-[11px] text-red-400 mt-0.5">Failed — check console for details</p>
+            <div className="mt-1 space-y-2">
+              <p className="text-[11px] text-red-400 leading-snug">
+                {errorMessage ?? "Agent failed — please retry"}
+              </p>
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  disabled={isRetrying}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[11px] font-semibold text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRetrying
+                    ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying…</>
+                    : <><RefreshCw className="w-3 h-3" />Retry {stage.agentLabel}</>}
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -524,6 +543,10 @@ export default function LaunchExecutionPage() {
   const [storeScore,     setStoreScore]     = useState<number>(0);
   const [storeProductId, setStoreProductId] = useState<string>("");
   const [storeUrl,       setStoreUrl]       = useState<string>("");
+
+  /* ── Per-stage error messages ── */
+  const [stageErrors,  setStageErrors]  = useState<Record<number, string>>({});
+  const [retryingIdx,  setRetryingIdx]  = useState<number | null>(null);
 
   /* ── Overall progress ── */
   const [overallPct, setOverallPct] = useState<number>(0);
@@ -638,6 +661,9 @@ export default function LaunchExecutionPage() {
       };
 
       try {
+        // Clear any previous error for this stage on retry
+        setStageErrors(prev => { const n = { ...prev }; delete n[i]; return n; });
+
         await stage.execute(ctx);
 
         /* Stage complete */
@@ -685,12 +711,55 @@ export default function LaunchExecutionPage() {
           }));
         }
       } catch (err) {
-        console.error(`[pipeline] Stage ${stage.id} failed:`, err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[pipeline] Stage ${stage.id} failed:`, msg);
         setAgentStatuses(prev => prev.map((s, idx) => idx === i ? "error" : s));
+        setStageErrors(prev => ({ ...prev, [i]: msg }));
+        // Persist failed status to DB so page reloads show correct state
+        await fetch(`/api/launch/${launchId}`, {
+          method:  "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ status: "failed" }),
+        }).catch(() => {});
         break;
       }
     }
   }, [buildSaveProgress]);
+
+  /* ── Retry a failed stage (and everything downstream) ── */
+  const retryFromStage = useCallback(async (fromIdx: number) => {
+    setRetryingIdx(fromIdx);
+    setStageErrors(prev => { const n = { ...prev }; delete n[fromIdx]; return n; });
+
+    try {
+      // Re-fetch project to get latest stageResults
+      const res = await fetch(`/api/launch/${launchId}`);
+      if (!res.ok) throw new Error("Could not reload project");
+      const freshProj = await res.json() as LaunchProject;
+      setProject(freshProj);
+
+      // Restore running status so the header badge updates
+      await fetch(`/api/launch/${launchId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ status: "running" }),
+      }).catch(() => {});
+      setOverallStatus("running");
+
+      // Reset statuses from the retry point onward (keep completed stages intact)
+      setAgentStatuses(prev => prev.map((s, idx) =>
+        idx === fromIdx ? "waiting" : idx > fromIdx && s !== "complete" ? "waiting" : s
+      ));
+
+      await runPipeline(freshProj);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[retry]", msg);
+      setStageErrors(prev => ({ ...prev, [fromIdx]: msg }));
+    } finally {
+      setRetryingIdx(null);
+    }
+  }, [launchId, runPipeline]);
 
   /* ── Load project + kick off pipeline ── */
   useEffect(() => {
@@ -834,6 +903,9 @@ export default function LaunchExecutionPage() {
                   progressLabel={i === activeIdx ? agentPLabel : ""}
                   isNextUp={isNextUp}
                   completeSummary={completedSummaries[i]}
+                  errorMessage={stageErrors[i]}
+                  onRetry={status === "error" ? () => void retryFromStage(i) : undefined}
+                  isRetrying={retryingIdx === i}
                 />
                 {showFolders && (
                   <MarketingFolderView items={marketingFolderItems} />

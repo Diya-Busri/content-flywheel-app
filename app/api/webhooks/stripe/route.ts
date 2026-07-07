@@ -12,7 +12,6 @@ import { emailSequencesTable, emailSequenceStepsTable } from "@/db/schema/email-
 import { emailSequenceEnrollmentsTable } from "@/db/schema/email-sequence-enrollments-schema";
 import { deliverWebhooks } from "@/lib/deliver-webhook";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
-import { promoCodesTable } from "@/db/schema/promo-codes-schema";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { affiliateLinksTable, affiliateCommissionsTable } from "@/db/schema/affiliate-links-schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
@@ -176,16 +175,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       billingCycleEnd,
       ...trialFields,
     });
-  }
-
-  // Increment platform promo code usedCount if one was applied
-  const promoCode = session.metadata?.promoCode;
-  if (promoCode) {
-    await db
-      .update(promoCodesTable)
-      .set({ usedCount: sql`${promoCodesTable.usedCount} + 1` })
-      .where(eq(promoCodesTable.code, promoCode))
-      .catch((err) => console.warn("[stripe-webhook] Failed to increment promo usedCount:", err));
   }
 }
 

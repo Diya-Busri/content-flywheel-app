@@ -18,8 +18,8 @@ function scrollToSection(id: string) {
 const NAV_LINKS = [
   { label: "Features", id: "features", href: "/#features" },
   { label: "How it Works", id: "how-it-works", href: "/#how-it-works" },
-  { label: "Marketplace", id: null, href: "/marketplace" },
   { label: "Pricing", id: null, href: "/pricing" },
+  { label: "Community", id: null, href: "https://www.skool.com/content-flywheel-7716", external: true },
 ];
 
 export function LandingNavbar() {

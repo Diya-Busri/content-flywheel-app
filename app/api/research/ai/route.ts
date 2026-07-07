@@ -4,7 +4,7 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // Vercel Pro — 60 s for streaming research
+export const maxDuration = 120; // Vercel Pro — 120 s for streaming research (synthesis needs 30-50s alone)
 
 // ─── Type-specific focus instructions ────────────────────────────────────────
 
@@ -1043,10 +1043,10 @@ Use the above real research data to generate a comprehensive, specific, and grou
         },
       ],
       temperature: 0.7,
-      max_tokens: 5_000,
+      max_tokens: 3_500,
       response_format: { type: "json_object" },
     }),
-    signal: AbortSignal.timeout(50_000),
+    signal: AbortSignal.timeout(40_000),
   });
 
   if (!res.ok) {

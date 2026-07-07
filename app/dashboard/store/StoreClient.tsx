@@ -37,8 +37,6 @@ import {
   Star,
   Zap,
   UserPlus,
-  Heart,
-  UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -79,19 +77,11 @@ type RecentOrder = {
 };
 type DayRevenue = { date: string; cents: number; orders: number };
 type TopProduct = { productId: string; title: string; orders: number; revenueCents: number };
-type ProductPerformance = {
-  productId: string; title: string; views: number; orders: number;
-  revenueCents: number; wishlistSaves: number; avgRating: number | null;
-};
 interface AnalyticsData {
   totalRevenueCents: number; totalOrders: number;
   last30DaysRevenueCents: number; last30DaysOrders: number;
   dailyRevenue: DayRevenue[]; topProducts: TopProduct[];
   recentOrders: RecentOrder[]; subscriberCount: number;
-  // Phase E additions
-  totalViews: number; followerCount: number;
-  totalWishlistSaves: number; overallAvgRating: number | null;
-  conversionFunnel: ProductPerformance[];
 }
 interface Customer {
   email: string; name: string | null; totalCents: number;
@@ -1222,54 +1212,11 @@ export function StoreClient({ userId }: StoreClientProps) {
               <div className="flex items-center justify-center py-14"><Loader2 className="w-6 h-6 animate-spin text-orange-600" /></div>
             ) : (
               <>
-                {/* ── Top-line metrics ── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <StatCard label="All Time Revenue" value={formatPrice(analytics?.totalRevenueCents ?? 0)} accent />
-                  <StatCard label="Total Orders"     value={String(analytics?.totalOrders ?? 0)} />
-                  <StatCard label="Last 30 Days"     value={formatPrice(analytics?.last30DaysRevenueCents ?? 0)} accent />
-                  <StatCard label="30-Day Orders"    value={String(analytics?.last30DaysOrders ?? 0)} />
-                </div>
-
-                {/* ── Platform engagement metrics ── */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0">
-                      <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">{(analytics?.totalViews ?? 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Total Views</p>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center shrink-0">
-                      <Heart className="w-4 h-4 text-rose-500" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">{(analytics?.totalWishlistSaves ?? 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Wishlist Saves</p>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center shrink-0">
-                      <UserCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">{(analytics?.followerCount ?? 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Followers</p>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] p-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center shrink-0">
-                      <Star className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {analytics?.overallAvgRating != null ? `${analytics.overallAvgRating} ★` : "—"}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Avg Rating</p>
-                    </div>
-                  </div>
+                  <StatCard label="Total Orders" value={String(analytics?.totalOrders ?? 0)} />
+                  <StatCard label="Last 30 Days" value={formatPrice(analytics?.last30DaysRevenueCents ?? 0)} accent />
+                  <StatCard label="30-Day Orders" value={String(analytics?.last30DaysOrders ?? 0)} />
                 </div>
 
                 {analytics?.dailyRevenue && analytics.dailyRevenue.length > 0 && (
@@ -1344,57 +1291,8 @@ export function StoreClient({ userId }: StoreClientProps) {
                   </div>
                 )}
 
-                {/* ── Product Performance Table ── */}
-                {analytics?.conversionFunnel && analytics.conversionFunnel.length > 0 && (
-                  <div className="rounded-2xl bg-gray-50 dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-200 dark:border-[#2A2A2A]">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Product Performance</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Views, sales, revenue, wishlists, rating, and conversion rate per product</p>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide border-b border-gray-200 dark:border-[#2A2A2A] bg-gray-50 dark:bg-[#111]">
-                            <th className="text-left px-5 py-3 font-semibold">Product</th>
-                            <th className="text-right px-4 py-3 font-semibold">Views</th>
-                            <th className="text-right px-4 py-3 font-semibold">Sales</th>
-                            <th className="text-right px-4 py-3 font-semibold hidden md:table-cell">Revenue</th>
-                            <th className="text-right px-4 py-3 font-semibold hidden lg:table-cell">
-                              <Heart className="w-3 h-3 inline-block mr-0.5 text-rose-400" />Saves
-                            </th>
-                            <th className="text-right px-4 py-3 font-semibold hidden lg:table-cell">Rating</th>
-                            <th className="text-right px-5 py-3 font-semibold">CVR</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-[#2A2A2A]">
-                          {analytics.conversionFunnel.map((p) => {
-                            const cvr = p.views > 0 ? ((p.orders / p.views) * 100).toFixed(1) : null;
-                            return (
-                              <tr key={p.productId} className="hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
-                                <td className="px-5 py-3.5 text-gray-800 dark:text-gray-200 truncate max-w-[160px] font-medium">{p.title}</td>
-                                <td className="px-4 py-3.5 text-right text-gray-600 dark:text-gray-400">{p.views.toLocaleString()}</td>
-                                <td className="px-4 py-3.5 text-right text-gray-600 dark:text-gray-400">{p.orders}</td>
-                                <td className="px-4 py-3.5 text-right text-orange-600 dark:text-orange-400 font-semibold hidden md:table-cell">{formatPrice(p.revenueCents)}</td>
-                                <td className="px-4 py-3.5 text-right text-rose-500 hidden lg:table-cell">{p.wishlistSaves > 0 ? `❤️ ${p.wishlistSaves}` : "—"}</td>
-                                <td className="px-4 py-3.5 text-right text-amber-600 dark:text-amber-400 hidden lg:table-cell">{p.avgRating != null ? `${p.avgRating} ★` : "—"}</td>
-                                <td className="px-5 py-3.5 text-right">
-                                  {cvr != null ? (
-                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${parseFloat(cvr) >= 3 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : parseFloat(cvr) >= 1 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}>
-                                      {cvr}%
-                                    </span>
-                                  ) : <span className="text-gray-400 text-xs">—</span>}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {(!analytics?.totalOrders || analytics.totalOrders === 0) && (analytics?.totalViews ?? 0) === 0 && (
-                  <EmptyState icon={TrendingUp} title="No data yet" subtitle="Your analytics will appear here once your store starts getting views and sales." />
+                {(!analytics?.totalOrders || analytics.totalOrders === 0) && (
+                  <EmptyState icon={TrendingUp} title="No sales data yet" subtitle="Your analytics will appear here once you make your first sale." />
                 )}
               </>
             )}
