@@ -377,7 +377,7 @@ export default function DigitalProductsLanding() {
         {/* ── Start creating ── */}
         <div className="mb-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* I Know What I Want */}
+            {/* I Know What I Want — marketing content for existing product */}
             <Link
               href="/dashboard/digital-products/create"
               className="group flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-6 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
@@ -390,15 +390,14 @@ export default function DigitalProductsLanding() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="font-semibold text-gray-900 dark:text-white">I Know What I Want</p>
-                  <span className="text-[10px] font-bold uppercase tracking-wide bg-orange-500 text-white px-1.5 py-0.5 rounded-full shrink-0">Recommended</span>
+                  <p className="font-semibold text-gray-900 dark:text-white">Create Marketing Content</p>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  You have a topic in mind. Type it and AI builds your product in minutes — no design skills needed.
+                  Already have a product file? Upload it and AI generates video scripts, captions, and marketing copy for it.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["Has an idea", "Knows their niche"].map((tag) => (
+                {["Has a file ready", "Wants marketing assets"].map((tag) => (
                   <span key={tag} className="text-[11px] font-medium bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2.5 py-1 rounded-full">
                     {tag}
                   </span>
