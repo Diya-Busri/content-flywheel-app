@@ -170,6 +170,12 @@ export type LaunchStageResults = {
    */
   marketingDept?: MarketingDepartment;
   /**
+   * Analytics Intelligence — AI analyst that learns from every published post.
+   * Collects platform metrics, generates qualitative insights, and produces
+   * daily intelligence reports. Every insight feeds into Business Memory.
+   */
+  analyticsDept?: AnalyticsDepartment;
+  /**
    * Business Brain — post-pipeline founder review.
    * Auto-generated when workspace first loads after completion.
    * Critiques all pipeline output and surfaces prioritised recommendations.
@@ -500,6 +506,136 @@ export type MarketingDepartment = {
   /** Denormalised connection status cache (source of truth is connected_accounts table) */
   connections?: Partial<Record<MarketingManagerId, PlatformConnectionStatus>>;
   lastUpdated?: string;
+};
+
+/* ─── Analytics Intelligence types ──────────────────────────────────────────── */
+
+export type AnalyticsMetrics = {
+  views?:           number;
+  reach?:           number;
+  impressions?:     number;
+  /** Average watch time in seconds (video platforms) */
+  watchTime?:       number;
+  /** Retention percentage 0–100 */
+  retention?:       number;
+  likes?:           number;
+  comments?:        number;
+  shares?:          number;
+  saves?:           number;
+  /** Click-through rate percentage */
+  ctr?:             number;
+  conversions?:     number;
+  sales?:           number;
+  revenue?:         number;
+  followersGained?: number;
+  profileVisits?:   number;
+  linkClicks?:      number;
+  /** ISO timestamp of last metrics fetch */
+  lastFetched?:     string;
+};
+
+export type ContentMetadata = {
+  hook?:        string;
+  cta?:         string;
+  hashtags?:    string[];
+  thumbnail?:   string;
+  topic?:       string;
+  /** Duration in seconds for video content */
+  duration?:    number;
+  caption?:     string;
+};
+
+export type AnalyticsInsightType =
+  | "win"            // Something that performed exceptionally well
+  | "problem"        // Something that underperformed or hurt metrics
+  | "trend"          // Pattern spotted across multiple posts
+  | "anomaly"        // Surprising deviation from normal
+  | "recommendation";// Actionable next step
+
+export type AnalyticsInsight = {
+  id:          string;
+  type:        AnalyticsInsightType;
+  /** Human-readable analysis — qualitative, grounded in data */
+  text:        string;
+  /** The metric(s) supporting this insight */
+  evidence?:   string;
+  metric?:     string;
+  confidence:  "high" | "medium" | "low";
+  createdAt:   string;
+};
+
+export type RecommendationStatus = "pending" | "accepted" | "ignored" | "auto_apply";
+
+export type AnalyticsRecommendation = {
+  id:          string;
+  text:        string;
+  /** Why the AI is making this recommendation, grounded in data */
+  reasoning:   string;
+  impact:      "high" | "medium" | "low";
+  category:    "content" | "timing" | "hooks" | "cta" | "format" | "hashtags" | "topic" | "platform";
+  status:      RecommendationStatus;
+  /** Which manager this applies to, if specific */
+  managerId?:  MarketingManagerId;
+  createdAt:   string;
+  appliedAt?:  string;
+};
+
+export type PostAnalytics = {
+  id:           string;
+  managerId:    MarketingManagerId;
+  /** References PublishedItem.id in marketingDept */
+  publishedItemId: string;
+  platform:     string;
+  publishedAt:  string;
+  /** The actual content that was published */
+  content:      string;
+  metadata:     ContentMetadata;
+  metrics:      AnalyticsMetrics;
+  /** AI-generated qualitative insights for this post */
+  insights:     AnalyticsInsight[];
+  analysedAt?:  string;
+};
+
+export type IntelligenceReportSummary = {
+  postsPublished:  number;
+  totalReach:      number;
+  totalViews:      number;
+  followersGained: number;
+  sales:           number;
+  revenue:         number;
+};
+
+export type IntelligenceReportHighlight = {
+  postId:    string;
+  platform:  string;
+  reason:    string;
+  metric:    string;
+  value:     number;
+};
+
+export type DailyIntelligenceReport = {
+  id:           string;
+  /** YYYY-MM-DD */
+  date:         string;
+  summary:      IntelligenceReportSummary;
+  biggestWin?:  IntelligenceReportHighlight;
+  biggestProblem?: { postId?: string; platform?: string; description: string };
+  insights:     AnalyticsInsight[];
+  recommendations: AnalyticsRecommendation[];
+  /** Prose narrative — the "briefing" the founder reads */
+  narrative?:   string;
+  generatedAt:  string;
+};
+
+export type AnalyticsDepartment = {
+  /** All tracked posts with their metrics and AI insights */
+  posts:            PostAnalytics[];
+  /** Global recommendations across all platforms */
+  recommendations:  AnalyticsRecommendation[];
+  /** Daily intelligence reports, newest first, capped at 30 */
+  reports:          DailyIntelligenceReport[];
+  lastAnalysedAt?:  string;
+  lastReportAt?:    string;
 };
 
 /* ─── Mission Control types ──────────────────────────────────────────────────── */
