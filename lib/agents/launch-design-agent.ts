@@ -198,6 +198,7 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
               thumbnailUrl: generatedAssets.thumbnail,
               socialUrl:    generatedAssets.social,
               assetsCount,
+              completedAt:  new Date().toISOString(),
             },
           };
 

@@ -22,7 +22,7 @@ import {
   Sparkles, Package, Palette, Megaphone, Store,
   CheckCircle2, XCircle, Loader2, ChevronLeft,
   Clock, PlugZap, ChevronDown, ChevronUp,
-  AlertTriangle, ExternalLink, Copy, Rocket,
+  AlertTriangle, Rocket,
 } from "lucide-react";
 
 import { runLaunchResearchAgent }   from "@/lib/agents/launch-research-agent";
@@ -353,136 +353,11 @@ function ReadinessScorePanel({ score, checks }: { score: number; checks: Validat
 }
 
 /* ═══════════════════════════════════════════════════════════
-   BUSINESS SUMMARY PANEL
-   Shown when all agents complete.
+   NOTE: BusinessSummaryPanel removed in Phase 1.7.
+   Post-completion UI now lives at:
+     /dashboard/launch/[launchId]/workspace
+   The execution page auto-redirects there on completion.
 ══════════════════════════════════════════════════════════ */
-
-interface BusinessSummaryProps {
-  stageResults:  Record<string, unknown>;
-  storeScore:    number;
-  storeProductId: string;
-  storeUrl:      string;
-  router:        ReturnType<typeof import("next/navigation").useRouter>;
-}
-
-function BusinessSummaryPanel({
-  stageResults, storeScore, storeProductId, storeUrl, router,
-}: BusinessSummaryProps) {
-  const research  = stageResults.research  as Record<string, unknown> | undefined;
-  const product   = stageResults.product   as { productName?: string; productId?: string } | undefined;
-  const design    = stageResults.design    as { assetsCount?: number } | undefined;
-  const marketing = stageResults.marketing as Record<string, unknown> | undefined;
-
-  const insights  = (research?.insights as unknown[] | undefined)?.length ?? 0;
-  const opps      = (research?.productOpportunities as unknown[] | undefined)?.length ?? 0;
-  const carousels = (marketing?.carousels as unknown[] | undefined)?.length ?? 0;
-  const emails    = (marketing?.emails    as unknown[] | undefined)?.length ?? 0;
-  const xPosts    = (marketing?.xPosts    as unknown[] | undefined)?.length ?? 0;
-  const tiktoks   = (marketing?.tiktokHooks as unknown[] | undefined)?.length ?? 0;
-  const marketingTotal = carousels + emails + xPosts + tiktoks + 9;
-
-  const summaryItems = [
-    { emoji: "🔍", label: "Research",          detail: `${insights} insights · ${opps} opportunities found` },
-    { emoji: "✍️", label: "Product",           detail: `"${product?.productName ?? "Digital Product"}" created` },
-    { emoji: "🎨", label: "Design Assets",     detail: `${design?.assetsCount ?? 4} images generated` },
-    { emoji: "📣", label: "Marketing Campaign",detail: `${marketingTotal}+ assets — launch copy, social, email` },
-    { emoji: "🛍️",label: "Store",             detail: `Readiness ${storeScore}% · all fields populated` },
-  ];
-
-  const productId = storeProductId || (product?.productId ?? "");
-
-  const copyLink = () => {
-    if (storeUrl) void navigator.clipboard.writeText(storeUrl);
-  };
-
-  return (
-    <div className="mt-8 space-y-4">
-      {/* Celebration header */}
-      <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.03] p-5 text-center">
-        <div className="text-3xl mb-2">🎉</div>
-        <h2 className="text-[16px] font-black text-foreground mb-1">Your business is ready to launch.</h2>
-        <p className="text-[12px] text-muted-foreground">
-          Every agent has finished. Your product, design, marketing, and store are all assembled.
-        </p>
-      </div>
-
-      {/* Summary items */}
-      <div className="rounded-xl border border-border/40 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-border/40 bg-muted/10">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
-            What was built
-          </p>
-        </div>
-        <div className="divide-y divide-border/30">
-          {summaryItems.map(item => (
-            <div key={item.label} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="text-base shrink-0">{item.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-semibold text-foreground">{item.label}</p>
-                <p className="text-[11px] text-muted-foreground/70 truncate">{item.detail}</p>
-              </div>
-              <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Next Actions */}
-      <div className="rounded-xl border border-border/40 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-border/40 bg-muted/10">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
-            Next actions
-          </p>
-        </div>
-        <div className="p-3 grid grid-cols-2 gap-2">
-          {productId && (
-            <button
-              onClick={() => router.push(`/dashboard/products/${productId}`)}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
-            >
-              <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <span className="text-[12px] font-semibold text-foreground">Review Product</span>
-            </button>
-          )}
-          {productId && (
-            <button
-              onClick={() => router.push(`/dashboard/products/${productId}#publish`)}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-orange-500/30 bg-orange-500/[0.05] hover:bg-orange-500/[0.08] transition-colors text-left"
-            >
-              <Rocket className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-              <span className="text-[12px] font-semibold text-orange-500">Publish to Store</span>
-            </button>
-          )}
-          {storeUrl && (
-            <button
-              onClick={() => window.open(storeUrl, "_blank")}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <span className="text-[12px] font-semibold text-foreground">Preview Store Page</span>
-            </button>
-          )}
-          {storeUrl && (
-            <button
-              onClick={copyLink}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
-            >
-              <Copy className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <span className="text-[12px] font-semibold text-foreground">Copy Link</span>
-            </button>
-          )}
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-card/60 hover:bg-muted/40 transition-colors text-left"
-          >
-            <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <span className="text-[12px] font-semibold text-foreground">Go to Dashboard</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════════
    AGENT CARD
@@ -653,6 +528,25 @@ export default function LaunchExecutionPage() {
   /* ── Overall progress ── */
   const [overallPct, setOverallPct] = useState<number>(0);
   const [overallStatus, setOverallStatus] = useState<LaunchStatus>("queued");
+
+  /* ── Auto-redirect to workspace on pipeline completion ── */
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (overallStatus !== "completed") return;
+    setRedirectCountdown(3);
+    const interval = setInterval(() => {
+      setRedirectCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          router.push(`/dashboard/launch/${launchId}/workspace`);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [overallStatus, launchId, router]);
 
   const hasRunRef = useRef(false);
 
@@ -952,15 +846,24 @@ export default function LaunchExecutionPage() {
           })}
         </div>
 
-        {/* ── Business Summary — shown when all agents finish ── */}
+        {/* ── Pipeline complete — redirect to workspace ── */}
         {overallStatus === "completed" && (
-          <BusinessSummaryPanel
-            stageResults={project.stageResults as Record<string, unknown> ?? {}}
-            storeScore={storeScore}
-            storeProductId={storeProductId}
-            storeUrl={storeUrl}
-            router={router}
-          />
+          <div className="mt-6 rounded-2xl border border-green-500/20 bg-green-500/[0.03] p-5 text-center">
+            <div className="text-2xl mb-2">🎉</div>
+            <p className="text-[14px] font-bold text-foreground mb-1">All agents finished.</p>
+            <p className="text-[12px] text-muted-foreground mb-4">
+              {redirectCountdown !== null
+                ? `Taking you to your workspace in ${redirectCountdown}s...`
+                : "Redirecting..."}
+            </p>
+            <button
+              onClick={() => router.push(`/dashboard/launch/${launchId}/workspace`)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-[13px] font-bold text-white transition-colors"
+            >
+              <Rocket className="w-4 h-4" />
+              View Workspace
+            </button>
+          </div>
         )}
 
       </div>

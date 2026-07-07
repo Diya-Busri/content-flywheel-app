@@ -224,7 +224,10 @@ export async function runLaunchMarketingAgent(ctx: ExecutionContext): Promise<vo
           console.log(`[marketing-agent] Generated ${totalAssets} assets: ${counts.launch} launch, ${counts.social} social, ${counts.email} emails`);
 
           const stageResultsPatch: Partial<LaunchStageResults> = {
-            marketing: fullMarketing as LaunchStageResults["marketing"],
+            marketing: {
+              ...(fullMarketing as LaunchStageResults["marketing"]),
+              completedAt: new Date().toISOString(),
+            },
           };
 
           await saveProgress({

@@ -188,6 +188,7 @@ export async function runLaunchResearchAgent(ctx: ExecutionContext): Promise<voi
                 competitorInsights:   Array.isArray(report.competitorInsights)
                                         ? (report.competitorInsights as CI[]) : [],
                 fullReport:           report,
+                completedAt:          new Date().toISOString(),
               },
             },
           });

@@ -226,6 +226,7 @@ export async function runLaunchProductAgent(ctx: ExecutionContext): Promise<void
             product: {
               productId:   productId,
               productName: productName ?? goal,
+              completedAt: new Date().toISOString(),
             },
           };
 

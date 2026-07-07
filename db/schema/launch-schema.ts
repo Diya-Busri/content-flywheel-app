@@ -23,10 +23,14 @@ export type LaunchStageResults = {
     competitorInsights?: Array<{ name: string; strength: string; gap: string }>;
     /** Complete synthesis report — used by Product, Design, Marketing agents */
     fullReport?: Record<string, unknown>;
+    /** ISO timestamp when this stage completed */
+    completedAt?: string;
   };
   product?: {
     productId: string;
     productName: string;
+    /** ISO timestamp when this stage completed */
+    completedAt?: string;
   };
   design?: {
     /** Product Cover — portrait marketing image */
@@ -39,6 +43,8 @@ export type LaunchStageResults = {
     socialUrl?: string;
     /** How many assets were successfully generated */
     assetsCount?: number;
+    /** ISO timestamp when this stage completed */
+    completedAt?: string;
   };
   video?: {
     libraryScriptId: string;
@@ -75,6 +81,8 @@ export type LaunchStageResults = {
     posts?:        string[];
     emailSubject?: string;
     hashtags?:     string[];
+    /** ISO timestamp when this stage completed */
+    completedAt?: string;
   };
   store?: {
     productId:       string;
@@ -87,6 +95,8 @@ export type LaunchStageResults = {
       detail?: string;
     }>;
     publishedAt?: string;
+    /** ISO timestamp when this stage completed */
+    completedAt?: string;
   };
 };
 

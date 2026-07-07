@@ -189,6 +189,7 @@ export async function runLaunchStoreAgent(ctx: ExecutionContext): Promise<void> 
                 status:  c.status,
                 ...(c.detail ? { detail: c.detail } : {}),
               })),
+              completedAt: new Date().toISOString(),
             },
           };
 
