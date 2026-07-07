@@ -287,6 +287,24 @@ export default async function DashboardPage() {
       <Suspense fallback={null}><InviteCapture /></Suspense>
       <SyncOnboardingSteps digitalProductsCount={(videoStats as { digitalProductsCount: number }).digitalProductsCount} />
 
+      {/* ── Launch with AI banner ──────────────────────────────────────────── */}
+      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/8 to-orange-500/10 border-b border-orange-500/20 px-4 py-3 sm:px-6">
+        <div className="max-w-[1200px] mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-orange-500/15 border border-orange-500/25 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-orange-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[13px] font-bold text-foreground">Launch with AI <span className="text-[10px] font-bold text-orange-500 bg-orange-500/10 px-1.5 py-0.5 rounded-md ml-1">Beta</span></p>
+              <p className="text-[11px] text-muted-foreground hidden sm:block">Tell us your idea — AI handles Research → Product → Design → Marketing automatically</p>
+            </div>
+          </div>
+          <Link href="/dashboard/launch" className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[12px] font-bold transition-all shadow-sm shadow-orange-500/20 shrink-0">
+            <Rocket className="w-3.5 h-3.5" />Launch Now
+          </Link>
+        </div>
+      </div>
+
       {/* ════════════════════════════════════════════════════════════════════
           NEW USER — LAUNCH MODE
           ════════════════════════════════════════════════════════════════════ */}
