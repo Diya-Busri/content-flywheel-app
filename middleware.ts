@@ -57,6 +57,7 @@ const isPublicRoute = createRouteMatcher([
   "/terms",
   "/privacy",
   "/refund-policy",
+  "/cookie-policy",
   "/pricing",
   "/pay(.*)",
   "/subscribe(.*)",
@@ -65,6 +66,16 @@ const isPublicRoute = createRouteMatcher([
   "/unsubscribed",
   "/c(.*)",
   "/products(.*)",
+  /** Public marketing pages */
+  "/features",
+  "/journey",
+  "/blog(.*)",
+  "/faq",
+  "/contact",
+  "/selling-guide",
+  "/affiliates",
+  /** Public marketplace — browsable + purchasable without a creator account */
+  "/marketplace(.*)",
   /** All API routes (nested paths included); individual routes still enforce auth inside handlers. */
   "/api(.*)",
 ]);

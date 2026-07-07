@@ -2,12 +2,14 @@ import withPWA from "@ducanh2912/next-pwa";
 
 const pwa = withPWA({
   dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === "development",
   workboxOptions: {
     disableDevLogs: true,
+    // Never serve cached HTML for dashboard or API routes — always go to network
+    navigateFallbackDenylist: [/^\/dashboard/, /^\/api\//],
   },
 });
 
