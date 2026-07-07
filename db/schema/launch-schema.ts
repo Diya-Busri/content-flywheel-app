@@ -144,6 +144,12 @@ export type LaunchStageResults = {
    */
   growth?: GrowthData;
   /**
+   * Mission Control — CEO AI that coordinates the workforce daily.
+   * Generates a strategic plan with specific task assignments for workers.
+   * Updated by POST /api/projects/[launchId]/mission-control/run.
+   */
+  missionControl?: MissionControlData;
+  /**
    * AI Workforce — 6 persistent workers that own ongoing responsibilities.
    * Each worker reads existing project data, executes targeted micro-tasks,
    * and appends results to the relevant stageResults field.
@@ -283,6 +289,70 @@ export type WorkerState = {
 
 export type WorkforceData = {
   workers: Partial<Record<WorkerId, WorkerState>>;
+};
+
+/* ─── Mission Control types ──────────────────────────────────────────────────── */
+
+export type MissionFocus =
+  | "launch"
+  | "growth"
+  | "optimisation"
+  | "scaling"
+  | "maintenance";
+
+export type MissionTask = {
+  id:           string;
+  workerId:     WorkerId;
+  workerLabel:  string;
+  /** The specific instruction passed to the worker when it runs */
+  instruction:  string;
+  reason:       string;
+  priority:     "high" | "medium" | "low";
+  status:       "pending" | "running" | "done" | "skipped";
+  assignedAt:   string;
+  completedAt?: string;
+};
+
+export type MissionPlan = {
+  id:               string;
+  /** YYYY-MM-DD of the day this plan was generated */
+  date:             string;
+  focus:            MissionFocus;
+  focusReason:      string;
+  mission:          string;
+  missionReason:    string;
+  tasks:            MissionTask[];
+  estimatedImpact:  string;
+  estimatedMinutes: number;
+  generatedAt:      string;
+};
+
+export type MissionBriefing = {
+  /** Opening sentence */
+  greeting:         string;
+  /** What completed since last brief */
+  yesterday:        string[];
+  /** Today's strategic direction */
+  today:            string[];
+  estimatedMinutes: number;
+  date:             string;
+};
+
+export type MissionMemory = {
+  acceptedRecommendations: string[];
+  rejectedRecommendations: string[];
+  currentBottlenecks:      string[];
+  lastUpdated:             string;
+};
+
+export type MissionControlData = {
+  focus?:       MissionFocus;
+  currentPlan?: MissionPlan;
+  briefing?:    MissionBriefing;
+  memory?:      MissionMemory;
+  /** Last 7 daily plans, newest first */
+  planHistory?: MissionPlan[];
+  lastRunAt?:   string;
 };
 
 export const launchProjectsTable = pgTable("launch_projects", {

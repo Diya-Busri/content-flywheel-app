@@ -69,7 +69,7 @@ function parseJSON<T>(raw: string): T | null {
 
 /* ─── Worker runners ─────────────────────────────────────────────────────────── */
 
-async function runResearch(results: LaunchStageResults, goal: string): Promise<{
+async function runResearch(results: LaunchStageResults, goal: string, instruction?: string): Promise<{
   activity: Omit<WorkerActivity, "id" | "completedAt">;
   patch: Partial<LaunchStageResults>;
 }> {
@@ -85,7 +85,7 @@ PRODUCT: "${existing.productName}"
 BUSINESS GOAL: "${goal}"
 EXISTING KEYWORDS (do not duplicate): ${JSON.stringify(existing.keywords)}
 KNOWN COMPETITORS (do not duplicate): ${JSON.stringify(existing.competitors)}
-
+${instruction ? `\nFOCUS FROM MISSION CONTROL: "${instruction}"\nApply this focus to your research below.\n` : ""}
 Generate NEW research insights not already in the data above.
 
 Return ONLY valid JSON:
@@ -137,7 +137,7 @@ Rules:
   };
 }
 
-async function runMarketing(results: LaunchStageResults, goal: string): Promise<{
+async function runMarketing(results: LaunchStageResults, goal: string, instruction?: string): Promise<{
   activity: Omit<WorkerActivity, "id" | "completedAt">;
   patch: Partial<LaunchStageResults>;
 }> {
@@ -166,7 +166,7 @@ GOAL: "${goal}"
 PLATFORM: ${target.label}
 EXISTING COUNT: ${target.count} (generate NEW ones, not duplicates)
 ${results.research?.keywords?.length ? `TOP KEYWORDS: ${results.research.keywords.slice(0, 4).map(k => k.term).join(", ")}` : ""}
-
+${instruction ? `\nFOCUS FROM MISSION CONTROL: "${instruction}"\nApply this focus to the content below.\n` : ""}
 Generate ${target.n} fresh, high-converting ${target.label} for "${productName}".
 
 Return ONLY valid JSON:
@@ -234,7 +234,7 @@ Return ONLY valid JSON:
   };
 }
 
-async function runStore(results: LaunchStageResults, goal: string): Promise<{
+async function runStore(results: LaunchStageResults, goal: string, instruction?: string): Promise<{
   activity: Omit<WorkerActivity, "id" | "completedAt">;
   patch: Partial<LaunchStageResults>;
 }> {
@@ -250,7 +250,7 @@ CURRENT SEO TITLE: "${m.seoTitle ?? "not set"}"
 CURRENT META DESC: "${m.seoMetaDesc ?? "not set"}"
 CURRENT CTAs: ${JSON.stringify(m.ctas?.slice(0, 3) ?? [])}
 CURRENT FAQs: ${m.faq?.length ?? 0} FAQs
-
+${instruction ? `\nFOCUS FROM MISSION CONTROL: "${instruction}"\nApply this focus to your improvements below.\n` : ""}
 Your job is to improve the store listing quality.
 
 Return ONLY valid JSON:
@@ -294,7 +294,7 @@ Rules:
   };
 }
 
-async function runProduct(results: LaunchStageResults, goal: string): Promise<{
+async function runProduct(results: LaunchStageResults, goal: string, instruction?: string): Promise<{
   activity: Omit<WorkerActivity, "id" | "completedAt">;
   workerPatch: Partial<import("@/db/schema/launch-schema").WorkerState>;
 }> {
@@ -309,7 +309,7 @@ PRODUCT: "${productName}"
 BUSINESS GOAL: "${goal}"
 STORE READINESS: ${storeScore}/100
 ${salesCopy ? `CURRENT HEADLINE: "${salesCopy.headline}"` : "No sales copy yet."}
-${brainIssues ? `KNOWN ISSUES FROM BRAIN REVIEW:
+${instruction ? `\nFOCUS FROM MISSION CONTROL: "${instruction}"\nApply this focus to your suggestions below.\n` : ""}${brainIssues ? `KNOWN ISSUES FROM BRAIN REVIEW:
 - Product: ${brainIssues.product?.issues?.join(", ") ?? "none noted"}
 - Marketing: ${brainIssues.marketing?.issues?.join(", ") ?? "none noted"}
 - Store: ${brainIssues.store?.issues?.join(", ") ?? "none noted"}` : ""}
@@ -349,7 +349,7 @@ Rules:
   };
 }
 
-async function runDesign(results: LaunchStageResults, goal: string): Promise<{
+async function runDesign(results: LaunchStageResults, goal: string, instruction?: string): Promise<{
   activity: Omit<WorkerActivity, "id" | "completedAt">;
   workerPatch: Partial<import("@/db/schema/launch-schema").WorkerState>;
 }> {
@@ -363,7 +363,7 @@ async function runDesign(results: LaunchStageResults, goal: string): Promise<{
 PRODUCT: "${productName}"
 GOAL: "${goal}"
 EXISTING ASSETS: cover=${hasCovers}, mockup=${hasMockup}, social=${hasSocial}
-
+${instruction ? `\nFOCUS FROM MISSION CONTROL: "${instruction}"\nApply this focus to your briefs below.\n` : ""}
 Generate 2 design briefs for new marketing visuals.
 
 Return ONLY valid JSON:
@@ -433,6 +433,9 @@ export async function POST(
 
   const { launchId, workerId } = await params;
   const wid = workerId as WorkerId;
+  /* Optional instruction from Mission Control */
+  const body = await req.json().catch(() => ({})) as { instruction?: string };
+  const instruction = body.instruction as string | undefined;
 
   const VALID: WorkerId[] = ["research", "product", "design", "marketing", "store", "growth"];
   if (!VALID.includes(wid)) return NextResponse.json({ error: "Invalid worker" }, { status: 400 });
@@ -470,22 +473,22 @@ export async function POST(
     let activity: WorkerActivity;
 
     if (wid === "research") {
-      const out = await runResearch(results, project.goal);
+      const out = await runResearch(results, project.goal, instruction);
       newResults = { ...results, ...out.patch };
       activity = { id: uid(), completedAt: now, ...out.activity };
 
     } else if (wid === "marketing") {
-      const out = await runMarketing(results, project.goal);
+      const out = await runMarketing(results, project.goal, instruction);
       newResults = { ...results, ...out.patch };
       activity = { id: uid(), completedAt: now, ...out.activity };
 
     } else if (wid === "store") {
-      const out = await runStore(results, project.goal);
+      const out = await runStore(results, project.goal, instruction);
       newResults = { ...results, ...out.patch };
       activity = { id: uid(), completedAt: now, ...out.activity };
 
     } else if (wid === "product") {
-      const out = await runProduct(results, project.goal);
+      const out = await runProduct(results, project.goal, instruction);
       activity = { id: uid(), completedAt: now, ...out.activity };
       worker.productSuggestions = [
         ...(out.workerPatch.productSuggestions ?? []),
@@ -493,7 +496,7 @@ export async function POST(
       ].slice(0, 10);
 
     } else if (wid === "design") {
-      const out = await runDesign(results, project.goal);
+      const out = await runDesign(results, project.goal, instruction);
       activity = { id: uid(), completedAt: now, ...out.activity };
       worker.designBriefs = [
         ...(out.workerPatch.designBriefs ?? []),

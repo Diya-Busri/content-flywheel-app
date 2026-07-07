@@ -25,6 +25,7 @@ import Link from "next/link";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
 import { GrowthDashboard } from "@/components/growth/GrowthDashboard";
 import { WorkforcePanel } from "@/components/workforce/WorkforcePanel";
+import { MissionControlCard } from "@/components/workforce/MissionControlCard";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -466,6 +467,9 @@ export default function ProjectDashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* ── Mission Control ── */}
+        <MissionControlCard launchId={launchId} />
 
         {/* ── Growth Mode ── */}
         <GrowthDashboard
