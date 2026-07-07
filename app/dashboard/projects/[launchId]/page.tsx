@@ -3,35 +3,33 @@
  * ──────────────────────────────────────────────────────────────────────────────
  * Single Project Dashboard — persistent view of one business.
  *
- * Sections:
- *  1. Header — project name, business stage, scores, dates
- *  2. Stats row — content count, store status
- *  3. Project Timeline — derived from stageResults.*completedAt fields
- *  4. Continue Building — contextual AI actions
- *  5. Project Sections — quick links to each AI pipeline output
+ * UX principles:
+ *   1. What's happening now  → Project header + stage badge
+ *   2. What happens next     → "Continue Building" actions + section completion dots
+ *   3. What action to take   → Highlighted top recommendation
  */
 "use client";
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ChevronLeft, Loader2, FolderOpen, CheckCircle2,
-  Circle, ExternalLink, ArrowRight, Rocket, Brain,
-  TrendingUp, Package, Palette, Megaphone, Store as StoreIcon,
-  Search, RefreshCw, Film, BarChart2, Zap, Clock,
-  Star, Play, Edit3,
+  FolderOpen, CheckCircle2, Circle,
+  ExternalLink, ArrowRight, Rocket,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
-import { GrowthDashboard } from "@/components/growth/GrowthDashboard";
-import { WorkforcePanel } from "@/components/workforce/WorkforcePanel";
-import { MissionControlCard } from "@/components/workforce/MissionControlCard";
-import { NotificationPanel } from "@/components/notifications/NotificationPanel";
-import { BusinessOSDashboard } from "@/components/business-os/BusinessOSDashboard";
-import { AutonomousModeDashboard } from "@/components/autonomous/AutonomousModeDashboard";
-import { ApprovalInbox } from "@/components/autonomous/ApprovalInbox";
-import { CompanyActivityFeed } from "@/components/autonomous/CompanyActivityFeed";
-import { CEOBriefingCard } from "@/components/autonomous/CEOBriefingCard";
+import { GrowthDashboard }          from "@/components/growth/GrowthDashboard";
+import { WorkforcePanel }           from "@/components/workforce/WorkforcePanel";
+import { MissionControlCard }       from "@/components/workforce/MissionControlCard";
+import { NotificationPanel }        from "@/components/notifications/NotificationPanel";
+import { BusinessOSDashboard }      from "@/components/business-os/BusinessOSDashboard";
+import { AutonomousModeDashboard }  from "@/components/autonomous/AutonomousModeDashboard";
+import { ApprovalInbox }            from "@/components/autonomous/ApprovalInbox";
+import { CompanyActivityFeed }      from "@/components/autonomous/CompanyActivityFeed";
+import { CEOBriefingCard }          from "@/components/autonomous/CEOBriefingCard";
+import { PageHeader }               from "@/components/ui/page-header";
+import { LoadingPage }              from "@/components/ui/loading-card";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -49,12 +47,12 @@ interface LaunchProject {
 /* ─── Shared helpers ─────────────────────────────────────────────────────────── */
 
 const STAGE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  building:       { bg: "bg-muted/40",      text: "text-muted-foreground", dot: "bg-muted-foreground/40" },
-  launching:      { bg: "bg-blue-500/10",   text: "text-blue-400",         dot: "bg-blue-400" },
-  first_visitors: { bg: "bg-amber-500/10",  text: "text-amber-400",        dot: "bg-amber-400" },
-  first_sales:    { bg: "bg-orange-500/10", text: "text-orange-400",       dot: "bg-orange-400 animate-pulse" },
-  growing:        { bg: "bg-green-500/10",  text: "text-green-400",        dot: "bg-green-400" },
-  scaling:        { bg: "bg-purple-500/10", text: "text-purple-400",       dot: "bg-purple-400" },
+  building:       { bg: "bg-gray-100 dark:bg-gray-800",      text: "text-gray-500 dark:text-gray-400",    dot: "bg-gray-400" },
+  launching:      { bg: "bg-blue-50 dark:bg-blue-950/40",    text: "text-blue-600 dark:text-blue-400",    dot: "bg-blue-400" },
+  first_visitors: { bg: "bg-amber-50 dark:bg-amber-950/30",  text: "text-amber-600 dark:text-amber-400",  dot: "bg-amber-400" },
+  first_sales:    { bg: "bg-orange-50 dark:bg-orange-950/30",text: "text-orange-600 dark:text-orange-400",dot: "bg-orange-400 animate-pulse" },
+  growing:        { bg: "bg-emerald-50 dark:bg-emerald-950/30",text:"text-emerald-600 dark:text-emerald-400",dot:"bg-emerald-400" },
+  scaling:        { bg: "bg-violet-50 dark:bg-violet-950/30",text: "text-violet-600 dark:text-violet-400", dot: "bg-violet-400" },
 };
 
 const BUSINESS_STAGES = [
@@ -100,13 +98,6 @@ function countContent(r: LaunchStageResults): number {
   );
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
 function relTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
@@ -143,7 +134,6 @@ function buildTimeline(r: LaunchStageResults, launchId: string): TimelineEvent[]
       href: "/dashboard/workspace?tab=research",
     });
   }
-
   if (r.product?.completedAt) {
     events.push({
       id: "product", emoji: "📦",
@@ -152,7 +142,6 @@ function buildTimeline(r: LaunchStageResults, launchId: string): TimelineEvent[]
       href: r.product.productId ? `/dashboard/products/${r.product.productId}` : undefined,
     });
   }
-
   if (r.design?.completedAt) {
     events.push({
       id: "design", emoji: "🎨",
@@ -162,7 +151,6 @@ function buildTimeline(r: LaunchStageResults, launchId: string): TimelineEvent[]
       href: "/dashboard/design-studio",
     });
   }
-
   if (r.marketing?.completedAt) {
     events.push({
       id: "marketing", emoji: "📣",
@@ -172,7 +160,6 @@ function buildTimeline(r: LaunchStageResults, launchId: string): TimelineEvent[]
       href: "/dashboard/workspace?tab=content",
     });
   }
-
   if (r.store?.completedAt) {
     events.push({
       id: "store", emoji: "🛍️",
@@ -182,7 +169,6 @@ function buildTimeline(r: LaunchStageResults, launchId: string): TimelineEvent[]
       href: r.store.storeUrl ?? undefined,
     });
   }
-
   if (r.brain?.completedAt) {
     events.push({
       id: "brain", emoji: "🧠",
@@ -207,80 +193,35 @@ interface ContinueAction {
   highlight?: boolean;
 }
 
-function buildContinueActions(
-  r: LaunchStageResults,
-  productId: string,
-  launchId:  string,
-): ContinueAction[] {
+function buildContinueActions(r: LaunchStageResults, productId: string, launchId: string): ContinueAction[] {
   const actions: ContinueAction[] = [];
 
-  // Surface top Brain recommendation as primary action
   if (r.brain?.recommendations?.length) {
-    const topRec = r.brain.recommendations.find(r => r.priority === "high") ?? r.brain.recommendations[0];
+    const topRec = r.brain.recommendations.find(rec => rec.priority === "high") ?? r.brain.recommendations[0];
     actions.push({
-      id:        "top_rec",
-      emoji:     "⚡",
-      label:     topRec.title,
-      detail:    "Top recommendation from Business Brain",
-      href:      topRec.actionHref?.replace("[id]", productId) ?? `/dashboard/launch/${launchId}/workspace`,
+      id: "top_rec", emoji: "⚡",
+      label: topRec.title,
+      detail: "Top recommendation from Business Brain",
+      href: topRec.actionHref?.replace("[id]", productId) ?? `/dashboard/launch/${launchId}/workspace`,
       highlight: true,
     });
   }
 
-  // Core continue-building actions
   if (productId) {
-    actions.push({
-      id: "improve_product", emoji: "📦",
-      label: "Improve Product",
-      detail: "Edit content, pricing, or structure",
-      href: `/dashboard/products/${productId}`,
-    });
+    actions.push({ id: "improve_product", emoji: "📦", label: "Improve Product", detail: "Edit content, pricing, or structure", href: `/dashboard/products/${productId}` });
   }
 
-  actions.push({
-    id: "more_marketing", emoji: "📣",
-    label: "Generate More Marketing",
-    detail: "More hooks, carousels, and posts",
-    href: "/dashboard/workspace?tab=content",
-  });
+  actions.push({ id: "more_marketing", emoji: "📣", label: "Generate More Marketing", detail: "More hooks, carousels, and posts", href: "/dashboard/workspace?tab=content" });
 
   if (r.store?.productId) {
-    actions.push({
-      id: "improve_store", emoji: "🛍️",
-      label: "Improve Store",
-      detail: "Update headline, description, or SEO",
-      href: productId ? `/dashboard/products/${productId}#publish` : "/dashboard/store",
-    });
+    actions.push({ id: "improve_store", emoji: "🛍️", label: "Improve Store", detail: "Update headline, description, or SEO", href: productId ? `/dashboard/products/${productId}#publish` : "/dashboard/store" });
   }
 
-  actions.push({
-    id: "rerun_brain", emoji: "🧠",
-    label: "Run Business Brain Again",
-    detail: "Get fresh recommendations after improvements",
-    href: `/dashboard/launch/${launchId}/workspace`,
-  });
-
-  actions.push({
-    id: "research_again", emoji: "🔍",
-    label: "Analyse Competition Again",
-    detail: "Check if market conditions have changed",
-    href: "/dashboard/workspace?tab=research",
-  });
-
-  actions.push({
-    id: "seo", emoji: "🔎",
-    label: "Improve SEO",
-    detail: "Find new keywords and ranking opportunities",
-    href: "/dashboard/workspace?tab=research",
-  });
+  actions.push({ id: "rerun_brain", emoji: "🧠", label: "Run Business Brain Again", detail: "Get fresh recommendations after improvements", href: `/dashboard/launch/${launchId}/workspace` });
+  actions.push({ id: "research_again", emoji: "🔍", label: "Analyse Competition Again", detail: "Check if market conditions have changed", href: "/dashboard/workspace?tab=research" });
 
   if (productId) {
-    actions.push({
-      id: "video", emoji: "🎬",
-      label: "Create Product Video",
-      detail: "Turn your product into a video guide",
-      href: `/dashboard/video-guide/new`,
-    });
+    actions.push({ id: "video", emoji: "🎬", label: "Create Product Video", detail: "Turn your product into a video guide", href: `/dashboard/video-guide/new` });
   }
 
   return actions.slice(0, 6);
@@ -289,53 +230,104 @@ function buildContinueActions(
 /* ─── Section quick links ────────────────────────────────────────────────────── */
 
 interface SectionLink {
-  id:     string;
-  emoji:  string;
-  label:  string;
-  done:   boolean;
-  href?:  string;
+  id:       string;
+  emoji:    string;
+  label:    string;
+  done:     boolean;
+  href?:    string;
   external?: boolean;
 }
 
-function buildSectionLinks(
-  r: LaunchStageResults,
-  productId: string,
-  storeUrl:  string,
-  launchId:  string,
-): SectionLink[] {
+function buildSectionLinks(r: LaunchStageResults, productId: string, storeUrl: string, launchId: string): SectionLink[] {
   return [
-    {
-      id: "research", emoji: "🔍", label: "Research",
-      done: !!r.research,
-      href: "/dashboard/workspace?tab=research",
-    },
-    {
-      id: "product", emoji: "📦", label: "Product",
-      done: !!r.product,
-      href: productId ? `/dashboard/products/${productId}` : undefined,
-    },
-    {
-      id: "design", emoji: "🎨", label: "Design Assets",
-      done: !!r.design,
-      href: "/dashboard/design-studio",
-    },
-    {
-      id: "marketing", emoji: "📣", label: "Marketing Content",
-      done: !!r.marketing,
-      href: "/dashboard/workspace?tab=content",
-    },
-    {
-      id: "store", emoji: "🛍️", label: "Store Listing",
-      done: !!r.store,
-      href: storeUrl || (productId ? `/dashboard/products/${productId}#publish` : undefined),
-      external: !!storeUrl,
-    },
-    {
-      id: "brain", emoji: "🧠", label: "Business Brain",
-      done: !!r.brain,
-      href: `/dashboard/launch/${launchId}/workspace`,
-    },
+    { id: "research",  emoji: "🔍", label: "Research",        done: !!r.research, href: "/dashboard/workspace?tab=research" },
+    { id: "product",   emoji: "📦", label: "Product",         done: !!r.product,  href: productId ? `/dashboard/products/${productId}` : undefined },
+    { id: "design",    emoji: "🎨", label: "Design Assets",   done: !!r.design,   href: "/dashboard/design-studio" },
+    { id: "marketing", emoji: "📣", label: "Marketing Content",done: !!r.marketing,href: "/dashboard/workspace?tab=content" },
+    { id: "store",     emoji: "🛍️", label: "Store Listing",   done: !!r.store,    href: storeUrl || (productId ? `/dashboard/products/${productId}#publish` : undefined), external: !!storeUrl },
+    { id: "brain",     emoji: "🧠", label: "Business Brain",  done: !!r.brain,    href: `/dashboard/launch/${launchId}/workspace` },
   ];
+}
+
+/* ─── Section label ──────────────────────────────────────────────────────────── */
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 mt-8 first:mt-0">
+      {children}
+    </p>
+  );
+}
+
+/* ─── Error state ────────────────────────────────────────────────────────────── */
+
+function ProjectError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="rounded-2xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-8 text-center max-w-sm">
+        <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-3" />
+        <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Failed to load project</p>
+        <p className="text-xs text-red-600/70 dark:text-red-400/60 mb-4">{message}</p>
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={onRetry}
+            className="text-xs font-semibold text-red-600 dark:text-red-400 underline hover:no-underline"
+          >
+            Try again
+          </button>
+          <Link
+            href="/dashboard/projects"
+            className="text-xs font-semibold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+          >
+            ← Back to Projects
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── First-run state ────────────────────────────────────────────────────────── */
+
+function ProjectFirstRun({ goal, launchId }: { goal: string; launchId: string }) {
+  const steps = [
+    { emoji: "🔬", title: "Research",  desc: "AI validates your niche" },
+    { emoji: "📦", title: "Product",   desc: "Product description + pricing" },
+    { emoji: "🎨", title: "Design",    desc: "Covers, mockups, social previews" },
+    { emoji: "📣", title: "Marketing", desc: "Hooks, emails, carousels" },
+    { emoji: "🛍️", title: "Store",    desc: "Publish-ready listing" },
+    { emoji: "🧠", title: "Brain",     desc: "Scores + recommendations" },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] p-6 text-center">
+      <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/30 mb-4">
+        <Rocket className="w-7 h-7 text-orange-500" />
+      </div>
+      <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Your workspace is ready</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-xs mx-auto">
+        Run your first AI execution to build everything for <span className="font-medium text-gray-700 dark:text-gray-300 italic">"{goal}"</span>
+      </p>
+
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-6">
+        {steps.map((s) => (
+          <div key={s.title} className="rounded-xl bg-gray-50 dark:bg-gray-900 p-2">
+            <div className="text-xl mb-1">{s.emoji}</div>
+            <p className="text-[10px] font-bold text-gray-700 dark:text-gray-300">{s.title}</p>
+            <p className="text-[9px] text-gray-400 leading-snug mt-0.5 hidden sm:block">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href={`/dashboard/launch/${launchId}/workspace`}
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors shadow-lg shadow-orange-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+      >
+        <Rocket className="w-4 h-4" />
+        Start Full AI Execution
+      </Link>
+    </div>
+  );
 }
 
 /* ─── Main page ──────────────────────────────────────────────────────────────── */
@@ -346,8 +338,11 @@ export default function ProjectDashboardPage() {
 
   const [project,   setProject]   = useState<LaunchProject | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey,  setRetryKey]  = useState(0);
 
   useEffect(() => {
+    setLoadError(null);
+    setProject(null);
     (async () => {
       try {
         const res = await fetch(`/api/launch/${launchId}`);
@@ -357,33 +352,30 @@ export default function ProjectDashboardPage() {
         setLoadError("Could not load this project.");
       }
     })();
-  }, [launchId]);
+  }, [launchId, retryKey]);
 
+  /* ── Error ── */
   if (loadError) {
     return (
-      <div className="min-h-dvh flex items-center justify-center p-8">
-        <div className="text-center max-w-sm">
-          <p className="text-[14px] text-muted-foreground mb-4">{loadError}</p>
-          <button onClick={() => router.push("/dashboard/projects")}
-            className="text-[13px] text-orange-500 hover:underline">
-            ← Back to Projects
-          </button>
-        </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <PageHeader
+          breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Projects", href: "/dashboard/projects" }, { label: "Project" }]}
+          title="Project"
+          border
+        />
+        <ProjectError message={loadError} onRetry={() => setRetryKey(k => k + 1)} />
       </div>
     );
   }
 
-  if (!project) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  /* ── Loading ── */
+  if (!project) return <LoadingPage />;
 
-  const r         = project.stageResults ?? ({} as LaunchStageResults);
-  const productId = r.product?.productId ?? "";
-  const storeUrl  = r.store?.storeUrl    ?? "";
+  /* ── Derived state ── */
+  const r          = project.stageResults ?? ({} as LaunchStageResults);
+  const productId  = r.product?.productId ?? "";
+  const storeUrl   = r.store?.storeUrl    ?? "";
+  const hasData    = !!(r.research || r.product || r.design || r.marketing || r.store || r.brain);
 
   const businessScore = r.brain?.businessScore ?? calcScore(r);
   const launchScore   = r.brain?.launchScore   ?? null;
@@ -391,280 +383,227 @@ export default function ProjectDashboardPage() {
   const stageStyle    = STAGE_COLORS[stage.id] ?? STAGE_COLORS.building;
   const content       = countContent(r);
   const timeline      = buildTimeline(r, launchId);
-  const continueActs  = buildContinueActions(r, productId, launchId);
+  const continueActs  = hasData ? buildContinueActions(r, productId, launchId) : [];
   const sectionLinks  = buildSectionLinks(r, productId, storeUrl, launchId);
 
-  const storeLabel = storeUrl
-    ? "Published" : r.store?.productId ? "Draft" : "Not built";
-  const storeLabelColor = storeUrl
-    ? "text-green-400" : r.store?.productId ? "text-amber-400" : "text-muted-foreground/40";
+  const storeLabel      = storeUrl ? "Published" : r.store?.productId ? "Draft" : "Not built";
+  const storeLabelColor = storeUrl ? "text-emerald-500" : r.store?.productId ? "text-amber-500" : "text-gray-400 dark:text-gray-600";
+
+  const projectTitle = r.product?.productName ?? project.goal;
 
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
-
-        {/* ── Back nav ── */}
-        <div className="flex items-center gap-4 mb-8">
-          <Link
-            href="/dashboard/projects"
-            className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Projects
-          </Link>
-          <div className="h-3 w-px bg-border/40" />
-          <Link
-            href={`/dashboard/launch/${launchId}/workspace`}
-            className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Full Workspace
-          </Link>
-          <div className="h-3 w-px bg-border/40" />
-          <Link
-            href="/dashboard/launch"
-            className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            New Execution
-          </Link>
-          {/* Notification bell */}
-          <div className="ml-auto">
-            <NotificationPanel launchId={launchId} />
-          </div>
-        </div>
-
-        {/* ── Project header ── */}
-        <div className="rounded-2xl border border-border/50 bg-card/60 p-5 mb-5">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
-              <FolderOpen className="w-5 h-5 text-orange-500" />
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* ── Sticky page header ── */}
+      <div className="sticky top-0 z-20 bg-[#F9FAFB] dark:bg-[#0F0F0F]">
+        <PageHeader
+          breadcrumbs={[
+            { label: "Dashboard",  href: "/dashboard" },
+            { label: "Projects",   href: "/dashboard/projects" },
+            { label: projectTitle },
+          ]}
+          title={projectTitle}
+          subtitle={`${stage.label} · updated ${relTime(project.updatedAt)}`}
+          border
+          action={
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${stageStyle.bg} ${stageStyle.text}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} />
+                {stage.label}
+              </span>
+              <NotificationPanel launchId={launchId} />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <h1 className="text-[18px] font-black text-foreground tracking-tight">
-                  {r.product?.productName ?? project.goal}
-                </h1>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${stageStyle.bg} ${stageStyle.text}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${stageStyle.dot}`} />
-                  {stage.label}
-                </span>
-              </div>
-              {r.product?.productName && r.product.productName !== project.goal && (
-                <p className="text-[11px] text-muted-foreground/60 mb-2">Goal: {project.goal}</p>
-              )}
-              <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground/50">
-                <span>Created {relTime(project.createdAt)}</span>
-                <span>·</span>
-                <span>Updated {relTime(project.updatedAt)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Stats row */}
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { label: "Business Score", value: String(businessScore), sub: "/100" },
-              { label: "Launch Score",   value: launchScore !== null ? String(launchScore) : "—", sub: "/100" },
-              { label: "Content Assets", value: String(content), sub: " pieces" },
-              { label: "Store",          value: storeLabel, sub: "", color: storeLabelColor },
-            ].map(stat => (
-              <div key={stat.label} className="rounded-xl bg-muted/20 px-3 py-2">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-0.5">{stat.label}</p>
-                <p className={`text-[16px] font-black tabular-nums ${stat.color ?? "text-foreground"}`}>
-                  {stat.value}
-                  <span className="text-[10px] font-medium text-muted-foreground/40">{stat.sub}</span>
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Business OS — morning briefing ── */}
-        <BusinessOSDashboard launchId={launchId} />
-
-        {/* ── Autonomous Company ── */}
-        <AutonomousModeDashboard launchId={launchId} />
-
-        {/* ── CEO Briefing + Activity Feed (2-col) ── */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <CEOBriefingCard launchId={launchId} />
-          <CompanyActivityFeed launchId={launchId} />
-        </div>
-
-        {/* ── Approval Inbox ── */}
-        <ApprovalInbox launchId={launchId} />
-
-        {/* ── Mission Control ── */}
-        <MissionControlCard launchId={launchId} />
-
-        {/* ── Growth Mode ── */}
-        <GrowthDashboard
-          launchId={launchId}
-          initialData={r.growth}
-          productId={productId}
+          }
         />
+      </div>
 
-        {/* ── AI Workforce ── */}
-        <WorkforcePanel launchId={launchId} />
+      <div className="px-4 sm:px-6 md:px-8 py-6 max-w-3xl mx-auto pb-16">
 
-        {/* ── Project Timeline ── */}
-        {timeline.length > 0 && (
-          <div className="mb-5">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">
-              Project Timeline
-            </p>
-            <div className="rounded-2xl border border-border/50 bg-card/60 overflow-hidden divide-y divide-border/30">
-              {timeline.map((event, i) => (
-                <div key={event.id} className="flex items-start gap-3 px-4 py-3">
-                  {/* Dot + line */}
-                  <div className="flex flex-col items-center shrink-0 mt-1">
-                    <div className="w-5 h-5 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center">
-                      <CheckCircle2 className="w-3 h-3 text-green-500" />
-                    </div>
-                    {i < timeline.length - 1 && <div className="w-px flex-1 bg-border/30 mt-1 min-h-[8px]" />}
-                  </div>
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 pb-1">
-                    {event.href ? (
-                      <a href={event.href} className="text-[12px] font-semibold text-foreground hover:text-orange-500 transition-colors flex items-center gap-1">
-                        {event.emoji} {event.label}
-                        <ArrowRight className="w-3 h-3 shrink-0 opacity-60" />
-                      </a>
-                    ) : (
-                      <p className="text-[12px] font-semibold text-foreground">{event.emoji} {event.label}</p>
-                    )}
-                    {event.detail && (
-                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">{event.detail}</p>
-                    )}
-                  </div>
-                  {/* Timestamp */}
-                  <p className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums whitespace-nowrap">
-                    {relTime(event.timestamp)}
-                  </p>
-                </div>
-              ))}
+        {/* ── Stats row ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+          {[
+            { label: "Business Score", value: String(businessScore), sub: "/100", color: "" },
+            { label: "Launch Score",   value: launchScore !== null ? String(launchScore) : "—", sub: launchScore !== null ? "/100" : "", color: "" },
+            { label: "Content",        value: String(content), sub: " pieces", color: "" },
+            { label: "Store",          value: storeLabel, sub: "", color: storeLabelColor },
+          ].map(stat => (
+            <div key={stat.label} className="rounded-xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] px-3 py-2.5">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-0.5">{stat.label}</p>
+              <p className={`text-base font-black tabular-nums ${stat.color || "text-gray-900 dark:text-white"}`}>
+                {stat.value}
+                <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">{stat.sub}</span>
+              </p>
             </div>
+          ))}
+        </div>
+
+        {/* ── First-run state ── */}
+        {!hasData && (
+          <div className="mt-5">
+            <ProjectFirstRun goal={project.goal} launchId={launchId} />
           </div>
         )}
 
-        {/* ── Continue Building ── */}
-        <div className="mb-5">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">
-            Continue Building
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {continueActs.map(action => (
-              <Link
-                key={action.id}
-                href={action.href}
-                className={[
-                  "flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors",
-                  action.highlight
-                    ? "border-orange-500/30 bg-orange-500/[0.05] hover:bg-orange-500/[0.1]"
-                    : "border-border/40 bg-card/60 hover:bg-muted/30",
-                ].join(" ")}
-              >
-                <span className="text-base shrink-0">{action.emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-[12px] font-bold leading-none ${action.highlight ? "text-orange-500" : "text-foreground"}`}>
-                    {action.label}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">{action.detail}</p>
+        {/* ── AI Company ─────────────────────────────────────────── */}
+        {hasData && (
+          <>
+            <SectionLabel>AI Company</SectionLabel>
+            <BusinessOSDashboard launchId={launchId} />
+            <AutonomousModeDashboard launchId={launchId} />
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+              <CEOBriefingCard    launchId={launchId} />
+              <CompanyActivityFeed launchId={launchId} />
+            </div>
+
+            <div className="mt-4">
+              <ApprovalInbox launchId={launchId} />
+            </div>
+          </>
+        )}
+
+        {/* ── AI Workforce ── */}
+        {hasData && (
+          <>
+            <SectionLabel>AI Workforce</SectionLabel>
+            <MissionControlCard launchId={launchId} />
+            <div className="mt-4">
+              <GrowthDashboard launchId={launchId} initialData={r.growth} productId={productId} />
+            </div>
+            <div className="mt-4">
+              <WorkforcePanel launchId={launchId} />
+            </div>
+          </>
+        )}
+
+        {/* ── Project progress ── */}
+        {hasData && (
+          <>
+            <SectionLabel>Project Progress</SectionLabel>
+
+            {/* Section links */}
+            <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] overflow-hidden divide-y divide-[#F5F5F5] dark:divide-[#1A1A1A] mb-4">
+              {sectionLinks.map(section => (
+                <div key={section.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-[#151515] transition-colors">
+                  <span className="text-base shrink-0">{section.emoji}</span>
+                  <p className="flex-1 text-sm font-semibold text-gray-900 dark:text-white">{section.label}</p>
+                  {section.done ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  ) : (
+                    <Circle className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 shrink-0" />
+                  )}
+                  {section.href ? (
+                    <a
+                      href={section.href}
+                      target={section.external ? "_blank" : undefined}
+                      rel={section.external ? "noopener noreferrer" : undefined}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-500 hover:underline shrink-0 ml-1"
+                    >
+                      {section.done ? "View" : "Start"}
+                      {section.external ? <ExternalLink className="w-2.5 h-2.5" /> : <ArrowRight className="w-2.5 h-2.5" />}
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-gray-400 dark:text-gray-600 shrink-0 ml-1">Not started</span>
+                  )}
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" />
-              </Link>
-            ))}
-          </div>
-        </div>
+              ))}
+            </div>
 
-        {/* ── Project Sections ── */}
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">
-            Project Sections
-          </p>
-          <div className="rounded-2xl border border-border/50 bg-card/60 overflow-hidden divide-y divide-border/30">
-            {sectionLinks.map(section => (
-              <div key={section.id} className="flex items-center gap-3 px-4 py-3">
-                <span className="text-base shrink-0">{section.emoji}</span>
-                <p className="flex-1 text-[12px] font-semibold text-foreground">{section.label}</p>
-                {section.done ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                ) : (
-                  <Circle className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" />
-                )}
-                {section.href ? (
-                  <a
-                    href={section.href}
-                    target={section.external ? "_blank" : undefined}
-                    rel={section.external ? "noopener noreferrer" : undefined}
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-500 hover:underline shrink-0"
-                  >
-                    {section.done ? "View" : "Start"}
-                    {section.external ? <ExternalLink className="w-2.5 h-2.5" /> : <ArrowRight className="w-2.5 h-2.5" />}
-                  </a>
-                ) : (
-                  <span className="text-[10px] text-muted-foreground/30 shrink-0">Not started</span>
-                )}
+            {/* Timeline */}
+            {timeline.length > 0 && (
+              <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] overflow-hidden divide-y divide-[#F5F5F5] dark:divide-[#1A1A1A]">
+                {timeline.map((event, i) => (
+                  <div key={event.id} className="flex items-start gap-3 px-4 py-3">
+                    <div className="flex flex-col items-center shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      </div>
+                      {i < timeline.length - 1 && <div className="w-px flex-1 bg-[#E5E7EB] dark:bg-[#1E1E1E] mt-1 min-h-[8px]" />}
+                    </div>
+                    <div className="flex-1 min-w-0 pb-1">
+                      {event.href ? (
+                        <a href={event.href} className="text-sm font-semibold text-gray-900 dark:text-white hover:text-orange-500 transition-colors flex items-center gap-1">
+                          {event.emoji} {event.label}
+                          <ArrowRight className="w-3 h-3 shrink-0 opacity-40" />
+                        </a>
+                      ) : (
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{event.emoji} {event.label}</p>
+                      )}
+                      {event.detail && (
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{event.detail}</p>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 tabular-nums whitespace-nowrap mt-0.5">
+                      {relTime(event.timestamp)}
+                    </p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            )}
+          </>
+        )}
 
-        {/* ── Marketing Department link ── */}
-        <div className="mt-5">
-          <Link
-            href={`/dashboard/projects/${launchId}/marketing`}
-            className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.03] hover:bg-blue-500/[0.07] transition-colors"
-          >
-            <span className="text-lg shrink-0">📣</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-foreground">Marketing Department</p>
-              <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-                7 AI managers — TikTok, Instagram, YouTube, X, LinkedIn, Email, SEO
-              </p>
+        {/* ── Continue Building ── */}
+        {continueActs.length > 0 && (
+          <>
+            <SectionLabel>Continue Building</SectionLabel>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {continueActs.map(action => (
+                <Link
+                  key={action.id}
+                  href={action.href}
+                  className={[
+                    "flex items-center gap-3 px-4 py-3 rounded-xl border transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500",
+                    action.highlight
+                      ? "border-orange-500/30 bg-orange-500/[0.04] hover:bg-orange-500/[0.08] dark:border-orange-500/20 dark:bg-orange-500/[0.06]"
+                      : "border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] hover:bg-gray-50 dark:hover:bg-[#151515]",
+                  ].join(" ")}
+                >
+                  <span className="text-base shrink-0">{action.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-bold leading-none ${action.highlight ? "text-orange-500" : "text-gray-900 dark:text-white"}`}>
+                      {action.label}
+                    </p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{action.detail}</p>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400 shrink-0 transition-colors" />
+                </Link>
+              ))}
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground/30 shrink-0" />
-          </Link>
-        </div>
+          </>
+        )}
 
-        {/* ── Analytics Intelligence link ── */}
-        <div className="mt-3">
-          <Link
-            href={`/dashboard/projects/${launchId}/analytics`}
-            className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] hover:bg-emerald-500/[0.07] transition-colors"
-          >
-            <span className="text-lg shrink-0">📊</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-foreground">Analytics Intelligence</p>
-              <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-                AI analyst — insights, daily reports, recommendations
-              </p>
+        {/* ── Department links ── */}
+        {hasData && (
+          <>
+            <SectionLabel>Departments</SectionLabel>
+            <div className="space-y-2">
+              {[
+                { href: `/dashboard/projects/${launchId}/marketing`, emoji: "📣", label: "Marketing Department",   sub: "7 AI managers — TikTok, Instagram, YouTube, X, LinkedIn, Email, SEO", color: "border-blue-500/20 bg-blue-500/[0.03] hover:bg-blue-500/[0.07] dark:border-blue-500/10" },
+                { href: `/dashboard/projects/${launchId}/analytics`, emoji: "📊", label: "Analytics Intelligence", sub: "AI analyst — insights, daily reports, recommendations",                  color: "border-emerald-500/20 bg-emerald-500/[0.03] hover:bg-emerald-500/[0.07] dark:border-emerald-500/10" },
+                { href: `/dashboard/projects/${launchId}/memory`,    emoji: "🧠", label: "Business Memory",        sub: "Everything the AI knows about your business — view and edit",           color: "border-violet-500/20 bg-violet-500/[0.03] hover:bg-violet-500/[0.07] dark:border-violet-500/10" },
+              ].map(dept => (
+                <Link
+                  key={dept.href}
+                  href={dept.href}
+                  className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${dept.color}`}
+                >
+                  <span className="text-lg shrink-0">{dept.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{dept.label}</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{dept.sub}</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" />
+                </Link>
+              ))}
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground/30 shrink-0" />
-          </Link>
-        </div>
-
-        {/* ── Business Memory link ── */}
-        <div className="mt-3">
-          <Link
-            href={`/dashboard/projects/${launchId}/memory`}
-            className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-purple-500/20 bg-purple-500/[0.03] hover:bg-purple-500/[0.07] transition-colors"
-          >
-            <span className="text-lg shrink-0">🧠</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-foreground">Business Memory</p>
-              <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-                Everything the AI knows about your business — view and edit
-              </p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground/30 shrink-0" />
-          </Link>
-        </div>
+          </>
+        )}
 
         {/* ── View full workspace ── */}
-        <div className="mt-5 text-center">
+        <div className="mt-8 text-center">
           <Link
             href={`/dashboard/launch/${launchId}/workspace`}
-            className="inline-flex items-center gap-2 text-[12px] font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             View full AI workspace
             <ArrowRight className="w-3.5 h-3.5" />

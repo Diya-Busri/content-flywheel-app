@@ -1,18 +1,21 @@
 /**
  * /dashboard/projects
  * ──────────────────────────────────────────────────────────────────────────────
- * All Projects — every AI execution becomes a persistent project.
- * Shows business stage, scores, content count, and store status.
+ * All Projects — polished list with skeleton loading, rich empty state,
+ * mobile-first cards, and view toggle.
  */
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  FolderOpen, Plus, Loader2, Rocket, TrendingUp,
-  Clock, LayoutGrid, List, ExternalLink,
-} from "lucide-react";
 import Link from "next/link";
+import {
+  FolderOpen, Plus, Rocket, TrendingUp, Clock,
+  CheckCircle2, Circle, AlertTriangle, ExternalLink,
+  LayoutGrid, List,
+} from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingCard, LoadingPageHeader } from "@/components/ui/loading-card";
+import { PageHeader } from "@/components/ui/page-header";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -38,157 +41,229 @@ interface Project {
   updatedAt:     string;
 }
 
-/* ─── Stage badge config ─────────────────────────────────────────────────────── */
+/* ─── Configs ────────────────────────────────────────────────────────────────── */
 
 const STAGE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  building:       { bg: "bg-muted/40",        text: "text-muted-foreground",  dot: "bg-muted-foreground/40" },
-  launching:      { bg: "bg-blue-500/10",     text: "text-blue-400",          dot: "bg-blue-400" },
-  first_visitors: { bg: "bg-amber-500/10",    text: "text-amber-400",         dot: "bg-amber-400" },
-  first_sales:    { bg: "bg-orange-500/10",   text: "text-orange-400",        dot: "bg-orange-400 animate-pulse" },
-  growing:        { bg: "bg-green-500/10",    text: "text-green-400",         dot: "bg-green-400" },
-  scaling:        { bg: "bg-purple-500/10",   text: "text-purple-400",        dot: "bg-purple-400" },
+  building:       { bg: "bg-gray-100 dark:bg-gray-800",      text: "text-gray-500 dark:text-gray-400",    dot: "bg-gray-400" },
+  launching:      { bg: "bg-blue-50 dark:bg-blue-950/40",    text: "text-blue-600 dark:text-blue-400",    dot: "bg-blue-400" },
+  first_visitors: { bg: "bg-amber-50 dark:bg-amber-950/30",  text: "text-amber-600 dark:text-amber-400",  dot: "bg-amber-400" },
+  first_sales:    { bg: "bg-orange-50 dark:bg-orange-950/30",text: "text-orange-600 dark:text-orange-400",dot: "bg-orange-400 animate-pulse" },
+  growing:        { bg: "bg-emerald-50 dark:bg-emerald-950/30",text:"text-emerald-600 dark:text-emerald-400",dot:"bg-emerald-400" },
+  scaling:        { bg: "bg-violet-50 dark:bg-violet-950/30",text: "text-violet-600 dark:text-violet-400", dot: "bg-violet-400" },
 };
 
-const STORE_STATUS: Record<string, { label: string; color: string }> = {
-  published: { label: "Published", color: "text-green-400" },
-  draft:     { label: "Draft",     color: "text-amber-400" },
-  not_built: { label: "Not built", color: "text-muted-foreground/40" },
+const STAGE_NEXT: Record<string, string> = {
+  building:       "Publish your store to start growing",
+  launching:      "Drive traffic to your first sale",
+  first_visitors: "Convert visitors into buyers",
+  first_sales:    "Scale what's working",
+  growing:        "Optimise and automate",
+  scaling:        "Keep the flywheel spinning",
 };
 
-/* ─── Relative time helper ───────────────────────────────────────────────────── */
+/* ─── Helpers ────────────────────────────────────────────────────────────────── */
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
+  if (mins < 1)  return "just now";
   if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  const hrs  = Math.floor(mins / 60);
+  if (hrs  < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7)  return `${days}d ago`;
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-/* ─── Stage completion dots ──────────────────────────────────────────────────── */
+function completionPercent(p: Project): number {
+  const flags = [p.hasResearch, p.hasProduct, p.hasDesign, p.hasMarketing, p.hasStore, p.hasBrain];
+  return Math.round((flags.filter(Boolean).length / flags.length) * 100);
+}
+
+/* ─── Stage dots ─────────────────────────────────────────────────────────────── */
 
 function StageDots({ project }: { project: Project }) {
   const stages = [
-    { key: "research",  label: "Research",  done: project.hasResearch  },
-    { key: "product",   label: "Product",   done: project.hasProduct   },
-    { key: "design",    label: "Design",    done: project.hasDesign    },
-    { key: "marketing", label: "Marketing", done: project.hasMarketing },
-    { key: "store",     label: "Store",     done: project.hasStore     },
-    { key: "brain",     label: "Brain",     done: project.hasBrain     },
+    { key: "research",  done: project.hasResearch  },
+    { key: "product",   done: project.hasProduct   },
+    { key: "design",    done: project.hasDesign    },
+    { key: "marketing", done: project.hasMarketing },
+    { key: "store",     done: project.hasStore     },
   ];
   return (
     <div className="flex items-center gap-1">
-      {stages.map(s => (
-        <div
-          key={s.key}
-          title={s.label}
-          className={[
-            "w-1.5 h-1.5 rounded-full",
-            s.done ? "bg-green-500" : "bg-muted/40",
-          ].join(" ")}
-        />
+      {stages.map(({ key, done }) => (
+        done
+          ? <CheckCircle2 key={key} className="h-3 w-3 text-emerald-500" />
+          : <Circle       key={key} className="h-3 w-3 text-gray-300 dark:text-gray-600" />
       ))}
     </div>
   );
 }
 
-/* ─── Project Card ───────────────────────────────────────────────────────────── */
+/* ─── Project card — grid view ───────────────────────────────────────────────── */
 
-function ProjectCard({ project }: { project: Project }) {
-  const stage  = STAGE_COLORS[project.businessStage.id] ?? STAGE_COLORS.building;
-  const store  = STORE_STATUS[project.storeStatus];
+function ProjectCardGrid({ project }: { project: Project }) {
+  const stage   = STAGE_COLORS[project.businessStage.id] ?? STAGE_COLORS.building;
+  const pct     = completionPercent(project);
+  const nextMsg = STAGE_NEXT[project.businessStage.id] ?? "";
 
   return (
-    <Link href={`/dashboard/projects/${project.id}`} className="block group">
-      <div className="rounded-2xl border border-border/50 bg-card/60 hover:border-border hover:bg-card/90 transition-all p-4 space-y-3">
+    <Link href={`/dashboard/projects/${project.id}`} className="block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-2xl">
+      <div className="rounded-2xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] hover:border-orange-200 dark:hover:border-orange-500/30 hover:shadow-md transition-all duration-150 p-4 flex flex-col gap-3 h-full">
 
-        {/* Header row */}
+        {/* Header */}
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
-            <FolderOpen className="w-4 h-4 text-orange-500" />
+          <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 group-hover:bg-orange-500/15 transition-colors">
+            <FolderOpen className="w-4.5 h-4.5 text-orange-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-foreground leading-snug line-clamp-2">
+            <p className="text-sm font-bold text-gray-900 dark:text-white leading-snug line-clamp-2">
               {project.projectName}
             </p>
-            {project.projectName !== project.goal && (
-              <p className="text-[10px] text-muted-foreground/50 mt-0.5 line-clamp-1">{project.goal}</p>
-            )}
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 line-clamp-1">
+              {relativeTime(project.updatedAt)}
+            </p>
           </div>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${stage.bg} ${stage.text}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${stage.dot}`} />
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${stage.bg} ${stage.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${stage.dot} shrink-0`} />
             {project.businessStage.label}
           </span>
         </div>
 
-        {/* Score bar */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] text-muted-foreground/50 font-semibold uppercase tracking-wider">Business Score</span>
-              <span className="text-[11px] font-black text-foreground tabular-nums">{project.businessScore}</span>
-            </div>
-            <div className="h-1 rounded-full bg-muted/30 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-orange-500 to-green-500"
-                style={{ width: `${project.businessScore}%` }}
-              />
-            </div>
+        {/* Progress */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <StageDots project={project} />
+            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 tabular-nums">{pct}%</span>
           </div>
-          {project.launchScore !== null && (
-            <div className="text-center shrink-0">
-              <p className="text-[9px] text-muted-foreground/50 font-semibold uppercase tracking-wider">Launch</p>
-              <p className="text-[13px] font-black text-foreground">{project.launchScore}</p>
-            </div>
-          )}
+          <div className="h-1 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
         </div>
 
-        {/* Footer row */}
-        <div className="flex items-center justify-between gap-2">
-          <StageDots project={project} />
-          <div className="flex items-center gap-3">
-            {project.contentCount > 0 && (
-              <span className="text-[10px] text-muted-foreground/50">
-                {project.contentCount} assets
-              </span>
-            )}
-            <span className={`text-[10px] font-semibold ${store.color}`}>
-              {store.label}
-            </span>
-            <span className="text-[10px] text-muted-foreground/40 flex items-center gap-1">
-              <Clock className="w-2.5 h-2.5" />
-              {relativeTime(project.updatedAt)}
-            </span>
-          </div>
-        </div>
+        {/* What's next */}
+        {nextMsg && (
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-auto pt-1 border-t border-[#F5F5F5] dark:border-[#1A1A1A]">
+            <span className="font-medium text-orange-500">Next:</span> {nextMsg}
+          </p>
+        )}
       </div>
     </Link>
   );
 }
 
-/* ─── Empty state ────────────────────────────────────────────────────────────── */
+/* ─── Project row — list view ────────────────────────────────────────────────── */
 
-function EmptyState() {
+function ProjectRow({ project }: { project: Project }) {
+  const stage = STAGE_COLORS[project.businessStage.id] ?? STAGE_COLORS.building;
+  const pct   = completionPercent(project);
+
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-4">
-        <FolderOpen className="w-7 h-7 text-orange-500" />
+    <Link
+      href={`/dashboard/projects/${project.id}`}
+      className="flex items-center gap-4 p-4 rounded-xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] hover:border-orange-200 dark:hover:border-orange-500/30 hover:shadow-sm transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+    >
+      <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 group-hover:bg-orange-500/15 transition-colors">
+        <FolderOpen className="w-4 h-4 text-orange-500" />
       </div>
-      <p className="text-[15px] font-bold text-foreground mb-1">No projects yet</p>
-      <p className="text-[12px] text-muted-foreground/60 mb-6 max-w-xs">
-        Every AI execution becomes a persistent project. Start your first one to build your business.
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{project.projectName}</p>
+        <div className="flex items-center gap-2 mt-1">
+          <div className="h-1 w-24 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-[10px] text-gray-400 tabular-nums">{pct}%</span>
+        </div>
+      </div>
+
+      <div className="hidden sm:flex items-center gap-2 shrink-0">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${stage.bg} ${stage.text}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${stage.dot}`} />
+          {project.businessStage.label}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1 text-[10px] text-gray-400 shrink-0">
+        <Clock className="h-3 w-3" />
+        {relativeTime(project.updatedAt)}
+      </div>
+    </Link>
+  );
+}
+
+/* ─── Rich empty state ───────────────────────────────────────────────────────── */
+
+function ProjectsEmptyState() {
+  const steps = [
+    { emoji: "🔬", title: "Research",  desc: "AI validates your niche and finds opportunities" },
+    { emoji: "📦", title: "Build",     desc: "Product, design, and marketing generated in minutes" },
+    { emoji: "📈", title: "Grow",      desc: "Autonomous AI company keeps working after launch" },
+  ];
+
+  return (
+    <div className="py-12 px-4 text-center">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-50 dark:bg-orange-950/30 mb-5">
+        <Rocket className="w-8 h-8 text-orange-500" />
+      </div>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+        Launch your first AI project
+      </h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
+        Every project gives you a full AI company — researchers, marketers, analysts — all working together to grow your business.
       </p>
+
+      {/* Journey preview */}
+      <div className="grid grid-cols-3 gap-3 mt-8 mb-8 max-w-lg mx-auto">
+        {steps.map((step) => (
+          <div key={step.title} className="rounded-xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] p-3 text-left">
+            <div className="text-2xl mb-2">{step.emoji}</div>
+            <p className="text-xs font-bold text-gray-900 dark:text-white">{step.title}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">{step.desc}</p>
+          </div>
+        ))}
+      </div>
+
       <Link
         href="/dashboard/launch"
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-bold transition-colors"
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors shadow-lg shadow-orange-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
       >
         <Rocket className="w-4 h-4" />
         Start First Project
       </Link>
+    </div>
+  );
+}
+
+/* ─── Loading skeleton ───────────────────────────────────────────────────────── */
+
+function ProjectsSkeleton({ view }: { view: "grid" | "list" }) {
+  if (view === "list") {
+    return (
+      <div className="space-y-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-4 p-4 rounded-xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] animate-pulse">
+            <div className="h-9 w-9 rounded-xl bg-gray-200 dark:bg-gray-800 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3.5 w-48 bg-gray-200 dark:bg-gray-800 rounded" />
+              <div className="h-1 w-24 bg-gray-200 dark:bg-gray-800 rounded" />
+            </div>
+            <div className="h-5 w-20 bg-gray-200 dark:bg-gray-800 rounded-full hidden sm:block" />
+            <div className="h-3 w-12 bg-gray-200 dark:bg-gray-800 rounded" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {[0, 1, 2, 3].map((i) => (
+        <LoadingCard key={i} lines={3} />
+      ))}
     </div>
   );
 }
@@ -199,83 +274,111 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
+  const [view,     setView]     = useState<"grid" | "list">("grid");
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/projects");
-        if (!res.ok) throw new Error("Failed to load projects");
-        const data = await res.json() as { projects: Project[] };
-        setProjects(data.projects);
-      } catch (e) {
-        setError("Could not load projects.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetch("/api/projects")
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then((data: { projects: Project[] }) => setProjects(data.projects))
+      .catch(() => setError("Could not load projects."))
+      .finally(() => setLoading(false));
   }, []);
 
-  /* Derived stats */
   const growing   = projects.filter(p => ["growing", "scaling"].includes(p.businessStage.id)).length;
   const launching = projects.filter(p => ["launching", "first_visitors", "first_sales"].includes(p.businessStage.id)).length;
 
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="max-w-4xl mx-auto px-4 py-8 sm:py-12">
-
-        {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-[22px] font-black text-foreground tracking-tight">Your Projects</h1>
-            <p className="text-[12px] text-muted-foreground/60 mt-1">
-              Every execution is a persistent business — AI keeps working, you keep building.
-            </p>
-          </div>
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* Page header */}
+      <PageHeader
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Projects" }]}
+        title="Projects"
+        subtitle={projects.length > 0 ? `${projects.length} AI business${projects.length !== 1 ? "es" : ""}` : "Your AI company portfolio"}
+        border
+        action={
           <Link
             href="/dashboard/launch"
-            className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-bold transition-colors shadow-lg shadow-orange-500/20"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors shadow-sm shadow-orange-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
           >
             <Plus className="w-4 h-4" />
-            New Project
+            <span className="hidden sm:inline">New Project</span>
+            <span className="sm:hidden">New</span>
           </Link>
-        </div>
+        }
+      />
 
-        {/* ── Summary strip (if has projects) ── */}
-        {projects.length > 0 && (
-          <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="px-4 sm:px-6 md:px-8 py-6 max-w-5xl mx-auto space-y-6 pb-12">
+
+        {/* Summary strip */}
+        {!loading && projects.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Total Projects",  value: projects.length,   icon: <FolderOpen className="w-3.5 h-3.5" /> },
-              { label: "Actively Growing", value: growing,           icon: <TrendingUp className="w-3.5 h-3.5 text-green-400" /> },
-              { label: "In Launch Phase",  value: launching,         icon: <Rocket className="w-3.5 h-3.5 text-orange-400" /> },
-            ].map(stat => (
-              <div key={stat.label} className="rounded-xl border border-border/40 bg-card/60 px-4 py-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/60 mb-1">
-                  {stat.icon}
-                  <span className="text-[10px] font-semibold uppercase tracking-wider">{stat.label}</span>
+              { label: "Total",     value: projects.length, icon: <FolderOpen className="w-3.5 h-3.5 text-orange-500" /> },
+              { label: "Growing",   value: growing,         icon: <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> },
+              { label: "Launching", value: launching,       icon: <Rocket className="w-3.5 h-3.5 text-blue-500" /> },
+            ].map(({ label, value, icon }) => (
+              <div key={label} className="rounded-xl border border-[#E5E7EB] dark:border-[#1E1E1E] bg-white dark:bg-[#111] px-4 py-3">
+                <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
+                  {icon}
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
                 </div>
-                <p className="text-[22px] font-black text-foreground tabular-nums">{stat.value}</p>
+                <p className="text-2xl font-black text-gray-900 dark:text-white tabular-nums">{value}</p>
               </div>
             ))}
           </div>
         )}
 
-        {/* ── Content ── */}
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : error ? (
-          <p className="text-center text-[13px] text-muted-foreground/60 py-20">{error}</p>
-        ) : projects.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {projects.map(project => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
+        {/* View toggle + sort (only when has projects) */}
+        {!loading && projects.length > 0 && (
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+              {projects.length} project{projects.length !== 1 ? "s" : ""}
+            </p>
+            <div className="flex items-center gap-1 rounded-lg border border-[#E5E7EB] dark:border-[#1E1E1E] p-1">
+              {(["grid", "list"] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  aria-label={`${v} view`}
+                  className={`p-1.5 rounded transition-colors ${
+                    view === v
+                      ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+                      : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  {v === "grid" ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
+        {/* Content */}
+        {loading ? (
+          <ProjectsSkeleton view={view} />
+        ) : error ? (
+          <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-6 text-center">
+            <AlertTriangle className="w-6 h-6 text-red-400 mx-auto mb-2" />
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">{error}</p>
+            <button
+              onClick={() => { setError(null); setLoading(true); fetch("/api/projects").then(r => r.json()).then((d: { projects: Project[] }) => setProjects(d.projects)).catch(() => setError("Could not load projects.")).finally(() => setLoading(false)); }}
+              className="mt-3 text-xs text-red-600 dark:text-red-400 underline hover:no-underline"
+            >
+              Try again
+            </button>
+          </div>
+        ) : projects.length === 0 ? (
+          <ProjectsEmptyState />
+        ) : view === "grid" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {projects.map(p => <ProjectCardGrid key={p.id} project={p} />)}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {projects.map(p => <ProjectRow key={p.id} project={p} />)}
+          </div>
+        )}
       </div>
     </div>
   );
