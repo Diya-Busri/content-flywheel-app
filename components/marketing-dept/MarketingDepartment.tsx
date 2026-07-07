@@ -685,7 +685,7 @@ export function MarketingDepartment({ launchId }: { launchId: string }) {
         <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.05]">
           <span className="text-lg">⏳</span>
           <p className="text-[12px] text-amber-400/80 flex-1">
-            <span className="font-bold">{totalPending} item{totalPending > 1 ? "s" : ""}</span> awaiting approval — open a manager's Queue tab to review
+            <span className="font-bold">{totalPending} item{totalPending > 1 ? "s" : ""}</span> awaiting approval — open a manager&apos;s Queue tab to review
           </p>
         </div>
       )}

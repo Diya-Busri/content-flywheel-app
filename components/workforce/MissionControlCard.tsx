@@ -629,7 +629,7 @@ export function MissionControlCard({ launchId }: Props) {
             {/* What's next? */}
             <div>
               <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1.5">
-                What's next
+                What&apos;s next
               </p>
               {plan && (
                 <div>
