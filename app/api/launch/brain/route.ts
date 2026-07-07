@@ -22,7 +22,8 @@ import type { LaunchStageResults, BrainResult } from "@/db/schema/launch-schema"
 import { eq, and } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 
-export const maxDuration = 120;
+// 60s matches Vercel Hobby plan cap; response fits in ~1400 tokens so this is ample.
+export const maxDuration = 60;
 
 const ai = new Anthropic();
 
@@ -192,8 +193,8 @@ export async function POST(req: NextRequest) {
   let rawText = "";
   try {
     const msg = await ai.messages.create({
-      model:      "claude-sonnet-4-6",
-      max_tokens: 4000,
+      model:      "claude-haiku-4-5",  // Haiku is 3-4× faster than Sonnet; Brain JSON fits in ~1400 tokens
+      max_tokens: 2000,                // actual response ~1200-1600 tokens; keeps latency under 30s
       messages: [
         {
           role:    "user",
@@ -211,14 +212,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "AI analysis failed" }, { status: 500 });
   }
 
-  /* Parse JSON — strip any accidental markdown fences */
+  /* Parse JSON — extract first {...} block to handle any preamble/fence text */
   let brain: BrainResult;
   try {
-    const cleaned = rawText
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/, "")
-      .trim();
-    brain = JSON.parse(cleaned) as BrainResult;
+    // Find the outermost JSON object regardless of any leading/trailing text
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON object found in response");
+    brain = JSON.parse(jsonMatch[0]) as BrainResult;
     brain.completedAt = new Date().toISOString();
   } catch (err) {
     console.error("[brain] Parse error:", err);
