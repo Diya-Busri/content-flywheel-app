@@ -27,6 +27,12 @@ export type NicheOption = {
   saturation: NicheSaturation;
   trend: NicheTrend;
   subNiches: string[];
+  // Extended research fields (populated when available)
+  targetCustomer?: string;
+  sellingPlatforms?: string[];
+  marketingAngle?: string;
+  priceRange?: string;
+  confidenceScore?: "High" | "Medium" | "Low";
 };
 
 type OpenAINiche = {
@@ -37,6 +43,11 @@ type OpenAINiche = {
   trend?: string;
   reason?: string;
   angles?: string[];
+  targetCustomer?: string;
+  sellingPlatforms?: string[];
+  marketingAngle?: string;
+  priceRange?: string;
+  confidenceScore?: string;
 };
 
 function normalizeSaturation(s: string | undefined): NicheSaturation {
@@ -57,6 +68,7 @@ function normalizeTrend(s: string | undefined): NicheTrend {
 }
 
 function mapToNicheOption(raw: OpenAINiche, index: number): NicheOption {
+  const confidence = raw.confidenceScore?.trim().toLowerCase();
   return {
     id: `openai-${Date.now()}-${index}`,
     name: raw.title ?? "Digital product niche",
@@ -67,6 +79,11 @@ function mapToNicheOption(raw: OpenAINiche, index: number): NicheOption {
     saturation: normalizeSaturation(raw.saturation),
     trend: normalizeTrend(raw.trend),
     subNiches: Array.isArray(raw.angles) ? raw.angles : [],
+    targetCustomer: raw.targetCustomer ?? undefined,
+    sellingPlatforms: Array.isArray(raw.sellingPlatforms) ? raw.sellingPlatforms : undefined,
+    marketingAngle: raw.marketingAngle ?? undefined,
+    priceRange: raw.priceRange ?? undefined,
+    confidenceScore: confidence === "high" ? "High" : confidence === "medium" ? "Medium" : confidence === "low" ? "Low" : undefined,
   };
 }
 
@@ -119,53 +136,70 @@ export async function POST(request: NextRequest) {
 
     let prompt = "";
 
+    const JSON_SHAPE = `[{
+  "title": "Hyper-specific niche name — format: [Specific product type] for [Specific person in specific situation]. NOT 'Wellness Journal' but 'ADHD Planner for UK University Students'.",
+  "saturation": "low" | "medium" | "high" | "veryHigh",
+  "competition": "Low" | "Medium" | "High",
+  "revenue": "$X-Yk/mo (realistic range for someone new to this niche)",
+  "trend": "rising" | "stable" | "declining",
+  "reason": "3-4 sentence market analysis. Who is the buyer exactly? What specific moment triggers the purchase? Why is there a gap in the market right now? What makes this niche winnable without a large audience? Write like someone who has actually sold in this space — no generic claims, no invented statistics.",
+  "angles": ["Specific product angle or sub-niche 1", "Specific product angle or sub-niche 2", "Specific product angle or sub-niche 3"],
+  "targetCustomer": "One sentence: the exact person (e.g. 'Women in their 30s working NHS shifts who want to batch-cook but have no structured system for their unpredictable rota')",
+  "sellingPlatforms": ["Primary platform e.g. Etsy", "Secondary e.g. TikTok Shop", "Optional third e.g. Gumroad"],
+  "marketingAngle": "The specific content hook that drives discovery for this niche (e.g. 'A day-in-the-life reel of prepping meals on a rest day — show the chaos, then show the solution'). Be specific to this audience.",
+  "priceRange": "$X-Y (sweet spot for this audience and format)",
+  "confidenceScore": "High" | "Medium" | "Low"
+}]`;
+
     if (showTrending || !interests || interests.trim().length === 0) {
-      prompt = `Generate 6 currently trending, high-opportunity digital product niches for 2026.
+      prompt = `Identify 6 high-opportunity digital product niches for 2026 that are currently performing well on Gumroad, Etsy, TikTok Shop, and Payhip.
 
-Focus on what's selling well on Gumroad, Etsy, and TikTok Shop.
-Include low to medium competition opportunities.
+These must be hyper-specific — not "Wellness Journal" but "ADHD Study Planner for University Students" or "Budget Spreadsheet for UK First-Time Buyers".
+
+For each niche, reason through:
+- WHO is the exact buyer (role, life stage, specific situation)?
+- WHAT specific frustration makes them pull out their wallet for a $17-67 PDF or template?
+- WHY does this particular angle have manageable competition (new segment, underserved format, recent life-event trigger)?
+- WHICH platforms are buyers and creators already active on for this topic?
+- WHAT content format reliably drives traffic to this type of product?
+
+Prioritise niches where:
+1. The buyer has an urgent, specific pain point — not just a vague interest
+2. A focused digital product ($17-67) is the obvious, accessible solution
+3. The creator can produce content from lived experience or a clear perspective
+4. Short-form video or Pinterest content about this problem already gets strong engagement
+
+Do NOT invent statistics or make up search volumes. Reason from observable market patterns and buyer behaviour.
 
 Return ONLY a JSON array (no markdown, no explanation):
-[{
-  "title": "Niche title",
-  "saturation": "low" | "medium" | "high" | "veryHigh",
-  "competition": "Low" | "Medium" | "High",
-  "revenue": "$1-3k/mo",
-  "trend": "Rising" | "Stable" | "Declining",
-  "reason": "Why this niche works",
-  "angles": ["Sub-niche 1", "Sub-niche 2", "Sub-niche 3"]
-}]`;
+${JSON_SHAPE}`;
     } else {
-      prompt = `Generate 6 digital product niches that are DIRECTLY RELATED to: "${interests}"
+      prompt = `Identify 6 high-opportunity digital product niches within: "${interests}"
 
-CRITICAL: Every niche MUST connect to at least one of these interests: ${interests}
-
+CRITICAL: Every niche MUST be directly rooted in these interests: ${interests}
 User's goal: ${goal}
-Already generated (avoid these): ${(exclude as string[]).join(", ") || "None"}
+Already shown (avoid these): ${(exclude as string[]).join(", ") || "None"}
 
-Examples:
-- If interests = "relationships, mental health"
-  ✅ Generate: Couples therapy worksheets, anxiety journals, relationship guides
-  ❌ DON'T: Tech spreadsheets, finance trackers
+These must be hyper-specific — not "${interests} Planner" but a named product for a named person with a named problem.
 
-- If interests = "marketing"
-  ✅ Generate: Social media templates, email sequences, content calendars
-  ❌ DON'T: Fitness planners, cooking recipes
+For each niche, work through:
+- WHO is the exact buyer within this topic? (specific life stage, role, or situation)
+- WHAT specific frustration within "${interests}" makes them willing to pay $17-67 for a digital product?
+- WHY is this particular angle in "${interests}" still winnable — what's the gap?
+- WHICH platforms are buyers and creators already active on for this angle?
+- WHAT content hook drives traffic to this type of product?
 
-CURRENT INTERESTS: "${interests}"
+Do NOT:
+- Generate niches unrelated to: "${interests}"
+- Invent statistics or precise search data
+- Use vague titles like "${interests} Guide" or "${interests} Workbook"
 
-Generate 6 niches ONLY about: "${interests}"
+Do:
+- Be as specific as "Meal Prep Tracker for UK Night Shift Nurses" or "AI Prompt Pack for Freelance Estate Agents"
+- Reason from buyer psychology and real marketplace patterns
 
 Return ONLY a JSON array (no markdown, no explanation):
-[{
-  "title": "Title directly about ${interests}",
-  "saturation": "low" | "medium" | "high" | "veryHigh",
-  "competition": "Low" | "Medium" | "High",
-  "revenue": "$1-3k/mo",
-  "trend": "Rising" | "Stable" | "Declining",
-  "reason": "How this connects to ${interests}",
-  "angles": ["Sub-niche about ${interests}", "Another angle", "Third angle"]
-}]`;
+${JSON_SHAPE}`;
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -187,18 +221,17 @@ Return ONLY a JSON array (no markdown, no explanation):
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            // gpt-4o-mini: niche suggestions, non-critical
             model: "gpt-4o-mini",
             messages: [
               {
                 role: "system",
                 content:
-                  "You are a digital product niche expert. Always return valid JSON arrays only, no markdown formatting.",
+                  "You are a digital product market research analyst who has studied what actually sells on Gumroad, Etsy, TikTok Shop, and Payhip. You specialise in identifying hyper-specific, winnable niches by reasoning from buyer psychology, marketplace patterns, and content trends. You never invent statistics or precise data you cannot know. You think in terms of specific people with specific problems, not broad categories. Return only valid JSON arrays — no markdown, no code fences, no explanation.",
               },
               { role: "user", content: prompt },
             ],
-            temperature: 0.8,
-            max_tokens: 2000,
+            temperature: 0.75,
+            max_tokens: 3500,
           }),
         },
         {

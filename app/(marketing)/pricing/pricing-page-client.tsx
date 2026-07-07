@@ -114,7 +114,7 @@ export default function PricingPageClient({
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-orange-400 to-orange-600" />
           <div className="absolute top-3 right-4">
             <span className="bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-              Save {savingsPct}% — ${savingsAmt} off
+              Save {savingsPct}%, ${savingsAmt} off
             </span>
           </div>
 

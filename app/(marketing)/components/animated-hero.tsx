@@ -20,7 +20,7 @@ export default function AnimatedHero() {
         Package & Market <span className="text-primary">Digital Products</span> in Minutes
       </h1>
       <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto">
-        From eBook to promo video in one workflow. AI writes the copy, generates the mockup, and creates your avatar video — ready to sell.
+        From eBook to promo video in one workflow. AI writes the copy, generates the mockup, and creates your avatar video, ready to sell.
       </p>
       <div className="flex flex-col sm:flex-row justify-center gap-3 pt-6">
         <Button asChild size="lg" className="font-medium">

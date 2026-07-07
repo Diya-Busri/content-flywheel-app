@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, boolean } from "drizzle-orm/pg-core";
 
 export type MarketingAssets = {
   productTitle?: string;
@@ -10,6 +10,8 @@ export type MarketingAssets = {
   coverThumbnailUrl?: string | null;
   /** Realistic book-on-desk mockup image generated via DALL-E 3. */
   bookMockupUrl?: string | null;
+  /** Square social media promotional image (AI Execution Design Agent). */
+  socialPreviewUrl?: string | null;
   /** HeyGen avatar promo video URL (9:16 vertical, expires in 7 days unless persisted). */
   promoVideoUrl?: string | null;
   /** In-progress HeyGen video_id being polled. */
@@ -90,6 +92,19 @@ export const productsTable = pgTable("products", {
   /** When 'ai' or 'brand', product was auto-designed; show "AI Designed" badge in library. Null = manual/blank. */
   designSource: text("design_source").$type<"ai" | "brand" | null>(),
   deletedAt: timestamp("deleted_at"),
+  /** When set, the product is archived — hidden from the marketplace and library default view. */
+  archivedAt: timestamp("archived_at"),
+  // ── Admin moderation fields ─────────────────────────────────────────────
+  /** Admin soft-delete: set when an admin removes a product. Disappears from marketplace; only admins can restore. */
+  removedAt: timestamp("removed_at"),
+  /** Admin moderation status: null (default) | "hidden" | "suspended". "hidden" removes from marketplace; creator draft preserved. */
+  moderationStatus: text("moderation_status"),
+  /** If true, displays a "Staff Pick" badge on the marketplace card. */
+  staffPick: boolean("staff_pick").notNull().default(false),
+  /** If true, product is pinned to the marketplace homepage/featured section. */
+  pinnedHomepage: boolean("pinned_homepage").notNull().default(false),
+  /** Internal admin notes about this product (not visible to creator). */
+  adminNotes: text("admin_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
