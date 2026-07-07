@@ -98,6 +98,22 @@ export type LaunchStageResults = {
     /** ISO timestamp when this stage completed */
     completedAt?: string;
   };
+  /**
+   * Optional post-pipeline content pack — "Behind the Build".
+   * Not a pipeline stage. Generated on demand by the creator.
+   * Never auto-published. Stores 5 authentic creator content pieces.
+   */
+  behindTheBuild?: {
+    items: Array<{
+      /** Unique piece ID: "tiktok" | "instagram" | "linkedin" | "x" | "story" */
+      id:      string;
+      label:   string;
+      emoji:   string;
+      content: string;
+    }>;
+    /** ISO timestamp when this pack was generated */
+    generatedAt: string;
+  };
 };
 
 export const launchProjectsTable = pgTable("launch_projects", {

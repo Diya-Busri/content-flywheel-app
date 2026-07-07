@@ -32,6 +32,7 @@ import {
   WorkspaceStageCard,
 } from "@/components/execution-workspace/WorkspaceStageCard";
 import type { WorkspaceCardStatus } from "@/components/execution-workspace/WorkspaceStageCard";
+import { BehindTheBuildSection } from "@/components/execution-workspace/BehindTheBuildSection";
 import type { LaunchStageResults, LaunchStatus } from "@/db/schema/launch-schema";
 
 /* ─── Project shape (matches what GET /api/launch/[launchId] returns) ────────── */
@@ -561,6 +562,15 @@ export default function ExecutionWorkspacePage() {
               </a>
             </div>
           </div>
+        )}
+
+        {/* ── Behind the Build (optional creator content pack) ── */}
+        {isComplete && (
+          <BehindTheBuildSection
+            launchId={launchId}
+            goal={project.goal}
+            existing={results.behindTheBuild}
+          />
         )}
 
       </div>
