@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { runLaunchResearchAgent } from "@/lib/agents/launch-research-agent";
+import { runLaunchProductAgent }  from "@/lib/agents/launch-product-agent";
 import type {
   ExecutionContext, AgentStep, AgentStatus, SaveProgressPatch,
 } from "@/lib/agents/types";
@@ -63,7 +64,7 @@ const PIPELINE_STAGES: StageConfig[] = [
     agentLabel:  "Product Agent",
     description: "Generate a complete digital product with sections and content",
     icon:        Package,
-    execute:     null,  // Phase 1.3
+    execute:     runLaunchProductAgent,  // ← Phase 1.3: wired
   },
   {
     id:          "design",
@@ -395,13 +396,19 @@ export default function LaunchExecutionPage() {
         setOverallPct(to);
 
         /* Collect a brief completion summary for the card */
-        const research = latestResultsRef.current.research;
-        if (stage.id === "research" && research) {
-          const insights = research.insights?.length ?? 0;
-          const opps     = research.productOpportunities?.length ?? 0;
+        const results = latestResultsRef.current;
+        if (stage.id === "research" && results.research) {
+          const insights = results.research.insights?.length ?? 0;
+          const opps     = results.research.productOpportunities?.length ?? 0;
           setCompletedSummaries(prev => ({
             ...prev,
             [i]: `${insights} insights · ${opps} product opportunities found`,
+          }));
+        } else if (stage.id === "product" && results.product) {
+          const name = results.product.productName ?? "Product";
+          setCompletedSummaries(prev => ({
+            ...prev,
+            [i]: `"${name}" created · ready in Digital Products`,
           }));
         }
       } catch (err) {
@@ -558,11 +565,11 @@ export default function LaunchExecutionPage() {
               <PlugZap className="w-4 h-4 text-muted-foreground/40 mt-0.5 shrink-0" />
               <div>
                 <p className="text-[12px] font-semibold text-foreground mb-0.5">
-                  Phase 1.2 complete — Research Agent running
+                  Phase 1.3 — Research & Product agents live
                 </p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Research results are saved to the pipeline. Product, Design, Marketing,
-                  and Store agents will connect in the next phases without any UI changes.
+                  Research and Product are saved to the pipeline. Design, Marketing, and
+                  Store agents connect in the next phases — no UI changes needed.
                 </p>
               </div>
             </div>
