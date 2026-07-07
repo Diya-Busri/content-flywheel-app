@@ -1,17 +1,18 @@
 /**
- * lib/post-publish-pipeline.ts — Phase 5.3
+ * lib/post-publish-pipeline.ts — Phase 6.0
  * ──────────────────────────────────────────────────────────────────────────────
  * Automated feedback loop triggered after every successful publish.
  *
  * Pipeline:
- *   1. Create PostAnalytics entry with simulated metrics
- *   2. Run AI analysis (qualitative insights) on the new post
- *   3. Check for viral threshold → viral_post notification
- *   4. If >= 2 analysed posts → run Learning Cycle (extract lessons, update trends)
- *   5. Merge all memory facts into Business Memory
- *   6. Create in-app notifications
- *   7. Save final state to DB
- *   8. Return notifications for the caller to acknowledge
+ *   1. Try real platform metrics (fetchRealMetrics) — fall back to simulateMetrics
+ *   2. Create PostAnalytics entry
+ *   3. Run AI analysis (qualitative insights) on the new post
+ *   4. Check for viral threshold → viral_post notification
+ *   5. If >= 2 analysed posts → run Learning Cycle (extract lessons, update trends)
+ *   6. Merge all memory facts into Business Memory
+ *   7. Create in-app notifications
+ *   8. Save final state to DB
+ *   9. Return notifications for the caller to acknowledge
  *
  * Called by publish/route.ts and approve/route.ts inside a try/catch — a pipeline
  * failure must never break the main publish response.
@@ -32,6 +33,7 @@ import type {
 import { simulateMetrics, extractContentMetadata, analyzePost } from "@/lib/analytics-ai";
 import { mergeMemoryFacts } from "@/lib/memory-context";
 import { runLearningCycle, buildTrends, mergeLessons } from "@/lib/learning-loop";
+import { fetchRealMetrics } from "@/lib/platform-analytics";
 
 /* ─── Helpers ────────────────────────────────────────────────────────────────── */
 
@@ -100,7 +102,9 @@ export async function runPostPublishPipeline(
   const alreadyTracked = existing.posts.some(p => p.publishedItemId === publishedItem.id);
   if (alreadyTracked) return [];
 
-  const metrics  = simulateMetrics(managerId, publishedItem.content, publishedItem.publishedAt);
+  // Try real platform metrics first; fall back to simulation if not connected or fetch fails
+  const realMetrics = await fetchRealMetrics(userId, publishedItem).catch(() => null);
+  const metrics = realMetrics ?? simulateMetrics(managerId, publishedItem.content, publishedItem.publishedAt);
   const metadata = extractContentMetadata(publishedItem.content, managerId);
 
   const newPost: PostAnalytics = {

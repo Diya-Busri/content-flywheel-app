@@ -27,6 +27,7 @@ import { GrowthDashboard } from "@/components/growth/GrowthDashboard";
 import { WorkforcePanel } from "@/components/workforce/WorkforcePanel";
 import { MissionControlCard } from "@/components/workforce/MissionControlCard";
 import { NotificationPanel } from "@/components/notifications/NotificationPanel";
+import { BusinessOSDashboard } from "@/components/business-os/BusinessOSDashboard";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -472,6 +473,9 @@ export default function ProjectDashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* ── Business OS — morning briefing ── */}
+        <BusinessOSDashboard launchId={launchId} />
 
         {/* ── Mission Control ── */}
         <MissionControlCard launchId={launchId} />
