@@ -44,9 +44,37 @@ export type LaunchStageResults = {
     libraryScriptId: string;
   };
   marketing?: {
-    posts: string[];
-    emailSubject: string;
-    hashtags: string[];
+    /* ── Launch Campaign ── */
+    salesCopy?: {
+      headline:    string;
+      subheadline: string;
+      body:        string;
+    };
+    marketplaceDesc?:   string;
+    storeDesc?:         string;
+    seoTitle?:          string;
+    seoMetaDesc?:       string;
+    tags?:              string[];
+    launchAnnouncement?: string;
+    faq?:               Array<{ q: string; a: string }>;
+    ctas?:              string[];
+    headlines?:         string[];
+    /* ── Social Media ── */
+    carousels?:         Array<{ hook: string; slides: string[] }>;
+    tiktokHooks?:       string[];
+    xPosts?:            string[];
+    instagramCaptions?: string[];
+    /* ── Email Marketing ── */
+    emails?: Array<{
+      name:    string;
+      subject: string;
+      preview: string;
+      body:    string;
+    }>;
+    /* Legacy fields (kept for backwards compat) */
+    posts?:        string[];
+    emailSubject?: string;
+    hashtags?:     string[];
   };
   store?: {
     productId: string;

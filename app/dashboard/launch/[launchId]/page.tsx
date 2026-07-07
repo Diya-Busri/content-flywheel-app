@@ -1,16 +1,17 @@
 /**
  * /dashboard/launch/[launchId] — AI Execution Dashboard
  * ───────────────────────────────────────────────────────
- * Phase 1.4: Research, Product, and Design agents live.
+ * Phase 1.5: Research, Product, Design, and Marketing agents live.
  *
  * Architecture:
  *   • PIPELINE_STAGES config defines every agent slot.
- *   • `execute` is null for un-wired stages (Phase 1.5+).
+ *   • `execute` is null for un-wired stages (Phase 1.6+).
  *   • The pipeline runner iterates stages, skips null slots,
  *     and passes an ExecutionContext to each agent.
  *   • Agent Cards show live steps + per-stage progress.
  *   • Design steps carry imageUrl — images appear live as each renders.
- *   • Future phases: fill `execute` for Marketing, Store.
+ *   • Marketing streams folder-asset events — campaign folder view updates live.
+ *   • Future phases: fill `execute` for Store.
  */
 "use client";
 
@@ -22,11 +23,12 @@ import {
   Clock, PlugZap, ChevronDown, ChevronUp,
 } from "lucide-react";
 
-import { runLaunchResearchAgent } from "@/lib/agents/launch-research-agent";
-import { runLaunchProductAgent }  from "@/lib/agents/launch-product-agent";
-import { runLaunchDesignAgent }   from "@/lib/agents/launch-design-agent";
+import { runLaunchResearchAgent }   from "@/lib/agents/launch-research-agent";
+import { runLaunchProductAgent }    from "@/lib/agents/launch-product-agent";
+import { runLaunchDesignAgent }     from "@/lib/agents/launch-design-agent";
+import { runLaunchMarketingAgent }  from "@/lib/agents/launch-marketing-agent";
 import type {
-  ExecutionContext, AgentStep, AgentStatus, SaveProgressPatch,
+  ExecutionContext, AgentStep, AgentStatus, SaveProgressPatch, FolderAssetItem,
 } from "@/lib/agents/types";
 import type {
   LaunchStatus, LaunchStageId, LaunchStageResults,
@@ -82,9 +84,9 @@ const PIPELINE_STAGES: StageConfig[] = [
     emoji:       "📣",
     label:       "Marketing",
     agentLabel:  "Marketing Agent",
-    description: "Write launch captions, email subjects, and hashtag sets",
+    description: "Generate full launch campaign: copy, social posts, and email sequences",
     icon:        Megaphone,
-    execute:     null,  // Phase 1.5
+    execute:     runLaunchMarketingAgent,  // ← Phase 1.5: wired
   },
   {
     id:          "store",
@@ -166,6 +168,87 @@ function StepLine({ step }: { step: AgentStep }) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MARKETING FOLDER VIEW
+   Shows 3 collapsible campaign folders that fill up live.
+══════════════════════════════════════════════════════════ */
+
+const FOLDER_CONFIG = [
+  { category: "launch" as const, emoji: "🚀", label: "Launch Campaign"   },
+  { category: "social" as const, emoji: "📱", label: "Social Media"       },
+  { category: "email"  as const, emoji: "📧", label: "Email Marketing"    },
+];
+
+function MarketingFolderView({ items }: { items: FolderAssetItem[] }) {
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set(["launch", "social", "email"]));
+
+  const toggle = (cat: string) =>
+    setOpenFolders(prev => {
+      const next = new Set(prev);
+      next.has(cat) ? next.delete(cat) : next.add(cat);
+      return next;
+    });
+
+  return (
+    <div className="mt-2 space-y-1.5 pl-1">
+      {FOLDER_CONFIG.map(({ category, emoji, label }) => {
+        const folderItems = items.filter(it => it.category === category);
+        const isOpen      = openFolders.has(category);
+        const count       = folderItems.length;
+
+        return (
+          <div key={category} className="rounded-lg border border-border/40 overflow-hidden">
+            {/* Folder header */}
+            <button
+              onClick={() => toggle(category)}
+              className="w-full flex items-center gap-2 px-3 py-2 bg-muted/20 hover:bg-muted/40 transition-colors"
+            >
+              <span className="text-base leading-none">{emoji}</span>
+              <span className="flex-1 text-[12px] font-semibold text-left text-foreground/80">{label}</span>
+              {count > 0 && (
+                <span className="text-[10px] font-bold text-muted-foreground/60 bg-muted/60 rounded px-1.5 py-0.5">
+                  {count}
+                </span>
+              )}
+              {isOpen
+                ? <ChevronUp   className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />}
+            </button>
+
+            {/* Folder items */}
+            {isOpen && (
+              <div className="divide-y divide-border/30">
+                {folderItems.length === 0 ? (
+                  <div className="px-3 py-2.5 flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 text-muted-foreground/30 animate-spin shrink-0" />
+                    <span className="text-[11px] text-muted-foreground/40">Generating...</span>
+                  </div>
+                ) : (
+                  folderItems.map(item => (
+                    <div key={item.id} className="px-3 py-2">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="w-3 h-3 text-green-500 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold text-foreground/80 truncate">{item.label}</p>
+                          {item.preview && (
+                            <p className="text-[10px] text-muted-foreground/60 mt-0.5 leading-relaxed line-clamp-2">
+                              {item.preview}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -327,6 +410,9 @@ export default function LaunchExecutionPage() {
   const [agentPLabel,    setAgentPLabel]    = useState<string>("");
   const [completedSummaries, setCompletedSummaries] = useState<Record<number, string>>({});
 
+  /* ── Marketing campaign folder items (streamed live) ── */
+  const [marketingFolderItems, setMarketingFolderItems] = useState<FolderAssetItem[]>([]);
+
   /* ── Overall progress ── */
   const [overallPct, setOverallPct] = useState<number>(0);
   const [overallStatus, setOverallStatus] = useState<LaunchStatus>("queued");
@@ -400,6 +486,12 @@ export default function LaunchExecutionPage() {
             const overall = Math.round(from + (pct / 100) * (to - from));
             setOverallPct(overall);
           },
+          // Marketing Agent: stream campaign folder assets live
+          ...(stage.id === "marketing" ? {
+            onFolderAsset: (item: FolderAssetItem) => {
+              setMarketingFolderItems(prev => [...prev, item]);
+            },
+          } : {}),
         },
         saveProgress,
       };
@@ -431,6 +523,16 @@ export default function LaunchExecutionPage() {
           setCompletedSummaries(prev => ({
             ...prev,
             [i]: `${count} marketing asset${count !== 1 ? "s" : ""} generated · cover, mockup, thumbnail, social`,
+          }));
+        } else if (stage.id === "marketing" && results.marketing) {
+          const carousels = results.marketing.carousels?.length ?? 0;
+          const emails    = results.marketing.emails?.length ?? 0;
+          const xPosts    = results.marketing.xPosts?.length ?? 0;
+          const tiktoks   = results.marketing.tiktokHooks?.length ?? 0;
+          const total     = carousels + emails + xPosts + tiktoks + 9; // +9 for launch assets
+          setCompletedSummaries(prev => ({
+            ...prev,
+            [i]: `${total}+ assets · launch copy, ${carousels} carousels, ${emails} emails, ${xPosts + tiktoks} posts`,
           }));
         }
       } catch (err) {
@@ -564,17 +666,26 @@ export default function LaunchExecutionPage() {
               agentStatuses.slice(0, i).every(s => s === "complete" || s === "waiting") &&
               i === (agentStatuses.findIndex(s => s !== "complete") ?? i);
 
+            const showFolders =
+              stage.id === "marketing" &&
+              (status === "working" || status === "complete") &&
+              marketingFolderItems.length > 0;
+
             return (
-              <AgentCard
-                key={stage.id}
-                stage={stage}
-                status={status}
-                steps={i === activeIdx ? currentSteps : []}
-                agentProgress={i === activeIdx ? agentProgress : 0}
-                progressLabel={i === activeIdx ? agentPLabel : ""}
-                isNextUp={isNextUp}
-                completeSummary={completedSummaries[i]}
-              />
+              <div key={stage.id}>
+                <AgentCard
+                  stage={stage}
+                  status={status}
+                  steps={i === activeIdx ? currentSteps : []}
+                  agentProgress={i === activeIdx ? agentProgress : 0}
+                  progressLabel={i === activeIdx ? agentPLabel : ""}
+                  isNextUp={isNextUp}
+                  completeSummary={completedSummaries[i]}
+                />
+                {showFolders && (
+                  <MarketingFolderView items={marketingFolderItems} />
+                )}
+              </div>
             );
           })}
         </div>
@@ -587,11 +698,11 @@ export default function LaunchExecutionPage() {
               <PlugZap className="w-4 h-4 text-muted-foreground/40 mt-0.5 shrink-0" />
               <div>
                 <p className="text-[12px] font-semibold text-foreground mb-0.5">
-                  Phase 1.4 — Research, Product & Design agents live
+                  Phase 1.5 — Research, Product, Design & Marketing agents live
                 </p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Research, Product, and Design assets are saved to the pipeline.
-                  Marketing and Store agents connect in the next phases — no UI changes needed.
+                  Research, Product, Design, and Marketing assets are saved to the pipeline.
+                  The Store agent connects in the next phase — no UI changes needed.
                 </p>
               </div>
             </div>

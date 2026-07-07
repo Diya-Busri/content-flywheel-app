@@ -22,6 +22,16 @@ export interface AgentStep {
   status:   AgentStepStatus;
   /** Optional: when set, renders an image thumbnail below the step label (Design Agent). */
   imageUrl?: string;
+  /** Optional: short text preview shown below the step label when done (Marketing Agent). */
+  preview?: string;
+}
+
+/** A single asset item inside a marketing campaign folder. */
+export interface FolderAssetItem {
+  category: "launch" | "social" | "email";
+  id:       string;
+  label:    string;
+  preview:  string;
 }
 
 /* ─── Callbacks ─────────────────────────────────────────────────────────────── */
@@ -39,6 +49,12 @@ export interface AgentCallbacks {
    * e.g. Research = 0–20% overall, so agent reporting 50% → 10% overall.
    */
   onProgress: (pct: number, label: string) => void;
+
+  /**
+   * Marketing Agent only — called for each completed campaign asset.
+   * The execution page groups these into the campaign folder view.
+   */
+  onFolderAsset?: (item: FolderAssetItem) => void;
 }
 
 /* ─── Save patch ─────────────────────────────────────────────────────────────── */
