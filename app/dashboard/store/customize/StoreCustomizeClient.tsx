@@ -484,9 +484,6 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     })()
   );
   const [customDomainError, setCustomDomainError] = useState<string | null>(null);
-  const [domainStep, setDomainStep] = useState<1 | 2>(1); // 1 = find, 2 = connect
-  const [brandSearch, setBrandSearch] = useState("");
-  const [showDnsGuide, setShowDnsGuide] = useState(false);
 
   const handleConnectCustomDomain = async () => {
     const domain = customDomainInput.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
@@ -504,7 +501,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
         setCustomDomainError(data.error ?? "Failed to connect domain.");
       } else {
         setDomainDns(data.dns ?? { type: "CNAME", name: "@", value: "cname.vercel-dns.com" });
-        toast({ title: "Domain connected!", description: "We've emailed you step-by-step setup instructions." });
+        toast({ title: "Domain connected!", description: `Add the DNS record below at your registrar to go live.` });
       }
     } catch {
       setCustomDomainError("Network error. Please try again.");
@@ -1088,30 +1085,35 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                     )}
                   </div>
 
-                  {/* Custom domain — two-step flow when unlocked */}
+                  {/* Custom .com domain — input when unlocked */}
                   {settings.customDomainActive ? (
                     <div className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2.5">
-                      {/* Header */}
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
                           <Globe size={13} className="text-green-600" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-green-800">Custom Domain</p>
-                          <p className="text-[11px] text-green-600">Connect your own domain to your store</p>
+                          <p className="text-[11px] text-green-600">Connect your own .com domain to your store</p>
                         </div>
                         <span className="text-[10px] font-bold text-green-600 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full shrink-0">Unlocked</span>
                       </div>
 
                       {domainDns ? (
-                        /* ── Connected: show DNS record ── */
+                        /* Domain connected — show DNS instructions */
                         <div className="space-y-2">
                           <div className="flex items-center gap-1.5">
                             <span className="text-[11px] font-semibold text-green-800">Connected:</span>
                             <span className="text-[11px] font-mono text-green-700">{customDomainInput}</span>
-                            <button type="button" onClick={handleRemoveCustomDomain} className="ml-auto text-[10px] text-red-400 hover:text-red-600 underline">Remove</button>
+                            <button
+                              type="button"
+                              onClick={handleRemoveCustomDomain}
+                              className="ml-auto text-[10px] text-red-400 hover:text-red-600 underline"
+                            >
+                              Remove
+                            </button>
                           </div>
-                          <div className="rounded-lg bg-white border border-green-200 p-2.5 space-y-2">
+                          <div className="rounded-lg bg-white border border-green-200 p-2.5 space-y-1.5">
                             <p className="text-[11px] font-semibold text-gray-700">Add this DNS record at your registrar:</p>
                             <div className="grid grid-cols-3 gap-1 text-[10px]">
                               <div className="bg-gray-50 rounded p-1.5">
@@ -1122,94 +1124,24 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                                 <p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Name</p>
                                 <p className="font-mono font-bold text-gray-800">{domainDns.name}</p>
                               </div>
-                              <div className="bg-gray-50 rounded p-1.5">
+                              <div className="bg-gray-50 rounded p-1.5 col-span-1">
                                 <p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Value</p>
                                 <p className="font-mono font-bold text-gray-800 break-all">{domainDns.value}</p>
                               </div>
                             </div>
-
-                            {/* Collapsible step-by-step guide */}
-                            <button
-                              type="button"
-                              onClick={() => setShowDnsGuide((v) => !v)}
-                              className="flex items-center gap-1 text-[11px] text-green-700 font-semibold hover:text-green-900"
-                            >
-                              <span>{showDnsGuide ? "▾" : "▸"}</span>
-                              Not sure how to add this? See step-by-step
-                            </button>
-                            {showDnsGuide && (
-                              <div className="bg-green-50 border border-green-100 rounded-lg p-2.5 space-y-2 text-[11px] text-gray-700">
-                                <p className="font-semibold text-green-800">If you bought your domain on Namecheap:</p>
-                                <div className="space-y-1.5">
-                                  <div className="flex gap-2">
-                                    <span className="font-bold text-green-600 shrink-0">1.</span>
-                                    <span>Go to <a href="https://ap.www.namecheap.com/domains/list/" target="_blank" rel="noopener noreferrer" className="underline font-semibold text-green-700">Namecheap → Domain List</a> and click <strong>Manage</strong> next to your domain.</span>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <span className="font-bold text-green-600 shrink-0">2.</span>
-                                    <span>Click the <strong>Advanced DNS</strong> tab. Under &ldquo;Host Records&rdquo; click <strong>Add New Record</strong>.</span>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <span className="font-bold text-green-600 shrink-0">3.</span>
-                                    <span>Set Type to <code className="bg-white border border-green-200 px-1 rounded font-mono">CNAME Record</code>, Host to <code className="bg-white border border-green-200 px-1 rounded font-mono">@</code>, Value to <code className="bg-white border border-green-200 px-1 rounded font-mono">cname.vercel-dns.com</code>. Save.</span>
-                                  </div>
-                                </div>
-                                <p className="text-[10px] text-gray-500">Used GoDaddy, Squarespace, or another registrar? The steps are similar — look for &ldquo;DNS Management&rdquo; in your domain settings.</p>
-                              </div>
-                            )}
-
-                            <p className="text-[10px] text-gray-400">Changes can take up to 24 hours. Your store goes live automatically once DNS propagates.</p>
-                            <p className="text-[10px] text-green-600 font-medium">📧 We&apos;ve emailed you these instructions so you can do this at your own pace.</p>
+                            <p className="text-[10px] text-gray-400">DNS changes take up to 24 hours to propagate. Your store will go live automatically.</p>
                           </div>
-                        </div>
-                      ) : domainStep === 1 ? (
-                        /* ── Step 1: Search for a domain ── */
-                        <div className="space-y-2">
-                          <p className="text-[11px] font-semibold text-green-800">Step 1 — Find a domain name</p>
-                          <div className="flex gap-1.5 items-center">
-                            <Input
-                              value={brandSearch}
-                              onChange={(e) => setBrandSearch(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                              placeholder="yourbrand"
-                              className="h-8 text-xs bg-white text-gray-900 placeholder:text-gray-400 focus:border-green-500 flex-1"
-                            />
-                            <span className="text-[11px] text-gray-400 shrink-0">.com</span>
-                          </div>
-                          {brandSearch.length > 1 && (
-                            <div className="space-y-1">
-                              {([".com", ".co.uk", ".shop", ".io"] as const).map((tld) => (
-                                <a
-                                  key={tld}
-                                  href={`https://www.namecheap.com/domains/registration/results/?domain=${brandSearch}${tld}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-green-200 hover:border-green-400 transition-colors no-underline"
-                                >
-                                  <span className="text-[11px] font-mono font-semibold text-gray-700">{brandSearch}{tld}</span>
-                                  <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Check price →</span>
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setDomainStep(2)}
-                            className="text-[11px] text-green-700 underline hover:text-green-900"
-                          >
-                            I already have a domain →
-                          </button>
                         </div>
                       ) : (
-                        /* ── Step 2: Connect the domain ── */
+                        /* Domain not yet connected — show input */
                         <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <button type="button" onClick={() => { setDomainStep(1); setCustomDomainError(null); }} className="text-[10px] text-green-600 hover:text-green-800">← Back</button>
-                            <p className="text-[11px] font-semibold text-green-800">Step 2 — Enter your domain</p>
-                          </div>
                           <div className="flex gap-1.5">
                             <Input
                               value={customDomainInput}
-                              onChange={(e) => { setCustomDomainInput(e.target.value); setCustomDomainError(null); }}
+                              onChange={(e) => {
+                                setCustomDomainInput(e.target.value);
+                                setCustomDomainError(null);
+                              }}
                               placeholder="yourbrand.com"
                               className="h-8 text-xs bg-white text-gray-900 placeholder:text-gray-400 focus:border-green-500 flex-1"
                             />
@@ -1224,17 +1156,8 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                             </button>
                           </div>
                           {customDomainError && (
-                            <p className="text-[11px] text-red-500">
-                              {customDomainError.includes("another Vercel account")
-                                ? "This domain is already hosted elsewhere. Remove it from your current host first, then try again."
-                                : customDomainError.includes("another store")
-                                ? "This domain is already connected to a different store."
-                                : customDomainError.includes("not unlocked")
-                                ? "Custom domain feature isn't active on your account."
-                                : customDomainError}
-                            </p>
+                            <p className="text-[11px] text-red-500">{customDomainError}</p>
                           )}
-                          <p className="text-[10px] text-green-700">After connecting, we&apos;ll show you the DNS record to add at your registrar.</p>
                         </div>
                       )}
                     </div>

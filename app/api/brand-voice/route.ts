@@ -60,9 +60,6 @@ export async function POST(request: NextRequest) {
     const targetAudience = (body.targetAudience as string)?.trim() || null;
     const writingStyle = (body.writingStyle as string)?.trim() || null;
     const examplePhrases = (body.examplePhrases as string)?.trim() || null;
-    const platformFocus = (body.platformFocus as string)?.trim() || null;
-    const postingFrequency = (body.postingFrequency as string)?.trim() || null;
-    const audienceSize = (body.audienceSize as string)?.trim() || null;
 
     await db
       .insert(brandVoiceTable)
@@ -73,9 +70,6 @@ export async function POST(request: NextRequest) {
         targetAudience,
         writingStyle,
         examplePhrases,
-        platformFocus,
-        postingFrequency,
-        audienceSize,
       })
       .onConflictDoUpdate({
         target: brandVoiceTable.userId,
@@ -85,9 +79,6 @@ export async function POST(request: NextRequest) {
           targetAudience,
           writingStyle,
           examplePhrases,
-          ...(platformFocus !== null ? { platformFocus } : {}),
-          ...(postingFrequency !== null ? { postingFrequency } : {}),
-          ...(audienceSize !== null ? { audienceSize } : {}),
           updatedAt: new Date(),
         },
       });
@@ -104,9 +95,6 @@ export async function POST(request: NextRequest) {
       targetAudience: row?.targetAudience ?? undefined,
       writingStyle: row?.writingStyle ?? undefined,
       examplePhrases: row?.examplePhrases ?? undefined,
-      platformFocus: row?.platformFocus ?? undefined,
-      postingFrequency: row?.postingFrequency ?? undefined,
-      audienceSize: row?.audienceSize ?? undefined,
       createdAt: row?.createdAt?.toISOString(),
       updatedAt: row?.updatedAt?.toISOString(),
     });

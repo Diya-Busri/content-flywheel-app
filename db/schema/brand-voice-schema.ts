@@ -12,9 +12,6 @@ export const brandVoiceTable = pgTable("brand_voice", {
   targetAudience: text("target_audience"),
   writingStyle: text("writing_style"),
   examplePhrases: text("example_phrases"),
-  platformFocus: text("platform_focus"),       // comma-separated e.g. "youtube,tiktok"
-  postingFrequency: text("posting_frequency"), // "daily"|"few_times_week"|"weekly"|"less"
-  audienceSize: text("audience_size"),         // "just_starting"|"small"|"growing"|"established"
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

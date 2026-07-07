@@ -11,6 +11,7 @@ import { VideoNotificationWatcher } from "@/components/video-notification-watche
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { BundleProgressBanner } from "@/components/dashboard/BundleProgressBanner";
+import { DevOnboardingReset } from "@/components/dev/DevOnboardingReset";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SelectProfile } from "@/db/schema/profiles-schema";
@@ -53,6 +54,7 @@ export function DashboardLayoutClient({ profile, userEmail, disabledFeatures = [
           <BundleProgressBanner />
           {children}
           <FeedbackWidget />
+          <DevOnboardingReset isAdmin={isAdmin} />
         </main>
         </OnboardingProvider>
       </SidebarProvider>
