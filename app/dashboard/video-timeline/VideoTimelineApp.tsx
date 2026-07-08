@@ -84,6 +84,9 @@ const ELEMENT_TYPES = {
   STICKER: "sticker",
 } as const;
 
+type MotionPreset = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down" | "ken-burns" | "shake" | "pulse-glow";
+type SceneEffects = { motionBlur?: boolean; softGlow?: boolean; filmGrain?: boolean; vignette?: boolean; particles?: boolean; };
+
 type Scene = {
   id: string;
   title: string;
@@ -100,6 +103,10 @@ type Scene = {
   originalImageUrl?: string | null;
   /** Per-scene animation progress state. */
   animationState?: "rendering" | "complete" | "failed" | null;
+  /** CSS-based cinematic motion preset applied to the background in preview. */
+  motionPreset?: MotionPreset | null;
+  /** Visual effects overlays (vignette, grain, glow, particles, motion blur). */
+  sceneEffects?: SceneEffects | null;
 };
 
 function isBackgroundEl(el: SceneElement): el is BackgroundElement {
@@ -116,6 +123,15 @@ function isGraphicEl(el: SceneElement): el is GraphicElement {
 }
 function isStickerEl(el: SceneElement): el is StickerElement {
   return el.type === "sticker";
+}
+
+/** Returns inline CSS for the CSS-keyframe motion preset on the background wrapper. */
+function getMotionStyle(preset: MotionPreset | null | undefined, duration: number, playing: boolean): React.CSSProperties {
+  if (!preset || preset === "none") return {};
+  const dur = `${Math.max(duration, 0.5).toFixed(2)}s`;
+  const loop = preset === "shake" || preset === "pulse-glow" ? "infinite" : "1";
+  const ease = preset === "ken-burns" ? "ease-in-out" : "linear";
+  return { animation: `cf-${preset} ${dur} ${ease} ${loop} both`, animationPlayState: playing ? "running" : "paused" };
 }
 
 type SceneAsset =
@@ -3778,6 +3794,20 @@ function VideoTimelineInner() {
             const media = getSceneBackgroundMedia(scene);
             if (!media?.url) return;
             try {
+              // Map CSS motion preset to Ken Burns FFmpeg params for export
+              const motionToKB: Record<string, { disableKenBurns?: boolean; kenBurnsZoomMax?: number }> = {
+                "none":       { disableKenBurns: true },
+                "zoom-in":    { disableKenBurns: false, kenBurnsZoomMax: 1.4 },
+                "zoom-out":   { disableKenBurns: false, kenBurnsZoomMax: 1.3 },
+                "pan-left":   { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
+                "pan-right":  { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
+                "pan-up":     { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
+                "pan-down":   { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
+                "ken-burns":  { disableKenBurns: false, kenBurnsZoomMax: 1.45 },
+                "shake":      { disableKenBurns: true },
+                "pulse-glow": { disableKenBurns: true },
+              };
+              const kbParams = scene.motionPreset ? (motionToKB[scene.motionPreset] ?? {}) : {};
               const res = await fetch("/api/videos/prerender-scene", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -3787,6 +3817,7 @@ function VideoTimelineInner() {
                   duration: scene.duration,
                   resolution,
                   sceneKey: scene.id,
+                  ...kbParams,
                 }),
               });
               const data = (await res.json().catch(() => ({}))) as { segmentUrl?: string };
@@ -5340,6 +5371,12 @@ function VideoTimelineInner() {
                   )}
                   {/* Current scene (transition out) */}
                   <div className="absolute inset-0 w-full h-full" style={currentLayerStyle}>
+                  {/* Motion-animated background wrapper — keyed to scene so animation restarts on scene change */}
+                  <div
+                    key={`motion-${sceneData?.id ?? "none"}`}
+                    className="absolute inset-0 w-full h-full"
+                    style={getMotionStyle(sceneData?.motionPreset, sceneData?.duration ?? 5, isPlaying)}
+                  >
                   {/* Background */}
                   {backgroundMedia?.type === "image" ? (
                     <>
@@ -5388,6 +5425,49 @@ function VideoTimelineInner() {
                       </div>
                     </div>
                   )}
+                  </div>
+                  {/* Scene effects overlays */}
+                  {sceneData?.sceneEffects?.motionBlur && (
+                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 1, backdropFilter: "blur(1.5px)" }} />
+                  )}
+                  {sceneData?.sceneEffects?.softGlow && (
+                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2, background: "radial-gradient(ellipse at 50% 40%, rgba(255,220,120,0.22) 0%, transparent 65%)", mixBlendMode: "screen" as const }} />
+                  )}
+                  {sceneData?.sceneEffects?.vignette && (
+                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 3, background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.78) 100%)" }} />
+                  )}
+                  {sceneData?.sceneEffects?.filmGrain && (
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        zIndex: 4,
+                        opacity: 0.28,
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+                        backgroundSize: "200px 200px",
+                        animation: "cf-film-grain 0.08s steps(1) infinite",
+                        mixBlendMode: "overlay" as const,
+                      }}
+                    />
+                  )}
+                  {sceneData?.sceneEffects?.particles && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 5 }}>
+                      {[...Array(10)].map((_, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            position: "absolute",
+                            width: `${2 + (i % 3)}px`,
+                            height: `${2 + (i % 3)}px`,
+                            borderRadius: "50%",
+                            background: i % 2 === 0 ? "rgba(255,210,80,0.9)" : "rgba(200,160,255,0.75)",
+                            left: `${(i * 11 + 5) % 88}%`,
+                            bottom: 0,
+                            animation: `cf-particle-float ${2.5 + (i % 3) * 0.7}s ${(i * 0.4) % 2.1}s ease-out infinite`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                   {/* Elements overlay */}
                   {elements.slice(1).map((element) => (
                     <div
@@ -5397,6 +5477,7 @@ function VideoTimelineInner() {
                         left: `${"position" in element && element.position ? element.position.x : 50}%`,
                         top: `${"position" in element && element.position ? element.position.y : 50}%`,
                         transform: "translate(-50%, -50%)",
+                        zIndex: 10,
                       }}
                     >
                       {isTextEl(element) && (
@@ -5931,6 +6012,63 @@ function VideoTimelineInner() {
                   </div>
                 )}
 
+                {/* Motion Preset */}
+                {selectedSceneIndex !== null && (
+                  <div className="mb-4">
+                    <label className="text-xs font-medium text-[#606060] block mb-1.5">Motion</label>
+                    <select
+                      className="w-full rounded border border-[#2a2a2a] bg-[#0f0f0f] text-white px-2 py-1.5 text-xs"
+                      value={scenes[selectedSceneIndex]?.motionPreset ?? "none"}
+                      onChange={(e) => {
+                        const val = e.target.value as MotionPreset;
+                        setScenes(prev => prev.map((s, i) => i !== selectedSceneIndex ? s : { ...s, motionPreset: val === "none" ? null : val }));
+                      }}
+                    >
+                      <option value="none">None</option>
+                      <option value="zoom-in">Slow Zoom In</option>
+                      <option value="zoom-out">Slow Zoom Out</option>
+                      <option value="pan-left">Pan Left</option>
+                      <option value="pan-right">Pan Right</option>
+                      <option value="pan-up">Pan Up</option>
+                      <option value="pan-down">Pan Down</option>
+                      <option value="ken-burns">Ken Burns</option>
+                      <option value="shake">Shake</option>
+                      <option value="pulse-glow">Pulse Glow</option>
+                    </select>
+                  </div>
+                )}
+                {/* Scene Effects */}
+                {selectedSceneIndex !== null && (
+                  <div className="mb-4">
+                    <label className="text-xs font-medium text-[#606060] block mb-1.5">Effects</label>
+                    <div className="grid grid-cols-2 gap-1">
+                      {(["motionBlur", "softGlow", "filmGrain", "vignette", "particles"] as const).map((fx) => {
+                        const fxLabels: Record<string, string> = { motionBlur: "Motion Blur", softGlow: "Soft Glow", filmGrain: "Film Grain", vignette: "Vignette", particles: "Particles" };
+                        const active = Boolean(scenes[selectedSceneIndex]?.sceneEffects?.[fx]);
+                        return (
+                          <button
+                            key={fx}
+                            type="button"
+                            onClick={() => {
+                              if (selectedSceneIndex === null) return;
+                              setScenes(prev => prev.map((s, i) => i !== selectedSceneIndex ? s : {
+                                ...s,
+                                sceneEffects: { ...(s.sceneEffects ?? {}), [fx]: !active },
+                              }));
+                            }}
+                            className={`rounded px-2 py-1.5 text-[10px] font-medium transition-all ${
+                              active
+                                ? "bg-[#f97316] text-white"
+                                : "bg-[#1a1a1a] border border-[#2a2a2a] text-[#606060] hover:text-white hover:border-[#3a3a3a]"
+                            }`}
+                          >
+                            {fxLabels[fx]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {selectedSceneIndex !== null && scenes[selectedSceneIndex]?.animationType && (
                   <div className="mb-4">
                     <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Animation</label>
