@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Rocket, ArrowRight, Loader2, Sparkles, Compass,
-  PencilLine, AlertTriangle, ChevronRight,
+  PencilLine, AlertTriangle, ChevronRight, Lightbulb,
 } from "lucide-react";
+import { DiscoveryFlow } from "./components/DiscoveryFlow";
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -144,6 +145,7 @@ function InvalidState({ suggestion }: { suggestion: string }) {
 export default function LaunchPage() {
   const router       = useRouter();
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const [mode,    setMode]    = useState<"launch" | "discover">("launch");
   const [goal,    setGoal]    = useState("");
   const [phase,   setPhase]   = useState<Phase>("idle");
   const [error,   setError]   = useState<string | null>(null);
@@ -241,6 +243,16 @@ export default function LaunchPage() {
 
   const isLoading = phase === "validating" || phase === "launching";
 
+  /* ── Discovery mode — full-page takeover ── */
+  if (mode === "discover") {
+    return (
+      <DiscoveryFlow
+        onClose={() => setMode("launch")}
+        onBuild={(goal) => startPipeline(goal)}
+      />
+    );
+  }
+
   return (
     <main className="min-h-dvh bg-background flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-16">
@@ -334,6 +346,23 @@ export default function LaunchPage() {
           {error && (
             <p className="text-center text-[13px] text-red-500 mb-3">{error}</p>
           )}
+
+          {/* ── Help Me Decide CTA ── */}
+          <div className="relative flex items-center gap-3 my-4">
+            <div className="flex-1 h-px bg-border/60" />
+            <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest shrink-0">or</span>
+            <div className="flex-1 h-px bg-border/60" />
+          </div>
+
+          <button
+            onClick={() => setMode("discover")}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-2xl border-2 border-dashed border-border hover:border-orange-500/40 hover:bg-orange-500/[0.03] text-foreground text-[14px] font-semibold transition-all group disabled:opacity-40 disabled:cursor-not-allowed mb-4"
+          >
+            <Lightbulb className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
+            ✨ Help me decide what to build
+            <span className="text-[11px] text-muted-foreground font-normal hidden sm:inline">— guided discovery</span>
+          </button>
 
           {/* Time estimate */}
           <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground/50 mb-3">
