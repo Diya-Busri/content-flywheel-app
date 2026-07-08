@@ -41,6 +41,7 @@ import { upload } from "@/lib/storage";
 import {
   detectNiche,
   buildAllCoverConcepts,
+  buildStoreThumbnailConcept,
   type CoverInput,
 } from "@/lib/cover-templates";
 
@@ -369,6 +370,7 @@ function streamDesignGeneration(
     const generatedUrls: Record<string, string> = {};
     const successfulConcepts: Array<{ style: string; label: string; designId: string }> = [];
     let carouselBundleId: string | undefined;
+    let thumbnailDesignId: string | undefined;
 
     try {
       /* ── Step 0: prep ── */
@@ -436,6 +438,32 @@ function streamDesignGeneration(
 
       await send({ type: "step-done", id: "concepts" });
 
+      /* ── Phase 1b: Generate dedicated store thumbnail design (800×800) ── */
+      try {
+        await send({ type: "asset-generating", assetId: "cover:thumbnail", label: "Store Thumbnail Design" });
+        const thumbConcept = buildStoreThumbnailConcept(coverInput);
+        const [thumbRow] = await db
+          .insert(designsTable)
+          .values({
+            userId,
+            title:      `${productName} — Store Thumbnail`,
+            data:       thumbConcept.data,
+            bundleId:   null,
+            slideIndex: null,
+          })
+          .returning({ id: designsTable.id });
+        thumbnailDesignId = thumbRow.id;
+        await send({
+          type:         "asset-done",
+          assetId:      "cover:thumbnail",
+          label:        "Store Thumbnail Design",
+          designId:     thumbnailDesignId,
+          conceptStyle: "thumbnail",
+        });
+      } catch (thumbErr) {
+        console.warn("[launch/design] Thumbnail design failed (non-fatal):", thumbErr);
+      }
+
       /* ── Phase 2: Generate mockup, thumbnail, social sequentially ── */
       for (const asset of REGULAR_ASSETS) {
         await send({ type: "asset-generating", assetId: asset.id, label: asset.label });
@@ -483,10 +511,11 @@ function streamDesignGeneration(
 
         const updatedMarketing = {
           ...existingMarketing,
-          ...(generatedUrls.mockup          ? { bookMockupUrl:    generatedUrls.mockup }      : {}),
-          ...(generatedUrls.thumbnail       ? { thumbnailUrl:     generatedUrls.thumbnail }   : {}),
-          ...(generatedUrls.social          ? { socialPreviewUrl: generatedUrls.social }      : {}),
-          ...(successfulConcepts.length > 0 ? { coverConcepts:    successfulConcepts }        : {}),
+          ...(generatedUrls.mockup          ? { bookMockupUrl:      generatedUrls.mockup }    : {}),
+          ...(generatedUrls.thumbnail       ? { thumbnailUrl:       generatedUrls.thumbnail } : {}),
+          ...(generatedUrls.social          ? { socialPreviewUrl:   generatedUrls.social }    : {}),
+          ...(successfulConcepts.length > 0 ? { coverConcepts:      successfulConcepts }      : {}),
+          ...(thumbnailDesignId             ? { thumbnailDesignId:  thumbnailDesignId }       : {}),
         };
 
         /* ── Update cover page: store primary design reference (no image URL) ── */
@@ -520,6 +549,7 @@ function streamDesignGeneration(
       // Concepts are design records, not images — count them separately
       const assetsCount =
         successfulConcepts.length +
+        (thumbnailDesignId       ? 1 : 0) +
         (generatedUrls.mockup    ? 1 : 0) +
         (generatedUrls.thumbnail ? 1 : 0) +
         (generatedUrls.social    ? 1 : 0);

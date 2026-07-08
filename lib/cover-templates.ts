@@ -464,3 +464,68 @@ export function buildAllCoverConcepts(input: CoverInput): CoverConcept[] {
     data:  c.builder(input, pal),
   }));
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   STORE THUMBNAIL — 800 × 800 square
+   Simplified layout optimised for card size. Large title, minimal text, high
+   contrast. Never crops or distorts inside a square container.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+const TW = 800;
+const TH = 800;
+
+function buildStoreThumbnail(input: CoverInput, pal: Palette): DesignData {
+  const { title, author, category } = input;
+  return {
+    width: TW, height: TH,
+    background: pal.primary,
+    backgroundType: "gradient",
+    backgroundGradient: { color1: pal.primary, color2: pal.secondary, angle: 145 },
+    elements: [
+      // Depth circle — top-right
+      shape("bg-circ-a", TW - 240, -120, 360, 360,
+        { fill: "#FFFFFF", opacity: 0.06, borderRadius: 180, zIndex: 0 }),
+      // Depth circle — bottom-left
+      shape("bg-circ-b", -160, TH - 250, 340, 340,
+        { fill: "#FFFFFF", opacity: 0.05, borderRadius: 170, zIndex: 0 }),
+      // Top accent bar
+      shape("t-bar", 0, 0, TW, 8, { fill: pal.accent, zIndex: 1 }),
+      // Category pill background
+      shape("cat-bg", TW / 2 - 100, 56, 200, 40,
+        { fill: "#FFFFFF", opacity: 0.15, borderRadius: 20, zIndex: 1 }),
+      txt("cat", category.toUpperCase(), TW / 2 - 100, 58, 200, 40,
+        { fontSize: 11, fontWeight: "700", color: "#FFFFFF", letterSpacing: 2,
+          textAlign: "center", zIndex: 2 }),
+      // Large title — centred, bold, readable at 200px wide
+      txt("title", title, 56, 240, TW - 112, 330,
+        { fontSize: 72, fontWeight: "900", color: "#FFFFFF",
+          textAlign: "center", lineHeight: 1.08, zIndex: 2 }),
+      // Accent separator
+      shape("sep", TW / 2 - 56, 612, 112, 5,
+        { fill: pal.accent, borderRadius: 3, zIndex: 2 }),
+      // Author
+      txt("author", `By ${author}`, 0, TH - 90, TW, 50,
+        { fontSize: 17, fontWeight: "500", color: "#FFFFFF80",
+          textAlign: "center", letterSpacing: 1, zIndex: 2 }),
+    ],
+  };
+}
+
+export interface ThumbnailConcept {
+  id:    "thumbnail";
+  name:  "Store Thumbnail";
+  label: "Dedicated Store Thumbnail";
+  style: "thumbnail";
+  data:  DesignData;
+}
+
+export function buildStoreThumbnailConcept(input: CoverInput): ThumbnailConcept {
+  const pal = PALETTES[input.niche] ?? PALETTES.default;
+  return {
+    id:    "thumbnail",
+    name:  "Store Thumbnail",
+    label: "Dedicated Store Thumbnail",
+    style: "thumbnail",
+    data:  buildStoreThumbnail(input, pal),
+  };
+}

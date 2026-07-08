@@ -560,13 +560,13 @@ function ProductCard({
         }}
       >
         {/* Thumbnail */}
-        <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#f97316 0%,#ea580c 100%)", position: "relative", overflow: "hidden", flexShrink: 0 }}>
+        <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#0f0f12 0%,#1a1a2e 100%)", position: "relative", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {item.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={item.thumbnailUrl}
               alt={item.title}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.35s cubic-bezier(.4,0,.2,1)", transform: hovered ? "scale(1.04)" : "scale(1)" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
             />
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", background: "linear-gradient(135deg,#1f1f2e 0%,#2d1f3d 100%)" }}>
@@ -1538,10 +1538,10 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
             </div>
 
             {/* Thumbnail */}
-            <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#f97316 0%,#ea580c 100%)", flexShrink: 0, overflow: "hidden", position: "relative" }}>
+            <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#0f0f12 0%,#1a1a2e 100%)", flexShrink: 0, overflow: "hidden", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {quickView.thumbnailUrl
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={quickView.thumbnailUrl} alt={quickView.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ? <img src={quickView.thumbnailUrl} alt={quickView.title} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 : <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}><ShoppingBag style={{ width: "52px", height: "52px", color: "rgba(255,255,255,0.5)" }} /></div>
               }
               {quickView.nativePrice === 0 && (

@@ -50,6 +50,8 @@ export async function PATCH(
     "coverConcepts",
     // Cover design reference (element-based cover concept)
     "coverDesignId",
+    // Dedicated store thumbnail design reference
+    "thumbnailDesignId",
   ] as const;
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {

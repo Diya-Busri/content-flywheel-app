@@ -100,9 +100,9 @@ function ProjectThumbnail({ url, size = "md" }: { url: string | null; size?: "sm
   const dim = size === "sm" ? "w-10 h-10" : "w-full aspect-[4/3]";
   if (url) {
     return (
-      <div className={`${dim} rounded-xl overflow-hidden bg-muted/20 shrink-0`}>
+      <div className={`${dim} rounded-xl overflow-hidden bg-[#0f0f12] shrink-0`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="" className="w-full h-full object-cover" />
+        <img src={url} alt="" className="w-full h-full object-contain" />
       </div>
     );
   }
@@ -124,12 +124,12 @@ function ProjectCardGrid({ project }: { project: Project }) {
 
       {/* Thumbnail strip */}
       {project.thumbnailUrl ? (
-        <div className="relative h-32 bg-muted/10 overflow-hidden">
+        <div className="relative h-32 bg-[#0f0f12] overflow-hidden flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={project.thumbnailUrl}
             alt=""
-            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+            className="w-full h-full object-contain"
           />
           {/* Gradient overlay */}
           <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/40 to-transparent" />

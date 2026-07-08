@@ -111,9 +111,9 @@ export function ProjectsSection() {
               <div className="flex items-center gap-3 px-4 py-3">
                 {/* Thumbnail or icon */}
                 {project.thumbnailUrl ? (
-                  <div className="w-9 h-9 rounded-lg overflow-hidden bg-muted/20 shrink-0">
+                  <div className="w-9 h-9 rounded-lg overflow-hidden bg-[#0f0f12] shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={project.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                    <img src={project.thumbnailUrl} alt="" className="w-full h-full object-contain" />
                   </div>
                 ) : (
                   <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">

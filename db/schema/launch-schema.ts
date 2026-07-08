@@ -97,6 +97,8 @@ export type LaunchStageResults = {
     selectedConceptUrl?: string;
     /** Design Studio bundle ID for the auto-generated Instagram carousel */
     carouselBundleId?: string;
+    /** designsTable ID for the dedicated 800×800 store thumbnail design (editable in Design Studio) */
+    thumbnailDesignId?: string;
   };
   video?: {
     libraryScriptId: string;
