@@ -148,7 +148,7 @@ Return ONLY valid JSON — no markdown fences, no explanation before or after:
       "impact": "<qualitative: what improves and why, no made-up numbers>",
       "confidence": "<high|medium|low>",
       "actionType": "<edit_product|edit_store|regenerate_design|edit_marketing|manual>",
-      "actionHref": "<relevant page path, e.g. /dashboard/products/[id] or /dashboard/workspace?tab=content>"
+      "actionHref": "<relevant page path — use /dashboard/digital-products/[id]/edit for product/design edits, /dashboard/digital-products/[id]/edit#publish for store/publish, /dashboard/launch/[launchId]/workspace for marketing content>"
     }
   ]
 }`;

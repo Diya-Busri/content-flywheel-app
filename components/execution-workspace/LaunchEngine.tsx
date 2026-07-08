@@ -241,13 +241,13 @@ function buildChecklist(
       id:   "product",
       label: `Product "${results.product?.productName ?? "created"}"`,
       done: !!results.product?.productId,
-      href: productId ? `/dashboard/products/${productId}` : undefined,
+      href: productId ? `/dashboard/digital-products/${productId}/edit` : undefined,
     },
     {
       id:   "design",
       label: `${d?.assetsCount ?? 0} design assets generated`,
       done: !!d?.assetsCount && d.assetsCount > 0,
-      href: productId ? `/dashboard/products/${productId}` : undefined,
+      href: productId ? `/dashboard/digital-products/${productId}/edit` : undefined,
     },
     {
       id:   "copy",
@@ -283,7 +283,7 @@ function buildChecklist(
       id:   "publish",
       label: "Publish product to store",
       done: !!(s?.publishedAt),
-      href: productId ? `/dashboard/products/${productId}#publish` : undefined,
+      href: productId ? `/dashboard/digital-products/${productId}/edit#publish` : undefined,
     },
     {
       id:   "share_tiktok",
@@ -374,7 +374,7 @@ function buildRecommendations(results: LaunchStageResults): Recommendation[] {
         badgeColor: "text-orange-400 bg-orange-400/10",
         title:      `Fix: ${top.label}`,
         detail:     top.detail ?? `Resolving this could push your readiness above 90%.`,
-        href:       s.productId ? `/dashboard/products/${s.productId}` : undefined,
+        href:       s.productId ? `/dashboard/digital-products/${s.productId}/edit` : undefined,
       });
     }
   }
@@ -553,7 +553,7 @@ export function LaunchEngine({ launchId, productId, storeUrl, results }: LaunchE
       });
       setLaunched(true);
       // Navigate to publish page
-      router.push(`/dashboard/products/${productId}#publish`);
+      router.push(`/dashboard/digital-products/${productId}/edit#publish`);
     } catch {
       setLaunching(false);
     }
