@@ -277,6 +277,8 @@ function streamProductGeneration(
       }
 
       const populated: Array<{ id: string; title: string; content: string; order: number }> = [];
+      // Track which sections failed so we can report them
+      const failedSectionIndices: number[] = [];
 
       const batchSize = 3;
       for (let i = 0; i < outline.length; i += batchSize) {
@@ -284,26 +286,54 @@ function streamProductGeneration(
         const results = await Promise.allSettled(
           batch.map(async (section, batchIdx) => {
             const idx = i + batchIdx;
-            const result = await generateSingleSectionBody(genParams, section, idx, outline.length);
-            await send({ type: "section-done", index: idx, title: section.title, total: outline.length });
-            return { id: section.id, title: section.title, content: result.body, order: idx + 1 };
+            try {
+              const result = await generateSingleSectionBody(genParams, section, idx, outline.length);
+              const body = result.body?.trim() ?? "";
+              if (!body || body.length < 50) {
+                // Generation produced insufficient content — treat as failure
+                throw new Error(`Section "${section.title}" returned insufficient content (${body.length} chars)`);
+              }
+              await send({ type: "section-done", index: idx, title: section.title, total: outline.length });
+              return { id: section.id, title: section.title, content: body, order: idx + 1 };
+            } catch (secErr) {
+              // Stream a section-failed event so the UI can show it specifically
+              await send({
+                type:   "section-failed",
+                index:  idx,
+                title:  section.title,
+                total:  outline.length,
+                reason: secErr instanceof Error ? secErr.message : "Generation timed out",
+              });
+              throw secErr; // re-throw so allSettled captures as rejected
+            }
           })
         );
 
-        for (const r of results) {
+        for (let ri = 0; ri < results.length; ri++) {
+          const r   = results[ri]!;
+          const idx = i + ri;
           if (r.status === "fulfilled") {
             populated.push(r.value);
           } else {
-            // Graceful fallback — keep section with empty content
-            const fallbackIdx = populated.length;
-            const sec = outline[fallbackIdx];
-            if (sec) populated.push({ id: sec.id, title: sec.title, content: "", order: fallbackIdx + 1 });
+            // Graceful fallback — keep section in the product but with a placeholder body
+            const sec = outline[idx];
+            if (sec) {
+              populated.push({
+                id:      sec.id,
+                title:   sec.title,
+                // Minimal placeholder so the section title at least exists
+                content: `[Content generation failed for "${sec.title}" — use the editor to add content]`,
+                order:   idx + 1,
+              });
+              failedSectionIndices.push(idx);
+            }
           }
         }
       }
 
       populated.sort((a, b) => a.order - b.order);
-      const sectionsGenerated = populated.filter(s => s.content.length > 0).length;
+      const sectionsGenerated = populated.filter(s => !failedSectionIndices.includes(s.order - 1)).length;
+      const emptySections     = failedSectionIndices.length;
 
       /* ── 5. Pricing step ── */
       await send({ type: "step", id: "pricing", label: "Setting pricing recommendation..." });
@@ -343,6 +373,46 @@ function streamProductGeneration(
 
       await send({ type: "step-done", id: "saving" });
 
+      /* ── 7. Validation phase ── */
+      await send({ type: "validation-start" });
+
+      // Check 1: product id
+      await send({
+        type:   "validation-check",
+        id:     "product-id",
+        label:  "Product created in library",
+        passed: true,
+      });
+
+      // Check 2: sections complete
+      const allSectionsOk = sectionsGenerated >= outline.length;
+      await send({
+        type:   "validation-check",
+        id:     "sections-complete",
+        label:  `Sections generated (${sectionsGenerated}/${outline.length})`,
+        passed: allSectionsOk,
+        reason: allSectionsOk ? undefined : `${emptySections} section${emptySections !== 1 ? "s" : ""} failed — will be flagged for retry`,
+      });
+
+      // Check 3: no empty sections
+      await send({
+        type:   "validation-check",
+        id:     "no-empty-sections",
+        label:  `Content quality — all sections have body text`,
+        passed: emptySections === 0,
+        reason: emptySections > 0 ? `${emptySections} section${emptySections !== 1 ? "s" : ""} have placeholder content` : undefined,
+      });
+
+      // Check 4: DB confirmed
+      await send({
+        type:   "validation-check",
+        id:     "saved-to-db",
+        label:  "Saved to Digital Products library",
+        passed: true,
+      });
+
+      await send({ type: "validation-done", passed: allSectionsOk && emptySections === 0 });
+
       await send({
         type:              "done",
         productId:         inserted.id,
@@ -352,6 +422,8 @@ function streamProductGeneration(
         pricePoint:        selection.pricePoint,
         sectionsGenerated,
         totalSections:     outline.length,
+        emptySections,
+        savedToDb:         true,
       });
 
     } catch (err) {

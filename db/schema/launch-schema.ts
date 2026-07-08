@@ -95,6 +95,14 @@ export type LaunchStageResults = {
   product?: {
     productId: string;
     productName: string;
+    /** How many sections had non-empty content after generation */
+    sectionsGenerated?: number;
+    /** Total sections in the outline */
+    totalSections?: number;
+    /** Sections with empty body content (generation failed or timed out) */
+    emptySections?: number;
+    /** True when the product row was confirmed inserted in the DB */
+    savedToDb?: boolean;
     /** ISO timestamp when this stage completed */
     completedAt?: string;
     /** Asset validation result — written by the agent immediately after generation */

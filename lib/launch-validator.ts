@@ -115,6 +115,18 @@ export function validateResearch(
 export function validateProduct(
   p: NonNullable<LaunchStageResults["product"]>,
 ): StageValidation {
+  const total      = p.totalSections     ?? 0;
+  // Legacy compat: if sectionsGenerated not tracked, assume all succeeded
+  const generated  = p.sectionsGenerated ?? (total > 0 ? total : 0);
+  const empty      = p.emptySections     ?? 0;
+  // Legacy compat: if savedToDb not tracked, assume true
+  const saved      = p.savedToDb         ?? true;
+
+  const allGenerated      = total === 0 || generated >= total;
+  const noEmptySections   = empty === 0;
+  const highCompletionRate = total === 0 || (generated / total) >= 0.8;
+  const pct = total > 0 ? Math.round((generated / total) * 100) : 100;
+
   const checks: AssetCheck[] = [
     check(
       "product-id",
@@ -128,7 +140,35 @@ export function validateProduct(
       "Product name generated",
       true,
       !!p.productName && p.productName.length > 0,
-      "productName is empty",
+      "productName is empty — AI did not return a product title",
+    ),
+    check(
+      "sections-complete",
+      `All sections generated (${generated}/${total > 0 ? total : "?"})`,
+      true,
+      allGenerated,
+      `Only ${generated} of ${total} sections generated — ${total - generated} failed or timed out`,
+    ),
+    check(
+      "no-empty-sections",
+      "All sections have content",
+      true,
+      noEmptySections,
+      `${empty} section${empty !== 1 ? "s" : ""} have empty body text — retry to fill missing content`,
+    ),
+    check(
+      "saved-to-db",
+      "Product saved to database",
+      true,
+      saved,
+      "Database insert failed — the product may not have persisted correctly",
+    ),
+    check(
+      "completion-rate",
+      `Content completion ≥80% (currently ${pct}%)`,
+      false,
+      highCompletionRate,
+      `Only ${pct}% of sections completed — some content may be missing`,
     ),
   ];
 
