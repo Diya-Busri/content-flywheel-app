@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { contentBundlesTable } from "@/db/schema/bundles-schema";
 import { designsTable, DesignData } from "@/db/schema/designs-schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -60,5 +60,26 @@ export async function POST(request: Request) {
     console.error("[POST /api/design-bundles]", err);
     const msg = err instanceof Error ? err.message : "Failed to create bundle";
     return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE: Soft-delete all design bundles for the current user.
+ * Called from Library → Design Studio tab "Delete All".
+ */
+export async function DELETE() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    await db
+      .update(contentBundlesTable)
+      .set({ deletedAt: sql`now()` })
+      .where(and(eq(contentBundlesTable.userId, userId), isNull(contentBundlesTable.deletedAt)));
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /api/design-bundles]", err);
+    return NextResponse.json({ error: "Failed to delete design bundles" }, { status: 500 });
   }
 }

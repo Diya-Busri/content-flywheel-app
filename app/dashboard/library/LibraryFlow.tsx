@@ -394,10 +394,21 @@ function itemMatchesLibrarySearch(item: LibraryItem, q: string): boolean {
   return false;
 }
 
-export default function LibraryFlow() {
+export default function LibraryFlow({ disabledFeatures = [] }: { disabledFeatures?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get("tab") as LibraryTab | null) ?? "all";
+
+  // Compute which tabs should be hidden based on admin feature flags
+  const hiddenTabs = new Set<LibraryTab>();
+  for (const f of disabledFeatures) {
+    if (f === "template_studio") { hiddenTabs.add("template-packs"); hiddenTabs.add("templates"); }
+    if (f === "youtube_upload") hiddenTabs.add("youtube");
+    if (f === "video_timeline") hiddenTabs.add("timeline");
+    if (f === "design_studio") hiddenTabs.add("designs");
+  }
+
+  const rawInitialTab = (searchParams.get("tab") as LibraryTab | null) ?? "all";
+  const initialTab = hiddenTabs.has(rawInitialTab) ? "all" : rawInitialTab;
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -856,14 +867,44 @@ export default function LibraryFlow() {
     }
   };
 
+  // Per-tab delete-all configuration
+  const deleteAllConfig: { show: boolean; itemLabel: string } = (() => {
+    if (isTrashView || tab === "templates" || tab === "history" || tab === "archived" || tab === "workspaces") {
+      return { show: false, itemLabel: "" };
+    }
+    if (tab === "images") return { show: myImages.length > 0, itemLabel: "all images" };
+    if (tab === "youtube") return { show: youtubePosts.length > 0, itemLabel: "all YouTube posts" };
+    if (tab === "template-packs") return { show: templatePacks.length > 0, itemLabel: "all template packs" };
+    if (tab === "designs") return { show: designBundles.length > 0, itemLabel: "all design bundles" };
+    return { show: items.length > 0, itemLabel: "all items" };
+  })();
+
   const handleDeleteAll = async () => {
     setDeletingAll(true);
     try {
-      const res = await fetch("/api/library/delete-all", { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete all");
+      if (tab === "images") {
+        const res = await fetch("/api/library/items?type=generated_image", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete images");
+        setMyImages([]);
+      } else if (tab === "youtube") {
+        const res = await fetch("/api/scheduled-posts", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete YouTube posts");
+        setYoutubePosts([]);
+      } else if (tab === "template-packs") {
+        const res = await fetch("/api/template-packs", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete template packs");
+        setTemplatePacks([]);
+      } else if (tab === "designs") {
+        const res = await fetch("/api/design-bundles", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete design bundles");
+        setDesignBundles([]);
+      } else {
+        const res = await fetch("/api/library/delete-all", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete all");
+        fetchItems();
+      }
       setDeleteAllOpen(false);
-      toast({ title: "All items deleted", description: "Your library has been cleared." });
-      fetchItems();
+      toast({ title: `Deleted ${deleteAllConfig.itemLabel}` });
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Could not delete all items", variant: "destructive" });
     } finally {
@@ -903,7 +944,7 @@ export default function LibraryFlow() {
     a.click();
   };
 
-  const showDeleteAll = !isTrashView && tab !== "template-packs" && tab !== "templates" && tab !== "history" && tab !== "youtube" && items.length > 0;
+  const showDeleteAll = deleteAllConfig.show;
 
   return (
     <main className="p-3 md:p-10 max-w-5xl mx-auto w-full overflow-x-hidden" style={{ maxWidth: "100vw" }}>
@@ -949,15 +990,25 @@ export default function LibraryFlow() {
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
             <TabsTrigger value="bundles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Bundles</TabsTrigger>
             <TabsTrigger value="scripts" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Scripts</TabsTrigger>
-            <TabsTrigger value="timeline" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">My Videos</TabsTrigger>
-            <TabsTrigger value="youtube" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-              <span>YouTube</span>
-              <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
-            </TabsTrigger>
-            <TabsTrigger value="designs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Design Studio</TabsTrigger>
+            {!hiddenTabs.has("timeline") && (
+              <TabsTrigger value="timeline" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">My Videos</TabsTrigger>
+            )}
+            {!hiddenTabs.has("youtube") && (
+              <TabsTrigger value="youtube" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                <span>YouTube</span>
+                <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
+              </TabsTrigger>
+            )}
+            {!hiddenTabs.has("designs") && (
+              <TabsTrigger value="designs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Design Studio</TabsTrigger>
+            )}
             <TabsTrigger value="images" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Images</TabsTrigger>
-            <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
-            <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
+            {!hiddenTabs.has("template-packs") && (
+              <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
+            )}
+            {!hiddenTabs.has("templates") && (
+              <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
+            )}
             <TabsTrigger value="archived" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
               <Archive className="w-3.5 h-3.5" />
               Archived
@@ -1013,9 +1064,9 @@ export default function LibraryFlow() {
         <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete all items?</AlertDialogTitle>
+              <AlertDialogTitle>Delete {deleteAllConfig.itemLabel}?</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete all items? This cannot be undone.
+                This will permanently delete {deleteAllConfig.itemLabel}. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1044,24 +1095,6 @@ export default function LibraryFlow() {
         <TabsContent value={tab} className="mt-0">
           {tab === "images" ? (
             <div className="space-y-4">
-              {!imagesLoading && myImages.length > 0 && (
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
-                    onClick={async () => {
-                      if (!confirm("Delete all saved images? This cannot be undone.")) return;
-                      await fetch("/api/library/items?type=generated_image", { method: "DELETE" });
-                      setMyImages([]);
-                      toast({ title: "All images deleted" });
-                    }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete All
-                  </Button>
-                </div>
-              )}
               {imagesLoading ? (
                 <div className="py-16 flex flex-col items-center justify-center">
                   <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
