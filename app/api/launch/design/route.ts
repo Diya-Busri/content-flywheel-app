@@ -1,31 +1,28 @@
 /**
  * POST /api/launch/design
  * ─────────────────────────
- * Streaming image generation for the AI Execution pipeline (Phase 1.4b).
+ * Streaming design generation for the AI Execution pipeline (Phase 1.4b).
  *
- * Generates assets sequentially / in parallel, streaming events so the
- * execution dashboard shows images appearing live.
- *
- * Phase 1: Cover Concepts (3 styles in parallel) — Minimal, Bold, Dark
- * Phase 2: Mockup, Thumbnail, Social (sequential)
- * Phase 3: Instagram carousel (text-only, fast)
+ * Phase 1: Cover Concepts — 6 code-generated DesignData objects (NO DALL-E)
+ *          Each concept is inserted into designsTable; no image generation cost.
+ * Phase 2: Mockup, Thumbnail, Social — DALL-E (sequential, still image-based)
+ * Phase 3: Instagram carousel (text-only DesignData, fast)
  * Phase 4: Save everything to DB
  *
  * Stream event sequence:
  *   step              — a named step is starting
  *   step-done         — a named step completed (may carry extra fields)
- *   asset-generating  — { assetId, label } — image generation started
- *   asset-done        — { assetId, label, url } — image ready (show it)
- *   asset-error       — { assetId, label, message } — image failed (non-fatal)
+ *   asset-generating  — { assetId, label } — processing started
+ *   asset-done        — { assetId, label, url?, designId? } — ready (show it)
+ *   asset-error       — { assetId, label, message } — failed (non-fatal)
  *   done              — { assets, assetsCount, concepts, carouselBundleId }
  *   error             — fatal error
  *
  * Saves to productsTable.marketingAssets:
- *   coverThumbnailUrl  — first successful cover concept
  *   bookMockupUrl      — 3D mockup
  *   thumbnailUrl       — store thumbnail (used by marketplace cards)
  *   socialPreviewUrl   — social preview
- *   coverConcepts      — all 3 concept objects { style, label, url }
+ *   coverConcepts      — 6 concept objects { style, label, designId }
  */
 
 export const dynamic     = "force-dynamic";
@@ -41,19 +38,11 @@ import { designsTable } from "@/db/schema/designs-schema";
 import type { DesignData, DesignElement } from "@/db/schema/designs-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { upload } from "@/lib/storage";
-
-/* ─── Cover concept definitions ──────────────────────────────────────────────── */
-
-interface CoverConcept {
-  style: string;
-  label: string;
-}
-
-const COVER_CONCEPTS: CoverConcept[] = [
-  { style: "minimal", label: "Modern Minimal" },
-  { style: "bold",    label: "Bold Marketing" },
-  { style: "dark",    label: "Dark Professional" },
-];
+import {
+  detectNiche,
+  buildAllCoverConcepts,
+  type CoverInput,
+} from "@/lib/cover-templates";
 
 /* ─── Regular asset definitions ──────────────────────────────────────────────── */
 
@@ -82,15 +71,6 @@ function buildImagePrompt(
   const fmt  = format || "guide";
 
   switch (assetId) {
-    case "cover:minimal":
-      return `Clean modern minimal digital product cover for a ${fmt} titled "${name}". Topic: ${n}. White or soft grey background. Elegant thin sans-serif typography. Subtle geometric lines or abstract shapes as decoration. No people. Plenty of whitespace. Premium editorial feel. Portrait orientation 2:3.`;
-
-    case "cover:bold":
-      return `Bold high-energy digital product cover for a ${fmt} titled "${name}". Topic: ${n}. Vivid gradient background (deep purple to electric blue, or vibrant orange to red). Large impactful block typography. Dynamic diagonal elements. Energetic marketing aesthetic. No people. Portrait orientation 2:3.`;
-
-    case "cover:dark":
-      return `Premium dark professional digital product cover for a ${fmt} titled "${name}". Topic: ${n}. Deep charcoal or midnight navy background. Gold or white accent typography and thin lines. Executive luxury aesthetic. Abstract dark texture or subtle pattern. No people. Portrait orientation 2:3.`;
-
     case "mockup":
       return `Realistic 3D product mockup: a ${fmt} titled "${name}" resting on a minimal clean white desk. Soft drop shadow. Professional product photography. No people. Neutral background.`;
 
@@ -387,7 +367,7 @@ function streamDesignGeneration(
 
   void (async () => {
     const generatedUrls: Record<string, string> = {};
-    const successfulConcepts: Array<{ style: string; label: string; url: string }> = [];
+    const successfulConcepts: Array<{ style: string; label: string; designId: string }> = [];
     let carouselBundleId: string | undefined;
 
     try {
@@ -395,30 +375,52 @@ function streamDesignGeneration(
       await send({ type: "step", id: "prep", label: "Reading product details..." });
       await send({ type: "step-done", id: "prep" });
 
-      /* ── Phase 1: Generate 3 cover concepts in parallel ── */
-      await send({ type: "step", id: "concepts", label: "Creating 3 cover concepts..." });
+      /* ── Phase 1: Generate 6 cover concepts via template engine (no DALL-E) ── */
+      await send({ type: "step", id: "concepts", label: "Creating 6 cover concepts..." });
 
-      // Announce all three as generating simultaneously
+      const detectedNiche = detectNiche(productName, niche);
+      const coverInput: CoverInput = {
+        title:    productName,
+        subtitle: `Your complete ${format} on ${niche}`,
+        author:   "The Author",   // will be overridden from product data when available
+        category: niche || "Digital Product",
+        niche:    detectedNiche,
+      };
+
+      const allConcepts = buildAllCoverConcepts(coverInput);
+
+      // Announce all 6 as generating simultaneously
       await Promise.all(
-        COVER_CONCEPTS.map(c =>
+        allConcepts.map(c =>
           send({ type: "asset-generating", assetId: `cover:${c.style}`, label: `${c.label} Cover` }),
         ),
       );
 
+      // Insert all 6 into designsTable in parallel
       const conceptResults = await Promise.allSettled(
-        COVER_CONCEPTS.map(async (concept) => {
-          const url = await generateAndStoreImage(
-            `cover:${concept.style}`, productName, niche, format, userId, apiKey, "1024x1536",
-          );
-          generatedUrls[`cover:${concept.style}`] = url;
+        allConcepts.map(async (concept) => {
+          const [row] = await db
+            .insert(designsTable)
+            .values({
+              userId,
+              title:      `${productName} — ${concept.label}`,
+              data:       concept.data,
+              bundleId:   null,
+              slideIndex: null,
+            })
+            .returning({ id: designsTable.id });
+
+          const designId = row.id;
+
           await send({
-            type:    "asset-done",
-            assetId: `cover:${concept.style}`,
-            label:   `${concept.label} Cover`,
-            url,
+            type:         "asset-done",
+            assetId:      `cover:${concept.style}`,
+            label:        `${concept.label} Cover`,
+            designId,
             conceptStyle: concept.style,
           });
-          return { style: concept.style, label: concept.label, url };
+
+          return { style: concept.style, label: concept.label, designId };
         }),
       );
 
@@ -477,37 +479,27 @@ function streamDesignGeneration(
         .limit(1);
 
       if (currentProduct[0]) {
-        const primaryCoverUrl    = successfulConcepts[0]?.url;
-        const existingMarketing  = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
+        const existingMarketing = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
 
         const updatedMarketing = {
           ...existingMarketing,
-          ...(primaryCoverUrl               ? { coverThumbnailUrl: primaryCoverUrl }             : {}),
-          ...(generatedUrls.mockup          ? { bookMockupUrl:     generatedUrls.mockup }         : {}),
-          ...(generatedUrls.thumbnail       ? { thumbnailUrl:      generatedUrls.thumbnail }      : {}),
-          ...(generatedUrls.social          ? { socialPreviewUrl:  generatedUrls.social }         : {}),
-          ...(successfulConcepts.length > 0 ? { coverConcepts:     successfulConcepts }            : {}),
+          ...(generatedUrls.mockup          ? { bookMockupUrl:    generatedUrls.mockup }      : {}),
+          ...(generatedUrls.thumbnail       ? { thumbnailUrl:     generatedUrls.thumbnail }   : {}),
+          ...(generatedUrls.social          ? { socialPreviewUrl: generatedUrls.social }      : {}),
+          ...(successfulConcepts.length > 0 ? { coverConcepts:    successfulConcepts }        : {}),
         };
 
-        /* ── Update cover page background with primary concept ── */
+        /* ── Update cover page: store primary design reference (no image URL) ── */
         const existingDs    = (currentProduct[0].designSettings ?? {}) as Record<string, unknown>;
         const sections      = (currentProduct[0].content as { sections?: unknown[] })?.sections ?? [];
         const totalPages    = sections.length + 2;
         const existingPages = (existingDs.pages as Record<string, unknown>[] | undefined) ?? [];
+        const primaryDesignId = successfulConcepts[0]?.designId;
 
         const pages = Array.from({ length: totalPages }, (_, i) => {
           const existing = existingPages[i] ?? {};
-          if (i === 0 && primaryCoverUrl) {
-            return {
-              ...existing,
-              backgroundImage: primaryCoverUrl,
-              backgroundSettings: {
-                size:     "cover",
-                position: "center center",
-                repeat:   "no-repeat",
-                opacity:  1,
-              },
-            };
+          if (i === 0 && primaryDesignId) {
+            return { ...existing, designId: primaryDesignId };
           }
           return existing;
         });
@@ -525,6 +517,7 @@ function streamDesignGeneration(
 
       await send({ type: "step-done", id: "saving" });
 
+      // Concepts are design records, not images — count them separately
       const assetsCount =
         successfulConcepts.length +
         (generatedUrls.mockup    ? 1 : 0) +

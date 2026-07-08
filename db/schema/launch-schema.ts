@@ -84,8 +84,15 @@ export type LaunchStageResults = {
     assetsCount?: number;
     /** ISO timestamp when this stage completed */
     completedAt?: string;
-    /** Multiple cover style concepts (Minimal, Bold, Dark) for user to choose from */
-    concepts?: Array<{ style: string; label: string; url: string }>;
+    /** Multiple cover style concepts (Minimal, Bold, Dark, Modern, Illustrated, Premium) */
+    concepts?: Array<{
+      style:      string;
+      label:      string;
+      /** Legacy DALL-E image URL (kept for backwards compat) */
+      url?:       string;
+      /** designsTable record ID — enables "Open in Design Studio" and full editability */
+      designId?:  string;
+    }>;
     /** The URL of the cover concept the user selected (defaults to concepts[0].url) */
     selectedConceptUrl?: string;
     /** Design Studio bundle ID for the auto-generated Instagram carousel */

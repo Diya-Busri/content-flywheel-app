@@ -48,6 +48,8 @@ export async function PATCH(
     "socialPreviewUrl",
     "bookMockupUrl",
     "coverConcepts",
+    // Cover design reference (element-based cover concept)
+    "coverDesignId",
   ] as const;
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {
