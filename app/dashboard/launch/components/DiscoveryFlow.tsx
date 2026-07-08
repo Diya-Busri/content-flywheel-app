@@ -292,7 +292,7 @@ export function DiscoveryFlow({ onClose, onBuild }: Props) {
   };
 
   /* ── Build with goal ── */
-  const handleBuild = (goal: string) => onBuild(goal.trim() || selectedOpp?.launchGoal ?? "");
+  const handleBuild = (goal: string) => onBuild(goal.trim() || (selectedOpp?.launchGoal ?? ""));
 
   /* ─────────────────────────────────────────────────── */
   /* Render helpers */
