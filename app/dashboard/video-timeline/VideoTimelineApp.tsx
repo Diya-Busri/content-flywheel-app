@@ -20,7 +20,7 @@ import {
   VIRAL_CAPTION_BOTTOM_PAD,
   VIRAL_CAPTION_FONT_SIZES,
 } from "@/lib/video-caption-ffmpeg";
-import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2, Image as ImageIcon } from "lucide-react";
+import { Loader2, Check, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2, Image as ImageIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
 import { useToast } from "@/components/ui/use-toast";
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -1462,6 +1462,21 @@ function VideoTimelineInner() {
   const [aiGeneratedImages, setAiGeneratedImages] = useState<string[]>([]);
   // Animate scene — Set of scene IDs currently being rendered/polled
   const [animatingScenes, setAnimatingScenes] = useState<Set<string>>(new Set());
+
+  // ── Autosave / persistence ────────────────────────────────────────────────
+  /** "saving" | "saved" | "error" — shown in header status chip. "idle" hides chip. */
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  /** True when scene state has changed since the last successful DB write. */
+  const [hasUnsaved, setHasUnsaved] = useState(false);
+  /**
+   * DB video ID created by autosave during this session (set after first POST).
+   * Used as fallback when ?projectId is not yet in the URL (avoids duplicate POSTs).
+   */
+  const autosaveDbIdRef = useRef<string | null>(null);
+  /** Guard: prevents concurrent POST calls while the first create is in-flight. */
+  const isCreatingProjectRef = useRef(false);
+  // ──────────────────────────────────────────────────────────────────────────
+
   /** Index of scene whose trailing transition badge popover is open (i.e. transition between scene[i] and scene[i+1]) */
   const [transitionBadgeOpen, setTransitionBadgeOpen] = useState<number | null>(null);
   const [transitionBadgePos, setTransitionBadgePos] = useState<{ x: number; y: number } | null>(null);
@@ -2501,13 +2516,98 @@ function VideoTimelineInner() {
     }
   }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration]);
 
+  /**
+   * autosaveToDb — persists the current timeline state to the DB.
+   * - If a project already exists in the URL (?projectId) or was created this session
+   *   (autosaveDbIdRef), it PATCHes.
+   * - Otherwise it POSTs to create a new project (guarded by isCreatingProjectRef to
+   *   prevent concurrent creates).
+   * Does NOT update the URL — that is handled by the explicit Save button / handleSaveToLibrary.
+   */
+  const autosaveToDb = useCallback(async () => {
+    if (typeof window === "undefined" || scenes.length === 0) return;
+
+    const content: Record<string, unknown> = {
+      scriptId,
+      scenes,
+      captions,
+      voiceoverUrl: voiceoverUrl?.startsWith("http") ? voiceoverUrl : null,
+      musicUrl: musicUrl?.startsWith("http") ? musicUrl : null,
+      musicVolume,
+      captionPosition,
+      captionFontSize,
+      captionTextColor,
+      captionAnimation,
+      captionBackground,
+      captionDisplayMode,
+      sceneTransition: sceneTransitionType,
+      aspectRatio,
+      voiceoverDuration: voiceoverDuration > 0 ? voiceoverDuration : undefined,
+      savedAt: new Date().toISOString(),
+    };
+
+    try {
+      // Prefer URL project ID, then one we created this session
+      const existingId = projectIdFromUrl ?? autosaveDbIdRef.current;
+
+      if (existingId) {
+        const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(existingId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: (scriptName?.trim() || "Untitled Project").slice(0, 500),
+            metadata: content,
+          }),
+        });
+        if (!res.ok) { setSaveStatus("error"); return; }
+      } else {
+        // First-ever save — create a new project
+        if (isCreatingProjectRef.current) return; // another POST is already in-flight
+        isCreatingProjectRef.current = true;
+        try {
+          const res = await fetch("/api/video-timeline/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: (scriptName?.trim() || "Untitled Project").slice(0, 500),
+              content,
+            }),
+          });
+          if (!res.ok) { setSaveStatus("error"); return; }
+          const data = await res.json().catch(() => ({})) as { id?: string };
+          if (data.id) {
+            autosaveDbIdRef.current = data.id;
+            // Silently update URL so browser Back/reload and handleSaveToLibrary use the right id
+            const url = new URL(window.location.href);
+            url.searchParams.set("projectId", data.id);
+            window.history.replaceState({}, "", url.toString());
+          }
+        } finally {
+          isCreatingProjectRef.current = false;
+        }
+      }
+
+      setSaveStatus("saved");
+      setHasUnsaved(false);
+    } catch {
+      setSaveStatus("error");
+    }
+  }, [scenes, captions, scriptId, scriptName, voiceoverUrl, musicUrl, musicVolume,
+      captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground,
+      captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration, projectIdFromUrl]);
+
   // When scene count changes (add/remove), save draft immediately so scenes don't disappear on refresh
   useEffect(() => {
     if (scenes.length !== prevSceneCountRef.current) {
       prevSceneCountRef.current = scenes.length;
       saveDraft();
+      if (scenes.length > 0) {
+        setSaveStatus("saving");
+        setHasUnsaved(true);
+        void autosaveToDb();
+      }
     }
-  }, [scenes.length, scenes, saveDraft]);
+  }, [scenes.length, scenes, saveDraft, autosaveToDb]);
 
   // Persist draft to localStorage so refresh doesn't lose progress (debounced)
   useEffect(() => {
@@ -2515,6 +2615,31 @@ function VideoTimelineInner() {
     const t = setTimeout(saveDraft, 1500);
     return () => clearTimeout(t);
   }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration, saveDraft]);
+
+  // DB autosave — fires for ALL projects (new unsaved and existing), debounced 1.5 s.
+  // Runs in parallel with the localStorage draft above.
+  useEffect(() => {
+    if (typeof window === "undefined" || scenes.length === 0) return;
+    setSaveStatus("saving");
+    setHasUnsaved(true);
+    const t = setTimeout(() => { void autosaveToDb(); }, 1500);
+    return () => clearTimeout(t);
+  }, [scenes, captions, scriptName, voiceoverUrl, musicUrl, musicVolume, captionPosition,
+      captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode,
+      sceneTransitionType, aspectRatio, voiceoverDuration, autosaveToDb]);
+
+  // Navigation guard — warn user before leaving with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsaved && saveStatus !== "saved") {
+        e.preventDefault();
+        // Chrome requires returnValue to be set
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsaved, saveStatus]);
 
   // Audio events: time update, duration, play/pause
   const onTimeUpdate = useCallback(() => {
@@ -3339,11 +3464,12 @@ function VideoTimelineInner() {
   );
 
   /** Save timeline project to the existing videos table (via API; content stored in metadata).
-   *  If projectId is already in the URL (project was previously saved), PATCHes the existing
-   *  row instead of creating a duplicate library entry. */
+   *  If projectId is already in the URL (project was previously saved) OR autosave already
+   *  created a project this session, PATCHes that row instead of creating a duplicate. */
   const handleSaveToLibrary = useCallback(async (opts?: { silent?: boolean }) => {
     try {
-      const existingProjectId = searchParams.get("projectId");
+      // Prefer URL param, then the ID autosave created silently this session
+      const existingProjectId = searchParams.get("projectId") ?? autosaveDbIdRef.current;
       const metadata: Record<string, unknown> = {
         ...saveProjectPayload.content,
         savedAt: new Date().toISOString(),
@@ -4504,6 +4630,21 @@ function VideoTimelineInner() {
             <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {/* Autosave status chip */}
+        {saveStatus !== "idle" && (
+          <span className="flex items-center gap-1 text-[10px] min-w-[64px] select-none">
+            {saveStatus === "saving" && (
+              <><Loader2 className="h-3 w-3 animate-spin text-[#606060]" /><span className="text-[#606060]">Saving…</span></>
+            )}
+            {saveStatus === "saved" && (
+              <><Check className="h-3 w-3 text-green-500" /><span className="text-[#505050]">Saved</span></>
+            )}
+            {saveStatus === "error" && (
+              <span className="text-red-400">Save failed</span>
+            )}
+          </span>
+        )}
 
         {/* Reload from Library — only shown for saved projects, useful when images finish generating after the page opened */}
         {projectIdFromUrl && (
