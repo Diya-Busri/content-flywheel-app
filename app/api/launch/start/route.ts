@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
-import { launchProjectsTable } from "@/db/schema/launch-schema";
+import { launchProjectsTable, type LaunchPreferences } from "@/db/schema/launch-schema";
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,9 +33,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "INVALID_GOAL", message: "Please enter a real business idea." }, { status: 400 });
     }
 
+    // Parse and validate user preferences
+    const rawPrefs = body.preferences as Record<string, unknown> | undefined;
+    const VALID_LENGTHS = new Set(["short", "medium", "long"]);
+    const VALID_COUNTS  = new Set([3, 5, 8, 10]);
+    const preferences: LaunchPreferences = {
+      productLength: VALID_LENGTHS.has(rawPrefs?.productLength as string)
+        ? (rawPrefs!.productLength as LaunchPreferences["productLength"]) : "medium",
+      includeImages: rawPrefs?.includeImages === true,
+      carouselCount: VALID_COUNTS.has(Number(rawPrefs?.carouselCount))
+        ? (Number(rawPrefs!.carouselCount) as LaunchPreferences["carouselCount"]) : 5,
+    };
+
     const [project] = await db
       .insert(launchProjectsTable)
-      .values({ userId, goal, status: "queued", currentStage: "research", progress: 0 })
+      .values({ userId, goal, status: "queued", currentStage: "research", progress: 0,
+        stageResults: { preferences } })
       .returning({ id: launchProjectsTable.id });
 
     if (!project?.id) return NextResponse.json({ error: "Failed to create project" }, { status: 500 });

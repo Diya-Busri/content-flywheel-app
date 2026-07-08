@@ -172,10 +172,11 @@ Return ONLY this JSON:
 /* ─── Main streaming function ───────────────────────────────────────────────── */
 
 function streamProductGeneration(
-  userId:   string,
-  goal:     string,
-  research: ResearchInput,
-  apiKey:   string,
+  userId:    string,
+  goal:      string,
+  research:  ResearchInput,
+  apiKey:    string,
+  preferences?: { productLength?: string; includeImages?: boolean; carouselCount?: number },
 ): Response {
   const encoder = new TextEncoder();
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
@@ -253,9 +254,12 @@ function streamProductGeneration(
         ctaTexts:            actionPlan.slice(0, 2).map(s => s.action),
         creatorExpertise:    expertiseParts.join("\n\n") || undefined,
         customizationOptions: {
-          numChapters:   5,
-          contentLength: "medium",
-          contentStyle:  "text_with_placeholders",
+          numChapters:   preferences?.productLength === "short" ? 4
+                       : preferences?.productLength === "long"  ? 9 : 5,
+          contentLength: (preferences?.productLength === "short" ? "short"
+                       : preferences?.productLength === "long"  ? "long" : "medium") as "short" | "medium" | "long",
+          contentStyle:  preferences?.includeImages
+                       ? "text_with_ai_images" : "text_with_placeholders",
         },
       };
 
@@ -460,19 +464,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({})) as {
-      goal?:     string;
-      research?: ResearchInput;
+      goal?:         string;
+      research?:     ResearchInput;
+      preferences?:  { productLength?: string; includeImages?: boolean; carouselCount?: number };
     };
 
-    const goal     = typeof body.goal     === "string" ? body.goal.trim()     : "";
-    const research = typeof body.research === "object" && body.research !== null
+    const goal        = typeof body.goal     === "string" ? body.goal.trim()     : "";
+    const research    = typeof body.research === "object" && body.research !== null
       ? body.research : {};
+    const preferences = body.preferences;
 
     if (!goal) {
       return new Response(JSON.stringify({ error: "goal is required" }), { status: 400 });
     }
 
-    return streamProductGeneration(userId, goal, research, apiKey);
+    return streamProductGeneration(userId, goal, research, apiKey, preferences);
 
   } catch (err) {
     console.error("[launch/product]", err);

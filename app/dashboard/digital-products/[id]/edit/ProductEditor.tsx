@@ -1241,7 +1241,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
     setLayoutSettings({ ...DEFAULT_LAYOUT });
   }, []);
 
-  const fetchProduct = useCallback(async () => {
+  const fetchProduct = useCallback(async (opts?: { preserveSections?: boolean }) => {
     try {
       const res = await fetch(`/api/products/${productId}`);
       if (!res.ok) {
@@ -1260,7 +1260,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       }
       const data = (await res.json()) as Product;
       setProduct(data);
-      setSections(data.content?.sections ?? []);
+      if (!opts?.preserveSections) setSections(data.content?.sections ?? []);
       const savedOrientation = ((data.content as { pageOrientation?: string })?.pageOrientation ?? "portrait") as "portrait" | "landscape";
       setPageOrientation(savedOrientation);
       const savedTemplate = ((data.designSettings as { template?: string })?.template ?? "modern") as TemplateId;
@@ -3203,7 +3203,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         });
         throw new Error(apiError);
       }
-      await fetchProduct();
+      await fetchProduct({ preserveSections: true });
       toast({ title: "Design updated" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not regenerate design";
@@ -7966,7 +7966,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
       </Dialog>
 
       {/* Edit Section Modal */}
-      <Dialog open={!!editingSectionId} onOpenChange={(open) => !open && setEditingSectionId(null)}>
+      <Dialog open={!!editingSectionId} onOpenChange={(open) => { if (!open) saveEdit(); }}>
         <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle>Edit Section: {sections.find((s) => s.id === editingSectionId)?.title ?? ""}</DialogTitle>

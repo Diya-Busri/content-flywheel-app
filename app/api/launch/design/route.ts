@@ -154,35 +154,38 @@ const SLIDE_LABELS = [
   "Why It Matters",
   "The Solution",
   "Take Action",
+  "Proof",
+  "Behind the Scenes",
+  "Quick Win",
+  "What You Get",
+  "Final CTA",
 ];
 
 async function generateCarouselContent(
   productName: string,
   niche:       string,
   apiKey:      string,
+  slideCount = 5,
 ): Promise<CarouselSlideContent[]> {
-  const prompt = `Create a 5-slide Instagram carousel promoting a digital product called "${productName}" in the ${niche} niche.
+  const count = Math.min(Math.max(slideCount, 3), 10);
+  const slideTemplates = SLIDE_LABELS.slice(0, count);
+  const arrayTemplate  = slideTemplates.map(() => `  { "headline": "...", "body": "...", "accentColor": "#hex" }`).join(",\n");
+  const slideGuide     = slideTemplates.map((label, i) => `${i + 1}. ${label}`).join("\n");
 
-Return ONLY a valid JSON array — no markdown, no code fences:
+  const prompt = `Create a ${count}-slide Instagram carousel promoting a digital product called "${productName}" in the ${niche} niche.
+
+Return ONLY a valid JSON array with exactly ${count} items — no markdown, no code fences:
 [
-  { "headline": "...", "body": "...", "accentColor": "#hex" },
-  { "headline": "...", "body": "...", "accentColor": "#hex" },
-  { "headline": "...", "body": "...", "accentColor": "#hex" },
-  { "headline": "...", "body": "...", "accentColor": "#hex" },
-  { "headline": "...", "body": "...", "accentColor": "#hex" }
+${arrayTemplate}
 ]
 
-Slide structure:
-1. Hook — bold question or provocative statement to stop the scroll (max 8 words)
-2. The Problem — the pain point the audience feels right now (max 12 words)
-3. Why It Matters — cost of not solving it (max 12 words)
-4. The Solution — what "${productName}" gives them (max 12 words)
-5. Take Action — specific CTA mentioning the product (max 10 words)
+Slide order:
+${slideGuide}
 
 Rules:
-- headline: 4-8 punchy words, ALL sentence case
+- headline: 4-8 punchy words, sentence case
 - body: 10-20 words, benefit-driven, conversational
-- accentColor: choose vivid hex from this palette: #e94560 #f59e0b #10b981 #3b82f6 #8b5cf6 — vary each slide`;
+- accentColor: vivid hex from: #e94560 #f59e0b #10b981 #3b82f6 #8b5cf6 — vary each slide`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method:  "POST",
@@ -194,7 +197,7 @@ Rules:
         { role: "user",   content: prompt },
       ],
       temperature: 0.7,
-      max_tokens:  700,
+      max_tokens:  Math.max(700, count * 120),
     }),
     signal: AbortSignal.timeout(30_000),
   });
@@ -208,7 +211,7 @@ Rules:
   }
 
   const slides = JSON.parse(text) as CarouselSlideContent[];
-  return slides.slice(0, 5);
+  return slides.slice(0, count);
 }
 
 /* ─── Carousel DesignData builder ────────────────────────────────────────────── */
@@ -349,12 +352,13 @@ async function createCarouselBundle(
 /* ─── Streaming generator ────────────────────────────────────────────────────── */
 
 function streamDesignGeneration(
-  userId:      string,
-  productId:   string,
-  productName: string,
-  niche:       string,
-  format:      string,
-  apiKey:      string,
+  userId:       string,
+  productId:    string,
+  productName:  string,
+  niche:        string,
+  format:       string,
+  apiKey:       string,
+  carouselCount = 5,
 ): Response {
   const encoder = new TextEncoder();
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
@@ -485,7 +489,7 @@ function streamDesignGeneration(
       await send({ type: "step", id: "carousel", label: "Creating Instagram carousel..." });
 
       try {
-        const slideContents = await generateCarouselContent(productName, niche, apiKey);
+        const slideContents = await generateCarouselContent(productName, niche, apiKey, carouselCount);
         carouselBundleId   = await createCarouselBundle(userId, productName, slideContents);
         await send({ type: "step-done", id: "carousel", bundleId: carouselBundleId });
       } catch (carouselErr) {
@@ -600,22 +604,27 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({})) as {
-      productId?:   string;
-      productName?: string;
-      niche?:       string;
-      format?:      string;
+      productId?:    string;
+      productName?:  string;
+      niche?:        string;
+      format?:       string;
+      preferences?:  { carouselCount?: number };
     };
 
-    const productId   = typeof body.productId   === "string" ? body.productId.trim()   : "";
-    const productName = typeof body.productName === "string" ? body.productName.trim() : "My Product";
-    const niche       = typeof body.niche       === "string" ? body.niche.trim()       : "digital products";
-    const format      = typeof body.format      === "string" ? body.format.trim()      : "guide";
+    const productId    = typeof body.productId   === "string" ? body.productId.trim()   : "";
+    const productName  = typeof body.productName === "string" ? body.productName.trim() : "My Product";
+    const niche        = typeof body.niche       === "string" ? body.niche.trim()       : "digital products";
+    const format       = typeof body.format      === "string" ? body.format.trim()      : "guide";
+
+    const VALID_COUNTS = new Set([3, 5, 8, 10]);
+    const rawCount     = Number(body.preferences?.carouselCount);
+    const carouselCount = VALID_COUNTS.has(rawCount) ? rawCount : 5;
 
     if (!productId) {
       return new Response(JSON.stringify({ error: "productId is required" }), { status: 400 });
     }
 
-    return streamDesignGeneration(userId, productId, productName, niche, format, apiKey);
+    return streamDesignGeneration(userId, productId, productName, niche, format, apiKey, carouselCount);
 
   } catch (err) {
     console.error("[launch/design]", err);

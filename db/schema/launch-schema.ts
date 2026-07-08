@@ -76,7 +76,19 @@ export type LaunchMemory = {
   format?: string;
 };
 
+/** User-supplied generation preferences collected on the goal input page */
+export type LaunchPreferences = {
+  /** Product length: controls numChapters (short=4, medium=6, long=9) and contentLength */
+  productLength: "short" | "medium" | "long";
+  /** Whether to include an AI-generated image prompt for each product page */
+  includeImages: boolean;
+  /** Number of Instagram carousel posts to generate */
+  carouselCount: 3 | 5 | 8 | 10;
+};
+
 export type LaunchStageResults = {
+  /** User preferences captured at launch start — read by product + design agents */
+  preferences?: LaunchPreferences;
   research?: {
     insights: string[];
     query: string;

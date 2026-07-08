@@ -122,7 +122,7 @@ export async function runLaunchProductAgent(ctx: ExecutionContext): Promise<void
   const res = await fetch("/api/launch/product", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ goal, research }),
+    body:    JSON.stringify({ goal, research, preferences: stageResults.preferences }),
   });
 
   if (!res.ok || !res.body) {

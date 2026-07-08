@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Rocket, ArrowRight, Loader2, Sparkles, Compass,
-  PencilLine, AlertTriangle, ChevronRight, Lightbulb,
+  PencilLine, AlertTriangle, ChevronRight, Lightbulb, Settings2,
 } from "lucide-react";
 import { DiscoveryFlow } from "./components/DiscoveryFlow";
 
@@ -151,6 +151,12 @@ export default function LaunchPage() {
   const [error,   setError]   = useState<string | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
 
+  /* ── Preferences ── */
+  const [showPrefs,     setShowPrefs]     = useState(false);
+  const [productLength, setProductLength] = useState<"short" | "medium" | "long">("medium");
+  const [includeImages, setIncludeImages] = useState(false);
+  const [carouselCount, setCarouselCount] = useState<3 | 5 | 8 | 10>(5);
+
   /* ── Clear validation when user edits ── */
   const handleGoalChange = (val: string) => {
     setGoal(val);
@@ -167,7 +173,10 @@ export default function LaunchPage() {
       const res = await fetch("/api/launch/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: text }),
+        body: JSON.stringify({
+          goal: text,
+          preferences: { productLength, includeImages, carouselCount },
+        }),
       });
       if (!res.ok) throw new Error("Failed to create execution");
       const { launchId } = await res.json() as { launchId: string };
@@ -346,6 +355,102 @@ export default function LaunchPage() {
           {error && (
             <p className="text-center text-[13px] text-red-500 mb-3">{error}</p>
           )}
+
+          {/* ── Customise panel ── */}
+          <div className="mb-3">
+            <button
+              onClick={() => setShowPrefs(p => !p)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground/60 hover:text-muted-foreground transition-colors w-full justify-center mb-2"
+            >
+              <Settings2 className="w-3 h-3" />
+              Customise your product
+              <span className="text-[10px] opacity-60">{showPrefs ? "▲" : "▼"}</span>
+            </button>
+
+            {showPrefs && (
+              <div className="bg-card/60 border border-border rounded-2xl p-4 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="flex flex-col sm:flex-row gap-4">
+
+                  {/* Product length */}
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">
+                      Product length
+                    </p>
+                    <div className="flex gap-1">
+                      {(["short", "medium", "long"] as const).map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setProductLength(opt)}
+                          className={[
+                            "flex-1 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
+                            productLength === opt
+                              ? "bg-orange-500 border-orange-500 text-white"
+                              : "border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground",
+                          ].join(" ")}
+                        >
+                          {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/40 mt-1">
+                      {productLength === "short" ? "~4 sections · quick read" : productLength === "long" ? "~9 sections · deep dive" : "~5 sections · balanced"}
+                    </p>
+                  </div>
+
+                  {/* Images */}
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">
+                      Product images
+                    </p>
+                    <div className="flex gap-1">
+                      {([{ val: false, label: "Text only" }, { val: true, label: "AI images" }] as const).map(({ val, label }) => (
+                        <button
+                          key={String(val)}
+                          onClick={() => setIncludeImages(val)}
+                          className={[
+                            "flex-1 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
+                            includeImages === val
+                              ? "bg-orange-500 border-orange-500 text-white"
+                              : "border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground",
+                          ].join(" ")}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/40 mt-1">
+                      {includeImages ? "AI generates images for each page" : "Clean text-based product"}
+                    </p>
+                  </div>
+
+                  {/* Carousel slides */}
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">
+                      Carousel slides
+                    </p>
+                    <div className="flex gap-1">
+                      {([3, 5, 8, 10] as const).map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setCarouselCount(n)}
+                          className={[
+                            "flex-1 py-1.5 rounded-lg text-[12px] font-semibold border transition-all",
+                            carouselCount === n
+                              ? "bg-orange-500 border-orange-500 text-white"
+                              : "border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground",
+                          ].join(" ")}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/40 mt-1">Instagram carousel posts</p>
+                  </div>
+
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* ── Help Me Decide CTA ── */}
           <div className="relative flex items-center gap-3 my-4">

@@ -99,7 +99,7 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
   const res = await fetch("/api/launch/design", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ productId, productName, niche, format }),
+    body:    JSON.stringify({ productId, productName, niche, format, preferences: stageResults.preferences }),
   });
 
   if (!res.ok || !res.body) {
