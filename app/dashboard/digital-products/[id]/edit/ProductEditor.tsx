@@ -102,6 +102,8 @@ import { SocialCaptionsCard } from "@/components/product-editor/SocialCaptionsCa
 import { EmailSequenceCard } from "@/components/product-editor/EmailSequenceCard";
 import { SalesPageCard } from "@/components/product-editor/SalesPageCard";
 import { ThumbnailVariantPicker } from "@/components/product-editor/ThumbnailVariantPicker";
+import { SlidePreview } from "@/app/dashboard/design-studio/SlidePreview";
+import type { DesignData } from "@/db/schema/designs-schema";
 import { RevenueTracker } from "@/components/product-editor/RevenueTracker";
 
 type Section = { id: string; title: string; content: string; contentHtml?: string; order: number; imageUrl?: string; imageUrlNoBg?: string; imageHeightPx?: number; imageWidthPx?: number; imageX?: number; imageY?: number; imageBgRemoved?: boolean };
@@ -1136,6 +1138,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings>(DEFAULT_OVERLAY);
   const [pageBackgrounds, setPageBackgrounds] = useState<PageBackground[]>([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [coverDesignData, setCoverDesignData] = useState<DesignData | null>(null);
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const selectedTextRef = useRef<HTMLElement | null>(null);
   const lastSelectedTextMetaRef = useRef<SelectedTextMeta | null>(null);
@@ -1368,6 +1371,20 @@ export default function ProductEditor({ productId }: { productId: string }) {
   useEffect(() => {
     fetchProduct();
   }, [fetchProduct]);
+
+  // Load cover design from Launch AI — renders it on the cover page canvas
+  useEffect(() => {
+    const id = (product?.marketingAssets as { coverDesignId?: string | null } | undefined | null)?.coverDesignId;
+    if (!id) { setCoverDesignData(null); return; }
+    let cancelled = false;
+    fetch(`/api/designs/${id}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then((json: { design?: { data?: DesignData } }) => {
+        if (!cancelled && json.design?.data) setCoverDesignData(json.design.data);
+      })
+      .catch(() => { if (!cancelled) setCoverDesignData(null); });
+    return () => { cancelled = true; };
+  }, [product?.marketingAssets]);
 
   // Load creator's other published products for the upsell picker
   useEffect(() => {
@@ -5221,7 +5238,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     marginBottom: needsScale ? `${effectiveCanvasHeight * (canvasPageScale - 1)}px` : 0,
                     boxSizing: "border-box",
                     fontFamily: "var(--font-sans), sans-serif",
-                    backgroundColor: canvasBgUrl ? "transparent" : (currentPageBackgroundColor ?? "#ffffff"),
+                    backgroundColor: (canvasBgUrl || (currentPageIndex === 0 && coverDesignData)) ? "transparent" : (currentPageBackgroundColor ?? "#ffffff"),
                     transform: needsScale ? `scale(${canvasPageScale})` : undefined,
                     transformOrigin: needsScale ? "top left" : undefined,
                   }}
@@ -5267,7 +5284,24 @@ export default function ProductEditor({ productId }: { productId: string }) {
                     }}
                   >
                     {currentPageIndex === 0 || currentPageIndex === totalPages - 1 ? (
-                      <div className="w-full pointer-events-none" style={{ minHeight: effectiveCanvasHeight }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"} />
+                      <div className="w-full pointer-events-none relative" style={{ minHeight: effectiveCanvasHeight }} aria-label={currentPageIndex === 0 ? "Cover page" : "Back cover"}>
+                        {currentPageIndex === 0 && coverDesignData && !canvasBgUrl && (
+                          <div
+                            className="absolute inset-0 overflow-hidden pointer-events-none"
+                            style={{ zIndex: 0 }}
+                            aria-hidden
+                          >
+                            <div style={{
+                              transform: `scale(${CANVAS_WIDTH / 1080})`,
+                              transformOrigin: "top left",
+                              width: 1080,
+                              height: 1350,
+                            }}>
+                              <SlidePreview data={coverDesignData} scale={1} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <>
                         {(sections[currentPageIndex - 1] ? [sections[currentPageIndex - 1]] : []).map((section) => {
