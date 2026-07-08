@@ -128,3 +128,20 @@ export async function GET() {
 
   return NextResponse.json({ projects });
 }
+
+/**
+ * DELETE /api/projects
+ * Permanently delete all launch workspaces for the current user.
+ */
+export async function DELETE() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    await db.delete(launchProjectsTable).where(eq(launchProjectsTable.userId, userId));
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /api/projects]", err);
+    return NextResponse.json({ error: "Failed to delete workspaces" }, { status: 500 });
+  }
+}

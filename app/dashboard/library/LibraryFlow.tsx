@@ -869,13 +869,14 @@ export default function LibraryFlow({ disabledFeatures = [] }: { disabledFeature
 
   // Per-tab delete-all configuration
   const deleteAllConfig: { show: boolean; itemLabel: string } = (() => {
-    if (isTrashView || tab === "templates" || tab === "history" || tab === "archived" || tab === "workspaces") {
+    if (isTrashView || tab === "templates" || tab === "history" || tab === "archived") {
       return { show: false, itemLabel: "" };
     }
     if (tab === "images") return { show: myImages.length > 0, itemLabel: "all images" };
     if (tab === "youtube") return { show: youtubePosts.length > 0, itemLabel: "all YouTube posts" };
     if (tab === "template-packs") return { show: templatePacks.length > 0, itemLabel: "all template packs" };
     if (tab === "designs") return { show: designBundles.length > 0, itemLabel: "all design bundles" };
+    if (tab === "workspaces") return { show: workspaceProjects.length > 0, itemLabel: "all workspaces" };
     return { show: items.length > 0, itemLabel: "all items" };
   })();
 
@@ -898,6 +899,10 @@ export default function LibraryFlow({ disabledFeatures = [] }: { disabledFeature
         const res = await fetch("/api/design-bundles", { method: "DELETE" });
         if (!res.ok) throw new Error("Failed to delete design bundles");
         setDesignBundles([]);
+      } else if (tab === "workspaces") {
+        const res = await fetch("/api/projects", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete workspaces");
+        setWorkspaceProjects([]);
       } else {
         const res = await fetch("/api/library/delete-all", { method: "DELETE" });
         if (!res.ok) throw new Error("Failed to delete all");
