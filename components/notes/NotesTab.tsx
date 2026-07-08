@@ -236,7 +236,7 @@ export function NotesTab({ onTabChange }: NotesTabProps) {
       title:      tpl.title || "Untitled",
       content:    null,
       body:       tpl.body || "",
-      folder:     tpl.folder ?? folderFilter || null,
+      folder:     (tpl.folder ?? folderFilter) || null,
       tags:       tpl.tag ? [tpl.tag] : [],
       isPinned:   false,
       isArchived: false,
