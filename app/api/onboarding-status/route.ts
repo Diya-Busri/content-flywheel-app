@@ -34,8 +34,9 @@ export async function GET() {
       .from(productsTable)
       .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt))),
     db.select({
-        stripeConnectChargesEnabled: profilesTable.stripeConnectChargesEnabled,
-        stripeConnectPayoutsEnabled: profilesTable.stripeConnectPayoutsEnabled,
+        stripeConnectAccountId:       profilesTable.stripeConnectAccountId,
+        stripeConnectChargesEnabled:  profilesTable.stripeConnectChargesEnabled,
+        stripeConnectPayoutsEnabled:  profilesTable.stripeConnectPayoutsEnabled,
       })
       .from(profilesTable)
       .where(eq(profilesTable.userId, userId))
@@ -67,8 +68,19 @@ export async function GET() {
     return ma.isNativePublished === true;
   });
 
-  // Both charges AND payouts must be enabled — per spec
-  const hasStripeConnect = !!(profile[0]?.stripeConnectChargesEnabled && profile[0]?.stripeConnectPayoutsEnabled);
+  // chargesEnabled is the authoritative signal for the checklist.
+  // payoutsEnabled can lag (defaults to false for users who connected before that column
+  // was added). The Payments card in Settings shows the live nuanced status via Stripe API.
+  const stripeCharges = profile[0]?.stripeConnectChargesEnabled ?? false;
+  const stripePayouts = profile[0]?.stripeConnectPayoutsEnabled ?? false;
+  const hasStripeConnect = !!stripeCharges;
+
+  console.log("[onboarding-status] Stripe state:", {
+    accountId:      !!(profile[0]?.stripeConnectAccountId),
+    chargesEnabled: stripeCharges,
+    payoutsEnabled: stripePayouts,
+    hasStripeConnect,
+  });
   const hasBrandVoice = !!(brandVoice[0]?.brandName?.trim());
   const hasPromoCode = Number(promoCodes[0]?.count ?? 0) > 0;
   const campaignsSent = Number(campaigns[0]?.count ?? 0) > 0;

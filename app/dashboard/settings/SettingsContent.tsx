@@ -119,25 +119,53 @@ export default function SettingsContent({
 
   useEffect(() => {
     let cancelled = false;
+    const isReturn = typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("stripe") === "connected";
+
     fetch("/api/stripe/connect/status")
       .then((r) => r.ok ? r.json() : null)
       .then((data: StripeStatus | null) => {
-        if (!cancelled && data) setStripeStatus(data);
+        if (cancelled) return;
+        if (data) setStripeStatus(data);
+
+        // Returning from Stripe OAuth — DB has been synced by the return route.
+        // Show a success toast, then navigate back to the dashboard so the
+        // Getting Started checklist remounts and re-fetches fresh onboarding status.
+        if (isReturn && data?.connected) {
+          const chargesOk = data.chargesEnabled ?? false;
+          const payoutsOk = data.payoutsEnabled ?? false;
+
+          console.log("[settings] Stripe OAuth return detected", {
+            connected:      true,
+            chargesEnabled: chargesOk,
+            payoutsEnabled: payoutsOk,
+            action:         "navigating to dashboard to refresh checklist",
+          });
+
+          if (chargesOk) {
+            toast({
+              title:       "Stripe connected ✓",
+              description: "You can now accept payments. Your checklist is updating…",
+            });
+            // Small delay so the toast is visible before navigating
+            setTimeout(() => { router.push("/dashboard"); }, 1800);
+          } else {
+            // Connected but not fully enabled — show in-page so user can complete setup
+            setTimeout(() => {
+              document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 400);
+          }
+        } else if (isReturn) {
+          // Status fetch failed or not connected — scroll to payments section
+          setTimeout(() => {
+            document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 400);
+        }
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setStripeLoading(false); });
     return () => { cancelled = true; };
-  }, []);
-
-  // Scroll to Payments section when returning from Stripe Connect
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("stripe") === "connected") {
-      setTimeout(() => {
-        document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 400);
-    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleConnectStripe = async () => {

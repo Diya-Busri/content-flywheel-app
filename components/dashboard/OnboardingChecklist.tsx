@@ -111,7 +111,7 @@ export function OnboardingChecklist() {
   const [dismissed, setDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchStatus = () => {
     if (localStorage.getItem(DISMISSED_KEY) === "1") {
       setDismissed(true);
       return;
@@ -120,9 +120,42 @@ export function OnboardingChecklist() {
 
     fetch("/api/onboarding-status")
       .then((r) => r.ok ? r.json() : null)
-      .then((data: ApiStatus | null) => { if (data) setApiStatus(data); })
+      .then((data: ApiStatus | null) => {
+        if (data) {
+          setApiStatus(data);
+          console.log("[OnboardingChecklist] Status fetched:", {
+            "Stripe Connected":  data.hasStripeConnect ? "true ✅" : "false ❌",
+            "hasProduct":        data.hasProduct,
+            "hasThumbnail":      data.hasThumbnail,
+            "hasPublished":      data.hasPublishedProduct,
+            "hasStripeConnect":  data.hasStripeConnect,
+            "hasMarketing":      data.hasMarketingContent,
+            "hasSale":           data.hasSale,
+            "Checklist State":   `${data.percentComplete}% (${[data.hasProduct, data.hasThumbnail, data.hasPublishedProduct, data.hasStripeConnect, data.hasMarketingContent, data.hasSale].filter(Boolean).length}/6 DB steps)`,
+          });
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch when the window regains focus — catches the case where user completes
+  // Stripe OAuth in the same tab and navigates back (dashboard remounts anyway),
+  // but also handles cases where the tab was backgrounded during OAuth.
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log("[OnboardingChecklist] Window focused — re-fetching status");
+      fetchStatus();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Mark research step done and navigate
