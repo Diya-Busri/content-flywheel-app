@@ -142,7 +142,18 @@ function streamBehindTheBuild(
     const insights   = research?.insights ?? [];
     const opps       = research?.productOpportunities ?? [];
 
+    /* Declared here so the catch block can reference it for error reporting */
+    const generatedItems: Array<{ id: string; label: string; emoji: string; content: string }> = [];
+
     try {
+      console.log("[behind-the-build] Starting generation", {
+        projectId:   project.id,
+        goal:        project.goal.slice(0, 80),
+        productName: productName.slice(0, 80),
+        hasResearch: !!research,
+        insightCount: insights.length,
+      });
+
       await send({ type: "start" });
 
       /* ── Call GPT-4o-mini ── */
@@ -177,7 +188,6 @@ function streamBehindTheBuild(
       }
 
       /* ── Stream each piece with a staggered delay ── */
-      const generatedItems: Array<{ id: string; label: string; emoji: string; content: string }> = [];
 
       for (const piece of PIECES) {
         const content = parsed[piece.id];
@@ -200,6 +210,8 @@ function streamBehindTheBuild(
       }
 
       /* ── Save to DB ── */
+      console.log("[behind-the-build] Saving to DB…", { projectId: project.id, itemCount: generatedItems.length });
+
       const existing = results as LaunchStageResults;
       const merged: LaunchStageResults = {
         ...existing,
@@ -209,19 +221,34 @@ function streamBehindTheBuild(
         },
       };
 
-      await db
+      const saved = await db
         .update(launchProjectsTable)
         .set({ stageResults: merged, updatedAt: new Date() })
         .where(and(
           eq(launchProjectsTable.id, project.id),
           eq(launchProjectsTable.userId, userId),
-        ));
+        ))
+        .returning({ id: launchProjectsTable.id });
 
-      await send({ type: "done", count: generatedItems.length });
+      if (!saved.length) {
+        throw new Error("Database save failed — project not found or permission denied");
+      }
+
+      console.log("[behind-the-build] Saved successfully", { projectId: saved[0]?.id });
+
+      await send({ type: "done", count: generatedItems.length, projectId: project.id });
 
     } catch (err) {
-      console.error("[behind-the-build]", err);
-      await send({ type: "error", message: err instanceof Error ? err.message : "Generation failed" }).catch(() => {});
+      const message = err instanceof Error ? err.message : "Generation failed";
+      console.error("[behind-the-build] ERROR:", { projectId: project.id, message });
+      await send({
+        type:    "error",
+        message,
+        reason:  message,
+        // Tell the client whether content was generated (may be in memory even if save failed)
+        contentGenerated: generatedItems.length > 0,
+        itemCount:        generatedItems.length,
+      }).catch(() => {});
     } finally {
       await writer.close().catch(() => {});
     }

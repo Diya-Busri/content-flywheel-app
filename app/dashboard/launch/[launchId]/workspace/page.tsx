@@ -325,19 +325,57 @@ export default function ExecutionWorkspacePage() {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [showDemoReveal, setShowDemoReveal] = useState(false);
 
-  /* ── Load project ── */
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/launch/${launchId}`);
-        if (!res.ok) throw new Error("Not found");
-        const data = await res.json() as LaunchProject;
-        setProject(data);
-      } catch {
-        setLoadError("Could not load this workspace.");
+  /* ── Load project (with retry) ── */
+  const [loadReason,   setLoadReason]   = useState<string | null>(null);
+  const [retryCount,   setRetryCount]   = useState(0);
+  const MAX_RETRIES = 3;
+
+  const loadProject = useCallback(async (attempt = 1) => {
+    console.log(`[workspace] Loading project (attempt ${attempt})`, { launchId });
+    try {
+      const res = await fetch(`/api/launch/${launchId}`);
+
+      if (!res.ok) {
+        let reason = `Server returned ${res.status}`;
+        try {
+          const body = await res.json() as { error?: string };
+          if (body.error) reason = body.error;
+        } catch { /* ignore parse error */ }
+
+        const mapped =
+          res.status === 401 ? "Not signed in — please refresh and sign in again."
+          : res.status === 404 ? "Workspace not found. It may have been deleted."
+          : res.status === 403 ? "You don't have permission to view this workspace."
+          : res.status >= 500  ? `Server error (${res.status}) — please retry.`
+          : `Request failed: ${reason}`;
+
+        console.error("[workspace] Load failed", { status: res.status, reason: mapped, attempt });
+        throw new Error(mapped);
       }
-    })();
+
+      const data = await res.json() as LaunchProject;
+      console.log("[workspace] Loaded successfully", { id: data.id, status: data.status });
+      setProject(data);
+      setLoadError(null);
+      setLoadReason(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("[workspace] Error", { message, attempt });
+
+      if (attempt < MAX_RETRIES) {
+        const delay = attempt * 1500;
+        console.log(`[workspace] Retrying in ${delay}ms…`);
+        setTimeout(() => void loadProject(attempt + 1), delay);
+      } else {
+        setLoadError("Failed to load Behind the Build.");
+        setLoadReason(message);
+      }
+    }
   }, [launchId]);
+
+  useEffect(() => {
+    void loadProject(1);
+  }, [loadProject]);
 
   useEffect(() => {
     if (project?.status !== "completed" || !readDemoMode()) return;
@@ -368,14 +406,64 @@ export default function ExecutionWorkspacePage() {
 
   if (loadError) {
     return (
-      <div className="min-h-dvh flex items-center justify-center p-8">
-        <div className="text-center max-w-sm">
-          <XCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
-          <p className="text-[14px] text-muted-foreground">{loadError}</p>
-          <button onClick={() => router.push("/dashboard/launch")}
-            className="mt-4 text-[13px] text-orange-500 hover:underline">
-            ← New execution
-          </button>
+      <div className="min-h-dvh flex items-center justify-center p-8 bg-background">
+        <div className="w-full max-w-md">
+          {/* Error card */}
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.03] p-6">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                <XCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-bold text-foreground">{loadError}</p>
+                <p className="text-[12px] text-muted-foreground/60 mt-0.5">
+                  This workspace could not be loaded.
+                </p>
+              </div>
+            </div>
+
+            {/* Reason */}
+            {loadReason && (
+              <div className="mb-5 rounded-lg bg-muted/20 border border-border/40 px-3 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1">Reason</p>
+                <p className="text-[12px] text-muted-foreground/80 leading-snug">{loadReason}</p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setLoadError(null);
+                  setLoadReason(null);
+                  void loadProject(1);
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-foreground hover:bg-foreground/90 text-[13px] font-bold text-background transition-colors"
+              >
+                <AlertTriangle className="w-4 h-4" />
+                Retry
+              </button>
+
+              <button
+                onClick={() => router.push(`/dashboard/launch/${launchId}`)}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-border/60 bg-card/60 hover:bg-muted/40 text-[13px] font-semibold text-foreground/70 transition-colors"
+              >
+                Return to Launch
+              </button>
+
+              <button
+                onClick={() => router.push("/dashboard/projects")}
+                className="text-center text-[12px] text-muted-foreground/60 hover:text-foreground/60 transition-colors mt-1"
+              >
+                View all launches →
+              </button>
+            </div>
+
+            {/* Logs note */}
+            <p className="text-[10px] text-muted-foreground/40 mt-4 text-center">
+              Check browser console for detailed logs · Your content is safe in the database
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -384,7 +472,10 @@ export default function ExecutionWorkspacePage() {
   if (!project) {
     return (
       <div className="min-h-dvh flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="text-center">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mx-auto mb-3" />
+          <p className="text-[12px] text-muted-foreground/60">Loading workspace…</p>
+        </div>
       </div>
     );
   }

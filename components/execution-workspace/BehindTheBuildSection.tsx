@@ -166,27 +166,41 @@ export function BehindTheBuildSection({
   const [phase, setPhase] = useState<"teaser" | "building" | "complete">(
     existing ? "complete" : "teaser"
   );
-  const [items,   setItems]   = useState<ContentItem[]>(existing?.items ?? []);
-  const [error,   setError]   = useState<string | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [items,         setItems]         = useState<ContentItem[]>(existing?.items ?? []);
+  const [error,         setError]         = useState<string | null>(null);
+  const [savedToLib,    setSavedToLib]    = useState(false);
+  const [activeId,      setActiveId]      = useState<string | null>(null);
+  const [generatedCount, setGeneratedCount] = useState(0);
 
   const generate = useCallback(async () => {
     setPhase("building");
     setItems([]);
     setError(null);
+    setSavedToLib(false);
+    setGeneratedCount(0);
+
+    console.log("[BehindTheBuild] Starting generation", { launchId });
 
     try {
+      console.log("[BehindTheBuild] Calling API…");
       const res = await fetch(`/api/launch/${launchId}/behind-the-build`, {
         method: "POST",
       });
 
       if (!res.ok || !res.body) {
-        throw new Error(`API returned ${res.status}`);
+        const statusText = res.status === 401 ? "Unauthorized — please refresh the page"
+          : res.status === 404 ? "Workspace not found in database"
+          : res.status === 429 ? "Too many requests — please wait a moment and try again"
+          : res.status >= 500  ? "Server error — please try again"
+          : `API returned ${res.status}`;
+        console.error("[BehindTheBuild] HTTP error", { status: res.status });
+        throw new Error(statusText);
       }
 
       const reader  = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      let localItems: ContentItem[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -205,8 +219,11 @@ export function BehindTheBuildSection({
             event = JSON.parse(trimmed) as Record<string, unknown>;
           } catch { continue; }
 
+          console.log("[BehindTheBuild] Event:", event.type, event.type === "item" ? (event.label as string) : "");
+
           switch (event.type as string) {
             case "start":
+              console.log("[BehindTheBuild] Generation started");
               setActiveId(PIECE_LABELS[0]?.label ?? null);
               break;
 
@@ -217,30 +234,63 @@ export function BehindTheBuildSection({
                 emoji:   event.emoji   as string,
                 content: event.content as string,
               };
-              setItems(prev => [...prev, item]);
+              localItems = [...localItems, item];
+              setItems(localItems);
+              setGeneratedCount(localItems.length);
               // Advance the active indicator to the next piece
               const idx = PIECE_LABELS.findIndex(p => p.label === item.label);
               const next = PIECE_LABELS[idx + 1];
               setActiveId(next?.label ?? null);
+              console.log("[BehindTheBuild] Item received:", item.label);
               break;
             }
 
-            case "done":
+            case "done": {
+              const count = event.count as number | undefined;
+              console.log("[BehindTheBuild] Done — saved to DB", {
+                count,
+                projectId: event.projectId,
+                localItemCount: localItems.length,
+              });
               setActiveId(null);
+              setSavedToLib(true);
               setPhase("complete");
               break;
+            }
 
-            case "error":
-              throw new Error(event.message as string ?? "Generation failed");
+            case "error": {
+              const reason   = (event.reason ?? event.message) as string | undefined;
+              const hadItems = (event.contentGenerated as boolean | undefined) ?? false;
+              const itemCount = (event.itemCount as number | undefined) ?? 0;
+              console.error("[BehindTheBuild] Server error", { reason, hadItems, itemCount });
+              if (hadItems && localItems.length > 0) {
+                // Content was generated but save failed — show what we have with a warning
+                setItems(localItems);
+                setPhase("complete");
+                setError(`Content generated but couldn't save to database. ${reason ?? ""} — copy your content now before leaving this page.`);
+              } else {
+                throw new Error(reason ?? "Generation failed");
+              }
+              break;
+            }
           }
         }
       }
 
+      // If stream ended without a "done" event but we have items, treat as success
+      if (localItems.length > 0 && phase !== "complete") {
+        console.warn("[BehindTheBuild] Stream ended without done event — treating as complete");
+        setItems(localItems);
+        setPhase("complete");
+      }
+
     } catch (err) {
-      console.error("[BehindTheBuild]", err);
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      const message = err instanceof Error ? err.message : "Something went wrong.";
+      console.error("[BehindTheBuild] Error:", message);
+      setError(message);
       setPhase("teaser");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launchId]);
 
   /* ── Teaser ── */
@@ -280,7 +330,13 @@ export function BehindTheBuildSection({
           </div>
 
           {error && (
-            <p className="text-[11px] text-red-400 mb-3">{error}</p>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 mb-3">
+              <p className="text-[11px] text-red-400 font-medium leading-snug">{error}</p>
+              <p className="text-[10px] text-muted-foreground/50 mt-1.5">
+                Your content was saved if generation completed. Access from{" "}
+                <a href="/dashboard/workspace" className="text-orange-500 hover:underline">My Workspace</a>.
+              </p>
+            </div>
           )}
 
           <button
@@ -342,6 +398,7 @@ export function BehindTheBuildSection({
           <p className="text-[13px] font-bold text-foreground">Behind the Build</p>
           <p className="text-[11px] text-muted-foreground/60 mt-0.5">
             {items.length} pieces ready · Edit, copy, or use as inspiration
+            {savedToLib && <> · <span className="text-green-500">✓ Saved</span></>}
           </p>
         </div>
         <button
@@ -353,6 +410,13 @@ export function BehindTheBuildSection({
           Regenerate
         </button>
       </div>
+
+      {/* Warning if save failed but content was generated */}
+      {error && (
+        <div className="px-5 py-3 bg-amber-500/5 border-b border-amber-500/20">
+          <p className="text-[11px] text-amber-500 leading-snug">{error}</p>
+        </div>
+      )}
 
       {/* Note */}
       <div className="px-5 py-2.5 bg-muted/10 border-b border-border/30">
