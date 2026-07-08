@@ -776,6 +776,13 @@ export function NoteEditor({
   const [showListMenu, setShowListMenu]           = useState(false);
   const [showFontMenu, setShowFontMenu]           = useState(false);
   const [showSizeMenu, setShowSizeMenu]           = useState(false);
+  // Fixed-position coords for each dropdown (escapes overflow-x-auto clipping)
+  const [blockMenuPos,  setBlockMenuPos]  = useState({ top: 0, left: 0 });
+  const [fontMenuPos,   setFontMenuPos]   = useState({ top: 0, left: 0 });
+  const [sizeMenuPos,   setSizeMenuPos]   = useState({ top: 0, left: 0 });
+  const [colorMenuPos,  setColorMenuPos]  = useState({ top: 0, left: 0 });
+  const [alignMenuPos,  setAlignMenuPos]  = useState({ top: 0, left: 0 });
+  const [listMenuPos,   setListMenuPos]   = useState({ top: 0, left: 0 });
   const [showCmdPalette, setShowCmdPalette]       = useState(false);
   const [aiLoading, setAiLoading]                 = useState<string | null>(null);
   const [bubbleVisible, setBubbleVisible]         = useState(false);
@@ -1066,14 +1073,14 @@ export function NoteEditor({
           {/* ── Group 1: Block type ▼ ──────────────────────────────────────── */}
           <div className="relative shrink-0" ref={blockRef}>
             <button
-              onMouseDown={e => { e.preventDefault(); setShowBlockMenu(v => !v); }}
+              onMouseDown={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); if (!showBlockMenu) setBlockMenuPos({ top: r.bottom + 4, left: r.left }); setShowBlockMenu(v => !v); }}
               className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[52px]"
             >
               {blockLabel}
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
             {showBlockMenu && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
+              <div style={{ top: blockMenuPos.top, left: blockMenuPos.left }} className="fixed z-[9999] bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
                 {[
                   { label: "Text",       icon: <Type className="w-3.5 h-3.5" />,     action: () => editor.chain().focus().setParagraph().run() },
                   { label: "Heading 1",  icon: <Heading1 className="w-3.5 h-3.5" />, action: () => editor.chain().focus().setHeading({ level: 1 }).run() },
@@ -1098,7 +1105,7 @@ export function NoteEditor({
           {/* ── Group 2: Font family ▼ ─────────────────────────────────────── */}
           <div className="relative shrink-0" ref={fontRef}>
             <button
-              onMouseDown={e => { e.preventDefault(); setShowFontMenu(v => !v); }}
+              onMouseDown={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); if (!showFontMenu) setFontMenuPos({ top: r.bottom + 4, left: r.left }); setShowFontMenu(v => !v); }}
               className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[60px]"
               title="Font Family"
             >
@@ -1106,7 +1113,7 @@ export function NoteEditor({
               <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
             </button>
             {showFontMenu && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[160px]">
+              <div style={{ top: fontMenuPos.top, left: fontMenuPos.left }} className="fixed z-[9999] bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[160px]">
                 {[
                   { label: "Sans-serif", value: "",               preview: "Aa" },
                   { label: "Serif",      value: "Georgia, serif",  preview: "Aa" },
@@ -1140,7 +1147,7 @@ export function NoteEditor({
           {/* ── Group 3: Font size ▼ ───────────────────────────────────────── */}
           <div className="relative shrink-0" ref={sizeRef}>
             <button
-              onMouseDown={e => { e.preventDefault(); setShowSizeMenu(v => !v); }}
+              onMouseDown={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); if (!showSizeMenu) setSizeMenuPos({ top: r.bottom + 4, left: r.left }); setShowSizeMenu(v => !v); }}
               className="flex items-center gap-1 h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors min-w-[48px]"
               title="Font Size"
             >
@@ -1148,7 +1155,7 @@ export function NoteEditor({
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
             {showSizeMenu && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[130px]">
+              <div style={{ top: sizeMenuPos.top, left: sizeMenuPos.left }} className="fixed z-[9999] bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[130px]">
                 {[
                   { label: "Default", value: null },
                   { label: "Small",   value: "12px" },
@@ -1201,7 +1208,7 @@ export function NoteEditor({
           <div className="relative shrink-0" ref={colorRef}>
             <button
               title="Text Colour & Highlight"
-              onMouseDown={e => { e.preventDefault(); setShowColorPicker(v => !v); }}
+              onMouseDown={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); if (!showColorPicker) setColorMenuPos({ top: r.bottom + 4, left: r.left }); setShowColorPicker(v => !v); }}
               className="flex items-center gap-0.5 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               <Type className="w-3.5 h-3.5" />
@@ -1209,7 +1216,7 @@ export function NoteEditor({
               <ChevronDown className="w-2.5 h-2.5 opacity-60" />
             </button>
             {showColorPicker && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl">
+              <div style={{ top: colorMenuPos.top, left: colorMenuPos.left }} className="fixed z-[9999] bg-popover border border-border rounded-xl shadow-xl">
                 <ColorPicker editor={editor} onClose={() => setShowColorPicker(false)} />
               </div>
             )}
@@ -1220,7 +1227,7 @@ export function NoteEditor({
           {/* ── Group 6: Align ▼ ──────────────────────────────────────────── */}
           <div className="relative shrink-0" ref={alignRef}>
             <button
-              onMouseDown={e => { e.preventDefault(); setShowAlignMenu(v => !v); }}
+              onMouseDown={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); if (!showAlignMenu) setAlignMenuPos({ top: r.bottom + 4, left: r.left }); setShowAlignMenu(v => !v); }}
               className="flex items-center gap-1 h-7 px-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               title="Text Alignment"
             >
@@ -1231,7 +1238,7 @@ export function NoteEditor({
               <ChevronDown className="w-2.5 h-2.5 opacity-60" />
             </button>
             {showAlignMenu && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl p-1 flex gap-0.5">
+              <div style={{ top: alignMenuPos.top, left: alignMenuPos.left }} className="fixed z-[9999] bg-popover border border-border rounded-xl shadow-xl p-1 flex gap-0.5">
                 {[
                   { icon: <AlignLeft className="w-3.5 h-3.5" />,    align: "left",    title: "Align Left" },
                   { icon: <AlignCenter className="w-3.5 h-3.5" />,  align: "center",  title: "Align Centre" },
@@ -1258,7 +1265,7 @@ export function NoteEditor({
           {/* ── Group 7: Lists ▼ ──────────────────────────────────────────── */}
           <div className="relative shrink-0" ref={listRef}>
             <button
-              onMouseDown={e => { e.preventDefault(); setShowListMenu(v => !v); }}
+              onMouseDown={e => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); if (!showListMenu) setListMenuPos({ top: r.bottom + 4, left: r.left }); setShowListMenu(v => !v); }}
               className={cn(
                 "flex items-center gap-1 h-7 px-1.5 rounded-md transition-colors",
                 (editor.isActive("bulletList") || editor.isActive("orderedList") || editor.isActive("taskList"))
@@ -1271,7 +1278,7 @@ export function NoteEditor({
               <ChevronDown className="w-2.5 h-2.5 opacity-60" />
             </button>
             {showListMenu && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
+              <div style={{ top: listMenuPos.top, left: listMenuPos.left }} className="fixed z-[9999] bg-popover border border-border rounded-xl shadow-xl py-1 min-w-[180px]">
                 {[
                   { label: "Bullet List",   icon: <List className="w-3.5 h-3.5" />,        active: editor.isActive("bulletList"),  action: () => editor.chain().focus().toggleBulletList().run() },
                   { label: "Numbered List", icon: <ListOrdered className="w-3.5 h-3.5" />, active: editor.isActive("orderedList"), action: () => editor.chain().focus().toggleOrderedList().run() },
