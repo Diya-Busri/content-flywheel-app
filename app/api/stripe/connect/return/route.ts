@@ -10,12 +10,12 @@ const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.u
 /**
  * GET /api/stripe/connect/return?userId=xxx
  * Called by Stripe after the creator completes (or abandons) onboarding.
- * Syncs their account status then redirects to the payouts dashboard.
+ * Syncs their account status then redirects to Settings > Payments.
  */
 export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get("userId");
   if (!userId) {
-    return NextResponse.redirect(`${baseUrl}/dashboard/store/payouts`);
+    return NextResponse.redirect(`${baseUrl}/dashboard/settings?stripe=connected`);
   }
 
   try {
@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
         .update(profilesTable)
         .set({
           stripeConnectOnboardingComplete: account.details_submitted,
-          stripeConnectChargesEnabled: account.charges_enabled,
+          stripeConnectChargesEnabled:     account.charges_enabled,
+          stripeConnectPayoutsEnabled:     account.payouts_enabled ?? false,
         })
         .where(eq(profilesTable.userId, userId));
     }
@@ -39,5 +40,6 @@ export async function GET(request: NextRequest) {
     console.error("[stripe/connect/return] error:", err);
   }
 
-  return NextResponse.redirect(`${baseUrl}/dashboard/store/payouts?connect=done`);
+  // Redirect to Settings Payments section so the user sees their connected status
+  return NextResponse.redirect(`${baseUrl}/dashboard/settings?stripe=connected`);
 }

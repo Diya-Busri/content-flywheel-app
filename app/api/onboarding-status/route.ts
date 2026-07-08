@@ -6,19 +6,21 @@ import { profilesTable } from "@/db/schema/profiles-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
-import { emailSequencesTable } from "@/db/schema/email-sequences-schema";
+import { emailCampaignsTable } from "@/db/schema/email-marketing-schema";
 import { eq, and, isNull, count } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export type OnboardingStatus = {
   hasProduct: boolean;
+  hasThumbnail: boolean;
   hasPublishedProduct: boolean;
   hasStripeConnect: boolean;
+  hasMarketingContent: boolean;
+  hasSale: boolean;
+  // legacy fields kept for backwards compat
   hasBrandVoice: boolean;
   hasPromoCode: boolean;
-  hasEmailSequence: boolean;
-  hasSale: boolean;
   complete: boolean;
   percentComplete: number;
 };
@@ -27,11 +29,14 @@ export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [products, profile, brandVoice, orders, promoCodes, sequences] = await Promise.all([
+  const [products, profile, brandVoice, orders, promoCodes, campaigns] = await Promise.all([
     db.select({ id: productsTable.id, marketingAssets: productsTable.marketingAssets })
       .from(productsTable)
       .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt))),
-    db.select({ stripeConnectChargesEnabled: profilesTable.stripeConnectChargesEnabled })
+    db.select({
+        stripeConnectChargesEnabled: profilesTable.stripeConnectChargesEnabled,
+        stripeConnectPayoutsEnabled: profilesTable.stripeConnectPayoutsEnabled,
+      })
       .from(profilesTable)
       .where(eq(profilesTable.userId, userId))
       .limit(1),
@@ -46,34 +51,47 @@ export async function GET() {
       .from(creatorPromoCodesTable)
       .where(and(eq(creatorPromoCodesTable.creatorUserId, userId), eq(creatorPromoCodesTable.active, true))),
     db.select({ count: count() })
-      .from(emailSequencesTable)
-      .where(eq(emailSequencesTable.userId, userId)),
+      .from(emailCampaignsTable)
+      .where(and(eq(emailCampaignsTable.userId, userId), eq(emailCampaignsTable.status, "sent"))),
   ]);
 
   const hasProduct = products.length > 0;
+
+  const hasThumbnail = products.some((p) => {
+    const ma = (p.marketingAssets ?? {}) as Record<string, unknown>;
+    return !!(ma.thumbnailUrl || ma.coverThumbnailUrl);
+  });
+
   const hasPublishedProduct = products.some((p) => {
     const ma = (p.marketingAssets ?? {}) as { isNativePublished?: boolean };
     return ma.isNativePublished === true;
   });
-  const hasStripeConnect = !!(profile[0]?.stripeConnectChargesEnabled);
+
+  // Both charges AND payouts must be enabled — per spec
+  const hasStripeConnect = !!(profile[0]?.stripeConnectChargesEnabled && profile[0]?.stripeConnectPayoutsEnabled);
   const hasBrandVoice = !!(brandVoice[0]?.brandName?.trim());
   const hasPromoCode = Number(promoCodes[0]?.count ?? 0) > 0;
-  const hasEmailSequence = Number(sequences[0]?.count ?? 0) > 0;
+  const campaignsSent = Number(campaigns[0]?.count ?? 0) > 0;
+  const hasMarketingContent = hasPromoCode || campaignsSent;
   const hasSale = Number(orders[0]?.count ?? 0) > 0;
 
-  const steps = [hasProduct, hasPublishedProduct, hasStripeConnect, hasBrandVoice, hasPromoCode, hasEmailSequence, hasSale];
-  const done = steps.filter(Boolean).length;
-  const complete = done === steps.length;
-  const percentComplete = Math.round((done / steps.length) * 100);
+  // 6 DB-tracked steps (research step is localStorage-only, handled client-side)
+  const dbSteps = [hasProduct, hasThumbnail, hasPublishedProduct, hasStripeConnect, hasMarketingContent, hasSale];
+  const dbDone = dbSteps.filter(Boolean).length;
+  // complete = all 7 steps (including research which client tracks)
+  const complete = dbDone === dbSteps.length;
+  // percentComplete is over 6 DB steps; client will add the research step
+  const percentComplete = Math.round((dbDone / dbSteps.length) * 100);
 
   return NextResponse.json({
     hasProduct,
+    hasThumbnail,
     hasPublishedProduct,
     hasStripeConnect,
+    hasMarketingContent,
+    hasSale,
     hasBrandVoice,
     hasPromoCode,
-    hasEmailSequence,
-    hasSale,
     complete,
     percentComplete,
   } satisfies OnboardingStatus);
