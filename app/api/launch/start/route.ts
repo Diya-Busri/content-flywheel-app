@@ -23,6 +23,16 @@ export async function POST(request: NextRequest) {
 
     if (!goal) return NextResponse.json({ error: "Goal is required" }, { status: 400 });
 
+    // Defence-in-depth: rule-based guard (no AI) to block obvious placeholder inputs
+    const norm = goal.toLowerCase().replace(/['"!?.]/g, "").trim();
+    const NO_IDEA = new Set(["idk", "i dont know", "i don't know", "not sure", "unsure", "no idea", "dunno", "help me decide", "help me choose"]);
+    const INVALID  = new Set(["test", "testing", "hello", "hi", "hey", "asdf", "qwerty", "foo", "bar", "baz", "lorem", "ipsum", "123", "abc"]);
+    const SPAM_RE  = [/^(.)\1{2,}$/, /^[qwerty]+$/i, /^[asdfghjkl]+$/i, /^[zxcvbnm]+$/i];
+    const isSpam   = SPAM_RE.some(r => r.test(norm));
+    if (NO_IDEA.has(norm) || INVALID.has(norm) || isSpam || norm.replace(/\s/g, "").length < 8) {
+      return NextResponse.json({ error: "INVALID_GOAL", message: "Please enter a real business idea." }, { status: 400 });
+    }
+
     const [project] = await db
       .insert(launchProjectsTable)
       .values({ userId, goal, status: "queued", currentStage: "research", progress: 0 })
