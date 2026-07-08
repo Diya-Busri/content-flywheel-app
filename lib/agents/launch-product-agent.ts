@@ -13,6 +13,7 @@
 
 import type { ExecutionContext, AgentStep } from "./types";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
+import { validateProduct } from "@/lib/launch-validator";
 
 /* ─── Fixed steps (before outline is known) ──────────────────────────────────── */
 
@@ -222,12 +223,16 @@ export async function runLaunchProductAgent(ctx: ExecutionContext): Promise<void
 
           callbacks.onProgress(98, "Saving research results...");
 
+          const productResult = {
+            productId:   productId,
+            productName: productName ?? goal,
+            completedAt: new Date().toISOString(),
+          };
+
+          const validation = validateProduct(productResult);
+
           const stageResultsPatch: Partial<LaunchStageResults> = {
-            product: {
-              productId:   productId,
-              productName: productName ?? goal,
-              completedAt: new Date().toISOString(),
-            },
+            product: { ...productResult, validation },
           };
 
           await saveProgress({

@@ -13,6 +13,7 @@
  */
 
 import type { ExecutionContext, AgentStep } from "./types";
+import { validateResearch } from "@/lib/launch-validator";
 
 /* ─── Analyst metadata — mirrors RESEARCH_ANALYSTS in /api/research/ai/route.ts */
 
@@ -185,28 +186,32 @@ export async function runLaunchResearchAgent(ctx: ExecutionContext): Promise<voi
           type AP = { step: number; action: string; detail: string; cta?: string };
           type CI = { name: string; strength: string; gap: string };
 
+          const researchResult = {
+            query:                goal,
+            insights:             Array.isArray(report.insights)
+                                    ? (report.insights as unknown[]).map(String)
+                                    : [],
+            reportSummary:        typeof report.summary === "string"
+                                    ? report.summary : "",
+            productOpportunities: Array.isArray(report.productOpportunities)
+                                    ? (report.productOpportunities as PO[]) : [],
+            keywords:             Array.isArray(report.keywords)
+                                    ? (report.keywords as KW[]) : [],
+            actionPlan:           Array.isArray(report.actionPlan)
+                                    ? (report.actionPlan as AP[]) : [],
+            competitorInsights:   Array.isArray(report.competitorInsights)
+                                    ? (report.competitorInsights as CI[]) : [],
+            fullReport:           report,
+            completedAt:          new Date().toISOString(),
+          };
+
+          const validation = validateResearch(researchResult);
+
           await saveProgress({
             currentStage: "product",
             progress:     20,
             stageResults: {
-              research: {
-                query:                goal,
-                insights:             Array.isArray(report.insights)
-                                        ? (report.insights as unknown[]).map(String)
-                                        : [],
-                reportSummary:        typeof report.summary === "string"
-                                        ? report.summary : "",
-                productOpportunities: Array.isArray(report.productOpportunities)
-                                        ? (report.productOpportunities as PO[]) : [],
-                keywords:             Array.isArray(report.keywords)
-                                        ? (report.keywords as KW[]) : [],
-                actionPlan:           Array.isArray(report.actionPlan)
-                                        ? (report.actionPlan as AP[]) : [],
-                competitorInsights:   Array.isArray(report.competitorInsights)
-                                        ? (report.competitorInsights as CI[]) : [],
-                fullReport:           report,
-                completedAt:          new Date().toISOString(),
-              },
+              research: { ...researchResult, validation },
             },
           });
 

@@ -20,6 +20,7 @@
 
 import type { ExecutionContext, AgentStep, ValidationCheck } from "./types";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
+import { validateStore } from "@/lib/launch-validator";
 
 /* ─── Step definition ────────────────────────────────────────────────────────── */
 
@@ -178,19 +179,23 @@ export async function runLaunchStoreAgent(ctx: ExecutionContext): Promise<void> 
 
           callbacks.onProgress(98, "Saving store results...");
 
+          const storeResult: NonNullable<LaunchStageResults["store"]> = {
+            productId,
+            storeUrl:         finalStoreUrl,
+            readinessScore:   finalScore,
+            validationChecks: finalChecks.map(c => ({
+              id:      c.id,
+              label:   c.label,
+              status:  c.status,
+              ...(c.detail ? { detail: c.detail } : {}),
+            })),
+            completedAt: new Date().toISOString(),
+          };
+
+          const validation = validateStore(storeResult);
+
           const stageResultsPatch: Partial<LaunchStageResults> = {
-            store: {
-              productId,
-              storeUrl:        finalStoreUrl,
-              readinessScore:  finalScore,
-              validationChecks: finalChecks.map(c => ({
-                id:      c.id,
-                label:   c.label,
-                status:  c.status,
-                ...(c.detail ? { detail: c.detail } : {}),
-              })),
-              completedAt: new Date().toISOString(),
-            },
+            store: { ...storeResult, validation },
           };
 
           await saveProgress({

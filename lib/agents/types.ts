@@ -108,4 +108,4 @@ export interface ExecutionContext {
 
 /* ─── Agent status (used by the execution page per-card) ─────────────────────── */
 
-export type AgentStatus = "waiting" | "working" | "complete" | "error";
+export type AgentStatus = "waiting" | "working" | "complete" | "needs_attention" | "error";

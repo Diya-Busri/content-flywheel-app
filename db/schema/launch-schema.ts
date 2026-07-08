@@ -42,6 +42,31 @@ export type BrainResult = {
 };
 export type LaunchStageId = "research" | "product" | "design" | "marketing" | "store" | "complete";
 
+/* ─── Asset validation types ─────────────────────────────────────────────────── */
+
+export type AssetCheck = {
+  id:       string;
+  label:    string;
+  /** If true, failing this check blocks "Ready to Launch" */
+  required: boolean;
+  status:   "pass" | "fail" | "warn";
+  /** Human-readable explanation of why this check failed or what's missing */
+  reason?:  string;
+};
+
+export type StageValidation = {
+  /** overall stage status based on required checks */
+  status:        "validated" | "needs_attention" | "failed";
+  passedCount:   number;
+  totalCount:    number;
+  /** how many required checks passed */
+  requiredPass:  number;
+  /** how many required checks total */
+  requiredTotal: number;
+  checks:        AssetCheck[];
+  validatedAt:   string;
+};
+
 export type LaunchMemory = {
   audience?: string;
   niche?: string;
@@ -64,12 +89,16 @@ export type LaunchStageResults = {
     fullReport?: Record<string, unknown>;
     /** ISO timestamp when this stage completed */
     completedAt?: string;
+    /** Asset validation result — written by the agent immediately after generation */
+    validation?: StageValidation;
   };
   product?: {
     productId: string;
     productName: string;
     /** ISO timestamp when this stage completed */
     completedAt?: string;
+    /** Asset validation result — written by the agent immediately after generation */
+    validation?: StageValidation;
   };
   design?: {
     /** Product Cover — portrait marketing image (first accepted concept) */
@@ -99,6 +128,8 @@ export type LaunchStageResults = {
     carouselBundleId?: string;
     /** designsTable ID for the dedicated 800×800 store thumbnail design (editable in Design Studio) */
     thumbnailDesignId?: string;
+    /** Asset validation result — written by the agent immediately after generation */
+    validation?: StageValidation;
   };
   video?: {
     libraryScriptId: string;
@@ -137,6 +168,8 @@ export type LaunchStageResults = {
     hashtags?:     string[];
     /** ISO timestamp when this stage completed */
     completedAt?: string;
+    /** Asset validation result — written by the agent immediately after generation */
+    validation?: StageValidation;
   };
   store?: {
     productId:       string;
@@ -151,6 +184,8 @@ export type LaunchStageResults = {
     publishedAt?: string;
     /** ISO timestamp when this stage completed */
     completedAt?: string;
+    /** Asset validation result — written by the agent immediately after generation */
+    validation?: StageValidation;
   };
   /**
    * Growth Mode — daily AI operational check.

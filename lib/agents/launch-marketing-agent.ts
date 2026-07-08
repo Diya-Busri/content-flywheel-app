@@ -17,6 +17,7 @@
 
 import type { ExecutionContext, AgentStep, FolderAssetItem } from "./types";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
+import { validateMarketing } from "@/lib/launch-validator";
 
 /* ─── Step definition ────────────────────────────────────────────────────────── */
 
@@ -223,11 +224,15 @@ export async function runLaunchMarketingAgent(ctx: ExecutionContext): Promise<vo
           const totalAssets = counts.launch + counts.social + counts.email;
           console.log(`[marketing-agent] Generated ${totalAssets} assets: ${counts.launch} launch, ${counts.social} social, ${counts.email} emails`);
 
+          const marketingResult = {
+            ...(fullMarketing as LaunchStageResults["marketing"]),
+            completedAt: new Date().toISOString(),
+          } as NonNullable<LaunchStageResults["marketing"]>;
+
+          const validation = validateMarketing(marketingResult);
+
           const stageResultsPatch: Partial<LaunchStageResults> = {
-            marketing: {
-              ...(fullMarketing as LaunchStageResults["marketing"]),
-              completedAt: new Date().toISOString(),
-            },
+            marketing: { ...marketingResult, validation },
           };
 
           await saveProgress({

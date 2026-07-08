@@ -36,7 +36,7 @@ import type {
   FolderAssetItem, ValidationCheck,
 } from "@/lib/agents/types";
 import type {
-  LaunchStatus, LaunchStageId, LaunchStageResults,
+  LaunchStatus, LaunchStageId, LaunchStageResults, StageValidation,
 } from "@/db/schema/launch-schema";
 
 /* ═══════════════════════════════════════════════════════════
@@ -412,42 +412,46 @@ function ReadinessScorePanel({ score, checks }: { score: number; checks: Validat
    AGENT CARD
 ══════════════════════════════════════════════════════════ */
 interface AgentCardProps {
-  stage:           StageConfig;
-  status:          AgentStatus;
-  steps:           AgentStep[];    // only shown when working
-  agentProgress:   number;         // 0-100, only shown when working
-  progressLabel:   string;
-  isNextUp:        boolean;        // slight visual hint for the next pending agent
-  completeSummary?: string;
-  errorMessage?:   string;
-  onRetry?:        () => void;
-  isRetrying?:     boolean;
-  demoMode?:       boolean;
+  stage:             StageConfig;
+  status:            AgentStatus;
+  steps:             AgentStep[];    // only shown when working
+  agentProgress:     number;         // 0-100, only shown when working
+  progressLabel:     string;
+  isNextUp:          boolean;        // slight visual hint for the next pending agent
+  completeSummary?:  string;
+  errorMessage?:     string;
+  validationResult?: StageValidation;
+  onRetry?:          () => void;
+  isRetrying?:       boolean;
+  demoMode?:         boolean;
 }
 
 function AgentCard({
   stage, status, steps, agentProgress, progressLabel, isNextUp, completeSummary,
-  errorMessage, onRetry, isRetrying, demoMode = false,
+  errorMessage, validationResult, onRetry, isRetrying, demoMode = false,
 }: AgentCardProps) {
   const [stepsExpanded, setStepsExpanded] = useState(true);
 
-  const isWorking  = status === "working";
-  const isComplete = status === "complete";
-  const isError    = status === "error";
-  const isWaiting  = status === "waiting";
+  const isWorking       = status === "working";
+  const isComplete      = status === "complete";
+  const isError         = status === "error";
+  const isWaiting       = status === "waiting";
+  const isNeedsAttention = status === "needs_attention";
 
   const borderCls =
-    isWorking  ? "border-orange-500/40 shadow-sm shadow-orange-500/5"
-    : isComplete ? "border-green-500/25"
-    : isError    ? "border-red-500/25"
-    : isNextUp   ? "border-border/80"
-    :              "border-border/40";
+    isWorking        ? "border-orange-500/40 shadow-sm shadow-orange-500/5"
+    : isComplete     ? "border-green-500/25"
+    : isNeedsAttention ? "border-amber-500/40"
+    : isError        ? "border-red-500/25"
+    : isNextUp       ? "border-border/80"
+    :                  "border-border/40";
 
   const bgCls =
-    isWorking  ? "bg-orange-500/[0.03]"
-    : isComplete ? "bg-green-500/[0.03]"
-    : isError    ? "bg-red-500/[0.03]"
-    :              "bg-card/30";
+    isWorking        ? "bg-orange-500/[0.03]"
+    : isComplete     ? "bg-green-500/[0.03]"
+    : isNeedsAttention ? "bg-amber-500/[0.03]"
+    : isError        ? "bg-red-500/[0.03]"
+    :                  "bg-card/30";
 
   return (
     <div className={[
@@ -469,7 +473,7 @@ function AgentCard({
           "text-lg leading-none shrink-0",
           isWaiting && !isNextUp ? "opacity-30 grayscale" : "",
         ].join(" ")}>
-          {isComplete ? "✅" : isError ? "❌" : stage.emoji}
+          {isComplete ? "✅" : isNeedsAttention ? "⚠️" : isError ? "❌" : stage.emoji}
         </span>
 
         {/* Name */}
@@ -513,22 +517,57 @@ function AgentCard({
               )}
             </div>
           )}
+          {isNeedsAttention && validationResult && (
+            <div className="mt-1 space-y-2">
+              {/* Asset count badge */}
+              <p className="text-[11px] text-amber-500 leading-snug">
+                {validationResult.passedCount}/{validationResult.totalCount} assets verified
+                {validationResult.requiredPass < validationResult.requiredTotal && (
+                  <> · {validationResult.requiredTotal - validationResult.requiredPass} required {validationResult.requiredTotal - validationResult.requiredPass === 1 ? "check" : "checks"} failed</>
+                )}
+              </p>
+              {/* Failed checks list */}
+              {validationResult.checks.filter(c => c.status !== "pass").length > 0 && (
+                <div className="space-y-1">
+                  {validationResult.checks.filter(c => c.status !== "pass").map(c => (
+                    <div key={c.id} className="flex items-start gap-1.5">
+                      <AlertTriangle className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+                      <span className="text-[10px] text-amber-500/80 leading-snug">{c.reason ?? c.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  disabled={isRetrying}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-[11px] font-semibold text-amber-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRetrying
+                    ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying…</>
+                    : <><RefreshCw className="w-3 h-3" />Retry Failed Step</>}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Status badge */}
         <div className="shrink-0 flex items-center gap-1.5">
-          {isWorking && <Loader2 className="w-3.5 h-3.5 text-orange-500 animate-spin" />}
-          {isComplete && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
-          {isError    && <XCircle className="w-3.5 h-3.5 text-red-400" />}
-          {isWaiting  && <Clock className="w-3.5 h-3.5 text-muted-foreground/30" />}
+          {isWorking        && <Loader2       className="w-3.5 h-3.5 text-orange-500 animate-spin" />}
+          {isComplete       && <CheckCircle2  className="w-3.5 h-3.5 text-green-500" />}
+          {isNeedsAttention && <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
+          {isError          && <XCircle       className="w-3.5 h-3.5 text-red-400" />}
+          {isWaiting        && <Clock         className="w-3.5 h-3.5 text-muted-foreground/30" />}
           <span className={[
             "text-[11px] font-semibold",
-            isWorking  ? "text-orange-500"
-            : isComplete ? "text-green-500"
-            : isError    ? "text-red-400"
-            :              isNextUp ? "text-muted-foreground/50" : "text-muted-foreground/25",
+            isWorking        ? "text-orange-500"
+            : isComplete     ? "text-green-500"
+            : isNeedsAttention ? "text-amber-400"
+            : isError        ? "text-red-400"
+            :                  isNextUp ? "text-muted-foreground/50" : "text-muted-foreground/25",
           ].join(" ")}>
-            {isWorking ? "Working" : isComplete ? "Complete" : isError ? "Error" : "Waiting"}
+            {isWorking ? "Working" : isComplete ? "Complete" : isNeedsAttention ? "Needs Attention" : isError ? "Error" : "Waiting"}
           </span>
           {isWorking && steps.length > 0 && (
             <button
@@ -609,8 +648,10 @@ export default function LaunchExecutionPage() {
   const [storeUrl,       setStoreUrl]       = useState<string>("");
 
   /* ── Per-stage error messages ── */
-  const [stageErrors,  setStageErrors]  = useState<Record<number, string>>({});
-  const [retryingIdx,  setRetryingIdx]  = useState<number | null>(null);
+  const [stageErrors,      setStageErrors]      = useState<Record<number, string>>({});
+  const [retryingIdx,      setRetryingIdx]      = useState<number | null>(null);
+  /* ── Per-stage validation results (for needs_attention cards) ── */
+  const [stageValidations, setStageValidations] = useState<Record<number, StageValidation | undefined>>({});
 
   /* ── Overall progress ── */
   const [overallPct, setOverallPct] = useState<number>(0);
@@ -696,7 +737,8 @@ export default function LaunchExecutionPage() {
             latestResultsRef.current = { ...latestResultsRef.current, ...patch.stageResults };
           }
           if (patch.progress !== undefined) setOverallPct(patch.progress);
-          if (patch.status)                setOverallStatus(patch.status);
+          // "completed" transition is gated on validation — pipeline runner handles it
+          if (patch.status && patch.status !== "completed") setOverallStatus(patch.status);
         } catch (err) {
           console.error("[saveProgress]", err);
         }
@@ -778,8 +820,13 @@ export default function LaunchExecutionPage() {
           demoMode ? sleep(DEMO_STAGE_MIN_MS[i] ?? 4800) : Promise.resolve(),
         ]);
 
-        /* Stage complete */
-        setAgentStatuses(prev => prev.map((s, idx) => idx === i ? "complete" : s));
+        /* Stage complete — check validation result */
+        const stageResultForVal = latestResultsRef.current[stage.id as keyof LaunchStageResults] as Record<string, unknown> | undefined;
+        const valResult = stageResultForVal?.validation as StageValidation | undefined;
+        const valStatus = valResult?.status;
+        const agentFinalStatus: AgentStatus = valStatus === "needs_attention" ? "needs_attention" : "complete";
+        setAgentStatuses(prev => prev.map((s, idx) => idx === i ? agentFinalStatus : s));
+        if (valResult) setStageValidations(prev => ({ ...prev, [i]: valResult }));
         setOverallPct(to);
 
         /* Collect a brief completion summary for the card */
@@ -837,7 +884,25 @@ export default function LaunchExecutionPage() {
         continue;
       }
     }
-  }, [buildSaveProgress, demoMode]);
+
+    /* ── After all stages: gate "completed" on all validations passing ── */
+    const allResults = latestResultsRef.current;
+    const hasNeedsAttention = PIPELINE_STAGES.some(s => {
+      const r = allResults[s.id as keyof LaunchStageResults] as Record<string, unknown> | undefined;
+      return (r?.validation as StageValidation | undefined)?.status === "needs_attention";
+    });
+
+    const finalStatus: LaunchStatus = hasNeedsAttention ? "awaiting_approval" : "completed";
+    setOverallStatus(finalStatus);
+    if (hasNeedsAttention) {
+      // Override the DB status the store agent may have already written
+      await fetch(`/api/launch/${launchId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ status: "awaiting_approval" }),
+      }).catch(() => {});
+    }
+  }, [buildSaveProgress, demoMode, launchId]);
 
   /* ── Retry a failed stage (and everything downstream) ── */
   const retryFromStage = useCallback(async (fromIdx: number) => {
@@ -909,10 +974,16 @@ export default function LaunchExecutionPage() {
         } else {
           /* Already completed — restore completed UI from saved results */
           const saved = data.stageResults ?? {} as LaunchStageResults;
-          const restoredStatuses: AgentStatus[] = PIPELINE_STAGES.map(stage => {
+          const restoredValidations: Record<number, StageValidation | undefined> = {};
+          const restoredStatuses: AgentStatus[] = PIPELINE_STAGES.map((stage, si) => {
             const key = stage.id as keyof LaunchStageResults;
-            return saved[key] ? "complete" : "waiting";
+            const r = saved[key] as Record<string, unknown> | undefined;
+            const v = r?.validation as StageValidation | undefined;
+            if (v) restoredValidations[si] = v;
+            if (!r) return "waiting";
+            return v?.status === "needs_attention" ? "needs_attention" : "complete";
           });
+          setStageValidations(restoredValidations);
           setAgentStatuses(restoredStatuses);
           setOverallPct(100);
 
@@ -1128,7 +1199,8 @@ export default function LaunchExecutionPage() {
                   isNextUp={isNextUp}
                   completeSummary={completedSummaries[i]}
                   errorMessage={stageErrors[i]}
-                  onRetry={status === "error" ? () => void retryFromStage(i) : undefined}
+                  validationResult={stageValidations[i]}
+                  onRetry={status === "error" || status === "needs_attention" ? () => void retryFromStage(i) : undefined}
                   isRetrying={retryingIdx === i}
                   demoMode={demoMode}
                 />

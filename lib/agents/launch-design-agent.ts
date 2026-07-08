@@ -14,6 +14,7 @@
 
 import type { ExecutionContext, AgentStep } from "./types";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
+import { validateDesign } from "@/lib/launch-validator";
 
 /* ─── Initial step list ──────────────────────────────────────────────────────── */
 
@@ -235,18 +236,22 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
 
           const firstConceptUrl = concepts[0]?.url;
 
+          const designResult = {
+            coverUrl:           firstConceptUrl,
+            mockupUrl:          generatedAssets.mockup,
+            thumbnailUrl:       generatedAssets.thumbnail,
+            socialUrl:          generatedAssets.social,
+            assetsCount,
+            completedAt:        new Date().toISOString(),
+            concepts:           concepts.length > 0 ? concepts : undefined,
+            selectedConceptUrl: firstConceptUrl,
+            carouselBundleId:   carouselBundleId,
+          };
+
+          const validation = validateDesign(designResult);
+
           const stageResultsPatch: Partial<LaunchStageResults> = {
-            design: {
-              coverUrl:         firstConceptUrl,
-              mockupUrl:        generatedAssets.mockup,
-              thumbnailUrl:     generatedAssets.thumbnail,
-              socialUrl:        generatedAssets.social,
-              assetsCount,
-              completedAt:      new Date().toISOString(),
-              concepts:         concepts.length > 0 ? concepts : undefined,
-              selectedConceptUrl: firstConceptUrl,
-              carouselBundleId: carouselBundleId,
-            },
+            design: { ...designResult, validation },
           };
 
           await saveProgress({
