@@ -25,7 +25,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, Loader2, XCircle, Sparkles, CheckCircle2,
-  AlertTriangle, Rocket,
+  AlertTriangle, Rocket, Cloud,
 } from "lucide-react";
 
 import {
@@ -358,7 +358,7 @@ export default function ExecutionWorkspacePage() {
       <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
 
         {/* ── Back nav ── */}
-        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center gap-3 mb-8">
           <button
             onClick={() => router.push(`/dashboard/launch/${launchId}`)}
             className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
@@ -371,8 +371,19 @@ export default function ExecutionWorkspacePage() {
             onClick={() => router.push("/dashboard/launch")}
             className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
           >
-            Launch new idea
+            New launch
           </button>
+          <div className="h-3 w-px bg-border/40" />
+          <button
+            onClick={() => router.push("/dashboard/projects")}
+            className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            All launches
+          </button>
+          <div className="ml-auto flex items-center gap-1.5 text-[11px] text-emerald-500/70">
+            <Cloud className="w-3 h-3" />
+            Auto-saved
+          </div>
         </div>
 
         {/* ── Header ── */}

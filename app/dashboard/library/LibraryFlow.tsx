@@ -420,6 +420,9 @@ export default function LibraryFlow() {
   const [promoteProductTitle, setPromoteProductTitle] = useState<string | undefined>();
   const { toast } = useToast();
 
+  /** Map of productId → launchProjectId for "Open Launch Workspace" links */
+  const [productLaunchMap, setProductLaunchMap] = useState<Record<string, string>>({});
+
   const showThumbnail = (item: LibraryItem) =>
     Boolean(item.thumbnail && !thumbnailErrors.has(item.id));
 
@@ -565,6 +568,20 @@ export default function LibraryFlow() {
     if (tab === "template-packs") fetchTemplatePacks();
     else fetchItems();
   }, [tab]);
+
+  // Build productId → launchId map once on mount (for "Open Launch Workspace" links)
+  useEffect(() => {
+    fetch("/api/projects")
+      .then(r => r.ok ? r.json() as Promise<{ projects: Array<{ id: string; productId: string | null }> }> : Promise.resolve({ projects: [] }))
+      .then(data => {
+        const map: Record<string, string> = {};
+        for (const p of data.projects ?? []) {
+          if (p.productId) map[p.productId] = p.id;
+        }
+        setProductLaunchMap(map);
+      })
+      .catch(() => { /* non-fatal */ });
+  }, []);
 
   // Poll generating products every 2s and update progress in real time
   useEffect(() => {
@@ -1611,6 +1628,14 @@ export default function LibraryFlow() {
                                     <Link href={`/dashboard/digital-products/scripts?productId=${encodeURIComponent(item.id)}`}>
                                       <Video className="w-4 h-4 mr-2" />
                                       Create Videos
+                                    </Link>
+                                  </DropdownMenuItem>
+                                )}
+                                {item.type === "product" && productLaunchMap[item.id] && (
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/dashboard/launch/${productLaunchMap[item.id]}/workspace`}>
+                                      <Rocket className="w-4 h-4 mr-2" />
+                                      Launch Workspace
                                     </Link>
                                   </DropdownMenuItem>
                                 )}

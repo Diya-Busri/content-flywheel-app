@@ -110,6 +110,7 @@ export async function GET() {
         : "not_built",
       storeUrl:      r.store?.storeUrl ?? null,
       productId:     r.product?.productId ?? null,
+      thumbnailUrl:  r.design?.concepts?.[0]?.url ?? r.design?.coverUrl ?? r.design?.thumbnailUrl ?? null,
       hasResearch:   !!r.research,
       hasProduct:    !!r.product,
       hasDesign:     !!r.design,
