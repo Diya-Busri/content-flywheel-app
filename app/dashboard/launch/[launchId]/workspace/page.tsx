@@ -99,6 +99,17 @@ const STAGE_CONFIGS: StageConfig[] = [
   },
 ];
 
+const DEMO_MODE_KEY = "cf_launch_demo_mode";
+
+function readDemoMode(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(DEMO_MODE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /* ─── AI summary generator — derives from stageResults, no extra API call ───── */
 
 function buildSummary(stageId: keyof LaunchStageResults, results: LaunchStageResults): string {
@@ -205,23 +216,52 @@ function ResearchPreview({ r }: { r: NonNullable<LaunchStageResults["research"]>
 
 
 function MarketingPreview({ m }: { m: NonNullable<LaunchStageResults["marketing"]> }) {
-  const rows = [
-    { emoji: "🚀", label: "Launch Campaign",   count: 9,                              note: "copy, headlines, FAQ, CTAs" },
-    { emoji: "📱", label: "Social Media",       count: (m.carousels?.length ?? 0) + (m.tiktokHooks?.length ?? 0) + (m.xPosts?.length ?? 0), note: "carousels, hooks, posts" },
-    { emoji: "📧", label: "Email Marketing",    count: m.emails?.length ?? 0,         note: "full sequence" },
-  ];
+  const carouselCount = m.carousels?.length ?? 0;
+  const emailCount    = m.emails?.length ?? 0;
+  const socialCount   = (m.xPosts?.length ?? 0) + (m.tiktokHooks?.length ?? 0);
+  const totalAssets   = carouselCount + emailCount + socialCount + 9;
+
   return (
-    <div className="rounded-lg border border-border/40 overflow-hidden divide-y divide-border/30">
-      {rows.map(row => (
-        <div key={row.label} className="flex items-center gap-3 px-3 py-2">
-          <span className="text-sm shrink-0">{row.emoji}</span>
-          <span className="flex-1 text-[11px] font-medium text-foreground/80">{row.label}</span>
-          <span className="text-[10px] text-muted-foreground/60">{row.note}</span>
-          <span className="text-[10px] font-bold text-foreground/70 tabular-nums shrink-0">
-            {row.count}+
-          </span>
+    <div className="space-y-2">
+      {/* Polished pack card */}
+      <div className="rounded-xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-amber-500/5 px-4 py-3.5 flex items-center gap-3">
+        <div className="text-2xl shrink-0">🎠</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-bold text-foreground">Carousel Pack Generated</p>
+          <p className="text-[11px] text-muted-foreground/70 mt-0.5 leading-snug">
+            Hooks, captions, slide structure and design direction ready.
+          </p>
         </div>
-      ))}
+        <span className="shrink-0 text-[10px] font-bold text-orange-500 bg-orange-500/10 px-2 py-1 rounded-full">
+          {carouselCount} slides
+        </span>
+      </div>
+
+      {/* Summary strip */}
+      <div className="rounded-lg border border-border/40 overflow-hidden divide-y divide-border/30">
+        <div className="flex items-center gap-3 px-3 py-2">
+          <span className="text-sm shrink-0">🚀</span>
+          <span className="flex-1 text-[11px] font-medium text-foreground/80">Launch Campaign</span>
+          <span className="text-[10px] text-muted-foreground/60">copy, headlines, FAQ, CTAs</span>
+          <span className="text-[10px] font-bold text-foreground/70 tabular-nums shrink-0">9+</span>
+        </div>
+        <div className="flex items-center gap-3 px-3 py-2">
+          <span className="text-sm shrink-0">📧</span>
+          <span className="flex-1 text-[11px] font-medium text-foreground/80">Email Sequence</span>
+          <span className="text-[10px] text-muted-foreground/60">full nurture flow</span>
+          <span className="text-[10px] font-bold text-foreground/70 tabular-nums shrink-0">{emailCount}+</span>
+        </div>
+        <div className="flex items-center gap-3 px-3 py-2">
+          <span className="text-sm shrink-0">📱</span>
+          <span className="flex-1 text-[11px] font-medium text-foreground/80">Social Posts</span>
+          <span className="text-[10px] text-muted-foreground/60">hooks, threads, short-form</span>
+          <span className="text-[10px] font-bold text-foreground/70 tabular-nums shrink-0">{socialCount}+</span>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground/50 px-1">
+        {totalAssets}+ assets total · view full campaign in Workspace
+      </p>
     </div>
   );
 }
@@ -283,6 +323,7 @@ export default function ExecutionWorkspacePage() {
   const [project,        setProject]        = useState<LaunchProject | null>(null);
   const [loadError,      setLoadError]      = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [showDemoReveal, setShowDemoReveal] = useState(false);
 
   /* ── Load project ── */
   useEffect(() => {
@@ -297,6 +338,13 @@ export default function ExecutionWorkspacePage() {
       }
     })();
   }, [launchId]);
+
+  useEffect(() => {
+    if (project?.status !== "completed" || !readDemoMode()) return;
+    setShowDemoReveal(true);
+    const timeout = setTimeout(() => setShowDemoReveal(false), 2000);
+    return () => clearTimeout(timeout);
+  }, [project?.status]);
 
   /* ── Regenerate handler ── */
   const handleRegenerate = useCallback(async (stageId: string) => {
@@ -355,6 +403,28 @@ export default function ExecutionWorkspacePage() {
 
   return (
     <div className="min-h-dvh bg-background">
+      {showDemoReveal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 px-6 backdrop-blur-2xl cf-demo-soft-reveal">
+          <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-emerald-400/25 bg-card/90 p-10 text-center shadow-2xl shadow-emerald-500/25">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300 to-transparent cf-demo-shimmer" />
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10 cf-demo-pulse-glow">
+              <Rocket className="h-7 w-7 text-emerald-300" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-emerald-300/80">
+              Launch Ready
+            </p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-foreground">
+              Your AI launch is built.
+            </h2>
+            <p className="mx-auto mt-4 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
+              Research, product, design, marketing and store prepared.
+            </p>
+            <div className="mx-auto mt-6 h-1 max-w-[200px] overflow-hidden rounded-full bg-muted/40">
+              <div className="h-full w-full rounded-full bg-gradient-to-r from-orange-400 via-amber-300 to-emerald-300 cf-demo-progress-shimmer" />
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
 
         {/* ── Back nav ── */}

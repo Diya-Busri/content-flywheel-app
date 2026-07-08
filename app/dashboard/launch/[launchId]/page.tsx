@@ -109,6 +109,54 @@ const STAGE_OVERALL_RANGE: [number, number][] = [
   [0, 20], [20, 40], [40, 60], [60, 80], [80, 100],
 ];
 
+const DEMO_MODE_KEY = "cf_launch_demo_mode";
+const DEMO_STAGE_MIN_MS = [4600, 5200, 5600, 5000, 4800];
+
+const DEMO_THINKING: Record<LaunchStageId, string[]> = {
+  research: [
+    "Researching niche signals...",
+    "Finding audience pain points...",
+    "Scanning competitor gaps...",
+    "Ranking product opportunities...",
+  ],
+  product: [
+    "Choosing the strongest product angle...",
+    "Building the product structure...",
+    "Writing sections from research...",
+    "Preparing the product for your library...",
+  ],
+  design: [
+    "Creating visual directions...",
+    "Rendering launch assets...",
+    "Checking cover and thumbnail fit...",
+    "Packaging editable design files...",
+  ],
+  marketing: [
+    "Writing conversion copy...",
+    "Creating social launch assets...",
+    "Drafting email sequences...",
+    "Organising campaign folders...",
+  ],
+  store: [
+    "Assembling the store listing...",
+    "Attaching product assets...",
+    "Validating launch readiness...",
+    "Preparing final launch handoff...",
+  ],
+  complete: ["Launch ready."],
+};
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function readDemoMode(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(DEMO_MODE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════
    DB PROJECT SHAPE
 ══════════════════════════════════════════════════════════ */
@@ -374,11 +422,12 @@ interface AgentCardProps {
   errorMessage?:   string;
   onRetry?:        () => void;
   isRetrying?:     boolean;
+  demoMode?:       boolean;
 }
 
 function AgentCard({
   stage, status, steps, agentProgress, progressLabel, isNextUp, completeSummary,
-  errorMessage, onRetry, isRetrying,
+  errorMessage, onRetry, isRetrying, demoMode = false,
 }: AgentCardProps) {
   const [stepsExpanded, setStepsExpanded] = useState(true);
 
@@ -401,9 +450,20 @@ function AgentCard({
     :              "bg-card/30";
 
   return (
-    <div className={`rounded-xl border transition-all duration-300 ${borderCls} ${bgCls}`}>
+    <div className={[
+      "relative overflow-hidden rounded-xl border transition-all duration-500",
+      borderCls,
+      bgCls,
+      demoMode && isWorking ? "cf-demo-pulse-glow" : "",
+    ].join(" ")}>
+      {demoMode && isWorking && (
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-orange-400/80 to-transparent cf-demo-shimmer" />
+          <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-orange-500/10 to-transparent cf-demo-scan-line" />
+        </div>
+      )}
       {/* ── Card header ── */}
-      <div className="flex items-center gap-3 px-4 py-3">
+      <div className="relative flex items-center gap-3 px-4 py-3">
         {/* Emoji / status icon */}
         <span className={[
           "text-lg leading-none shrink-0",
@@ -494,9 +554,12 @@ function AgentCard({
               <span className="text-[10px] text-muted-foreground/50">{progressLabel}</span>
               <span className="text-[10px] font-semibold text-muted-foreground/70">{agentProgress}%</span>
             </div>
-            <div className="h-1 bg-muted/50 rounded-full overflow-hidden">
+            <div className="relative h-1 bg-muted/50 rounded-full overflow-hidden">
               <div
-                className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                className={[
+                  "h-full rounded-full transition-all ease-out",
+                  demoMode ? "bg-gradient-to-r from-orange-400 via-amber-300 to-orange-500 duration-1000 cf-demo-progress-shimmer" : "bg-orange-500 duration-500",
+                ].join(" ")}
                 style={{ width: `${agentProgress}%` }}
               />
             </div>
@@ -559,10 +622,40 @@ export default function LaunchExecutionPage() {
 
   /* ── Auto-redirect to workspace on pipeline completion ── */
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const [demoMode, setDemoMode] = useState(() => readDemoMode());
+  const [demoThinkingIdx, setDemoThinkingIdx] = useState(0);
+  const [showCompletionReveal, setShowCompletionReveal] = useState(false);
+
+  useEffect(() => {
+    setDemoMode(readDemoMode());
+    const handleDemoMode = (event: Event) => {
+      const enabled = (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
+      setDemoMode(typeof enabled === "boolean" ? enabled : readDemoMode());
+    };
+    window.addEventListener("cf:launch-demo-mode", handleDemoMode);
+    return () => window.removeEventListener("cf:launch-demo-mode", handleDemoMode);
+  }, []);
+
+  useEffect(() => {
+    if (!demoMode || activeIdx < 0) {
+      setDemoThinkingIdx(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      const stageId = PIPELINE_STAGES[activeIdx]?.id ?? "complete";
+      const count = DEMO_THINKING[stageId]?.length ?? 1;
+      setDemoThinkingIdx(i => (i + 1) % count);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [activeIdx, demoMode]);
 
   useEffect(() => {
     if (overallStatus !== "completed") return;
-    setRedirectCountdown(3);
+    // Auto-save all stage summaries to the Founder Knowledge Base
+    fetch(`/api/launch/${launchId}/save-to-library`, { method: "POST" }).catch(() => {});
+    const seconds = demoMode ? 6 : 3;
+    if (demoMode) setShowCompletionReveal(true);
+    setRedirectCountdown(seconds);
     const interval = setInterval(() => {
       setRedirectCountdown(prev => {
         if (prev === null || prev <= 1) {
@@ -574,7 +667,7 @@ export default function LaunchExecutionPage() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [overallStatus, launchId, router]);
+  }, [overallStatus, launchId, router, demoMode]);
 
   /* ── Warn on tab close / hard refresh while pipeline is running ── */
   useEffect(() => {
@@ -680,7 +773,10 @@ export default function LaunchExecutionPage() {
         // Clear any previous error for this stage on retry
         setStageErrors(prev => { const n = { ...prev }; delete n[i]; return n; });
 
-        await stage.execute(ctx);
+        await Promise.all([
+          stage.execute(ctx),
+          demoMode ? sleep(DEMO_STAGE_MIN_MS[i] ?? 4800) : Promise.resolve(),
+        ]);
 
         /* Stage complete */
         setAgentStatuses(prev => prev.map((s, idx) => idx === i ? "complete" : s));
@@ -737,10 +833,11 @@ export default function LaunchExecutionPage() {
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ status: "failed" }),
         }).catch(() => {});
-        break;
+        // Continue to next stage — later stages may still succeed
+        continue;
       }
     }
-  }, [buildSaveProgress]);
+  }, [buildSaveProgress, demoMode]);
 
   /* ── Retry a failed stage (and everything downstream) ── */
   const retryFromStage = useCallback(async (fromIdx: number) => {
@@ -809,6 +906,44 @@ export default function LaunchExecutionPage() {
           } finally {
             setPipelineActive(false);
           }
+        } else {
+          /* Already completed — restore completed UI from saved results */
+          const saved = data.stageResults ?? {} as LaunchStageResults;
+          const restoredStatuses: AgentStatus[] = PIPELINE_STAGES.map(stage => {
+            const key = stage.id as keyof LaunchStageResults;
+            return saved[key] ? "complete" : "waiting";
+          });
+          setAgentStatuses(restoredStatuses);
+          setOverallPct(100);
+
+          /* Restore per-card completion summaries */
+          const summaries: Record<number, string> = {};
+          PIPELINE_STAGES.forEach((stage, i) => {
+            if (stage.id === "research" && saved.research) {
+              const insights = saved.research.insights?.length ?? 0;
+              const opps     = saved.research.productOpportunities?.length ?? 0;
+              summaries[i]   = `${insights} insights · ${opps} product opportunities found`;
+            } else if (stage.id === "product" && saved.product) {
+              const name   = saved.product.productName ?? "Product";
+              summaries[i] = `"${name}" created · ready in Digital Products`;
+            } else if (stage.id === "design" && saved.design) {
+              const count  = saved.design.assetsCount ?? 0;
+              summaries[i] = `${count} marketing asset${count !== 1 ? "s" : ""} generated · cover, mockup, thumbnail, social`;
+            } else if (stage.id === "marketing" && saved.marketing) {
+              const carousels = saved.marketing.carousels?.length ?? 0;
+              const emails    = saved.marketing.emails?.length ?? 0;
+              const xPosts    = saved.marketing.xPosts?.length ?? 0;
+              const tiktoks   = saved.marketing.tiktokHooks?.length ?? 0;
+              const total     = carousels + emails + xPosts + tiktoks + 9;
+              summaries[i]    = `${total}+ assets · launch copy, ${carousels} carousels, ${emails} emails, ${xPosts + tiktoks} posts`;
+            } else if (stage.id === "store" && saved.store) {
+              const score  = saved.store.readinessScore ?? 0;
+              setStoreProductId(saved.store.productId ?? "");
+              setStoreUrl(saved.store.storeUrl ?? "");
+              summaries[i] = `Store Readiness ${score}% · ready to publish`;
+            }
+          });
+          setCompletedSummaries(summaries);
         }
       } catch {
         setLoadError("Could not load this execution. It may not exist.");
@@ -844,9 +979,22 @@ export default function LaunchExecutionPage() {
   }
 
   const statusMeta = LAUNCH_STATUS_META[overallStatus];
+  const activeStage = activeIdx >= 0 ? PIPELINE_STAGES[activeIdx] : null;
+  const activeThinking = activeStage
+    ? DEMO_THINKING[activeStage.id]?.[demoThinkingIdx % (DEMO_THINKING[activeStage.id]?.length || 1)]
+    : "Preparing launch pipeline...";
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className="relative min-h-dvh bg-background">
+      {demoMode && (
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+          <div className="absolute left-1/2 top-[-18rem] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-orange-500/10 blur-3xl" />
+          <div className="absolute bottom-[-16rem] right-[-10rem] h-[30rem] w-[30rem] rounded-full bg-emerald-400/10 blur-3xl" />
+          <div className="absolute left-[12%] top-[22%] h-1.5 w-1.5 rounded-full bg-orange-300/60 cf-demo-particle-one" />
+          <div className="absolute right-[18%] top-[34%] h-1 w-1 rounded-full bg-amber-200/60 cf-demo-particle-two" />
+          <div className="absolute left-[22%] bottom-[26%] h-1 w-1 rounded-full bg-emerald-200/50 cf-demo-particle-three" />
+        </div>
+      )}
 
       {/* ── Pipeline-active warning banner ── */}
       {pipelineActive && (
@@ -868,7 +1016,7 @@ export default function LaunchExecutionPage() {
         onConfirm={() => { setLeaveConfirmOpen(false); router.push("/dashboard/launch"); }}
       />
 
-      <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
+      <div className="relative z-10 max-w-2xl mx-auto px-4 py-8 sm:py-12">
 
         {/* Back nav */}
         <button
@@ -912,13 +1060,44 @@ export default function LaunchExecutionPage() {
                 {overallPct}%
               </span>
             </div>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="relative h-1.5 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full bg-orange-500 rounded-full transition-all duration-700"
+                className={[
+                  "h-full rounded-full transition-all ease-out",
+                  demoMode ? "bg-gradient-to-r from-orange-400 via-amber-300 to-emerald-400 duration-1000 cf-demo-progress-shimmer" : "bg-orange-500 duration-700",
+                ].join(" ")}
                 style={{ width: `${overallPct}%` }}
               />
             </div>
           </div>
+
+          {demoMode && activeStage && overallStatus !== "completed" && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-background/70 px-4 py-3 shadow-2xl shadow-orange-500/10 backdrop-blur-xl cf-demo-soft-reveal">
+              <div className="flex items-center gap-3">
+                <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-orange-400/25 bg-orange-500/10">
+                  <activeStage.icon className="h-4 w-4 text-orange-400" />
+                  <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/40 animate-pulse" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-orange-400/80">
+                    AI agents communicating
+                  </p>
+                  <p className="mt-0.5 truncate text-[13px] font-semibold text-foreground">
+                    {activeThinking}
+                  </p>
+                </div>
+                <div className="hidden sm:flex items-center gap-1.5">
+                  {[0, 1, 2].map(dot => (
+                    <span
+                      key={dot}
+                      className="h-1.5 w-1.5 rounded-full bg-orange-300/70"
+                      style={{ animation: `cf-demo-dot 1.2s ease-in-out ${dot * 0.16}s infinite` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Agent cards ── */}
@@ -951,6 +1130,7 @@ export default function LaunchExecutionPage() {
                   errorMessage={stageErrors[i]}
                   onRetry={status === "error" ? () => void retryFromStage(i) : undefined}
                   isRetrying={retryingIdx === i}
+                  demoMode={demoMode}
                 />
                 {showFolders && (
                   <MarketingFolderView items={marketingFolderItems} />
@@ -996,6 +1176,29 @@ export default function LaunchExecutionPage() {
         )}
 
       </div>
+
+      {demoMode && showCompletionReveal && overallStatus === "completed" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-6 backdrop-blur-xl cf-demo-soft-reveal">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-emerald-400/20 bg-card/80 p-8 text-center shadow-2xl shadow-emerald-500/20">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300 to-transparent cf-demo-shimmer" />
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10 cf-demo-pulse-glow">
+              <Rocket className="h-7 w-7 text-emerald-300" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-emerald-300/80">
+              Launch Ready
+            </p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-foreground">
+              Your AI launch is built.
+            </h2>
+            <p className="mx-auto mt-3 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+              Research, product, design, marketing, and store setup are ready for review.
+            </p>
+            <div className="mx-auto mt-6 h-1.5 max-w-xs overflow-hidden rounded-full bg-muted/50">
+              <div className="h-full w-full rounded-full bg-gradient-to-r from-orange-400 via-amber-300 to-emerald-300 cf-demo-progress-shimmer" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
