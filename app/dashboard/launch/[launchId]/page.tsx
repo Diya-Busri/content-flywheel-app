@@ -747,11 +747,23 @@ export default function LaunchExecutionPage() {
   );
 
   /* ── Pipeline runner ── */
-  const runPipeline = useCallback(async (proj: LaunchProject) => {
-    const latestResultsRef = { current: proj.stageResults ?? {} };
+  const runPipeline = useCallback(async (proj: LaunchProject, fromStageIdx = 0) => {
+    // Deep-copy so we don't mutate the project prop
+    const latestResultsRef = { current: { ...(proj.stageResults ?? {}) } };
+
+    // Clear stale results for all stages from the retry point onward.
+    // This ensures the skip-check below re-runs them instead of treating
+    // partial/failed results as "complete".
+    if (fromStageIdx > 0) {
+      for (let j = fromStageIdx; j < PIPELINE_STAGES.length; j++) {
+        const k = PIPELINE_STAGES[j]!.id as keyof LaunchStageResults;
+        delete (latestResultsRef.current as Record<string, unknown>)[k];
+      }
+    }
 
     // Mark already-complete stages (resume case)
-    const initialStatuses: AgentStatus[] = PIPELINE_STAGES.map(stage => {
+    const initialStatuses: AgentStatus[] = PIPELINE_STAGES.map((stage, idx) => {
+      if (idx >= fromStageIdx) return "waiting";
       const key = stage.id as keyof LaunchStageResults;
       return latestResultsRef.current[key] ? "complete" : "waiting";
     });
@@ -762,9 +774,9 @@ export default function LaunchExecutionPage() {
     for (let i = 0; i < PIPELINE_STAGES.length; i++) {
       const stage = PIPELINE_STAGES[i]!;
 
-      // Skip already-complete stages
+      // Skip already-complete stages (only stages BEFORE the retry point)
       const key = stage.id as keyof LaunchStageResults;
-      if (latestResultsRef.current[key]) continue;
+      if (i < fromStageIdx && latestResultsRef.current[key]) continue;
 
       // Skip un-wired stages (no execute fn yet)
       if (!stage.execute) continue;
@@ -924,12 +936,8 @@ export default function LaunchExecutionPage() {
       }).catch(() => {});
       setOverallStatus("running");
 
-      // Reset statuses from the retry point onward (keep completed stages intact)
-      setAgentStatuses(prev => prev.map((s, idx) =>
-        idx === fromIdx ? "waiting" : idx > fromIdx && s !== "complete" ? "waiting" : s
-      ));
-
-      await runPipeline(freshProj);
+      // runPipeline handles status reset internally via fromStageIdx
+      await runPipeline(freshProj, fromIdx);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[retry]", msg);
