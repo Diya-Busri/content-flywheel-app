@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight, FolderOpen, Rocket } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight, Rocket } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -80,7 +80,6 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
     {
       label: "AI",
       items: [
-        { href: "/dashboard/projects", icon: <FolderOpen size={18} />, label: "Projects", activeWhenStartsWith: true },
         { href: "/dashboard/launch",   icon: <Rocket size={18} />,     label: "Launch with AI", activeWhenStartsWith: true },
       ],
     },
@@ -439,9 +438,8 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       <div data-tour="mobile-nav" className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-card border-t border-[#E5E7EB] dark:border-white/10 flex items-center justify-around px-2 pb-safe">
         {[
           { href: "/dashboard",           icon: <Home size={22} />,       label: "Home"     },
-          { href: "/dashboard/projects",  icon: <FolderOpen size={22} />, label: "Projects" },
-          { href: "/dashboard/launch",    icon: <Rocket size={22} />,     label: "Launch"   },
           { href: "/dashboard/library",   icon: <Library size={22} />,    label: "Library"  },
+          { href: "/dashboard/launch",    icon: <Rocket size={22} />,     label: "Launch"   },
         ].map((item) => {
           const active = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
           return (
