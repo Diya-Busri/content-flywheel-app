@@ -186,24 +186,72 @@ function streamDesignGeneration(
       await send({ type: "step", id: "saving", label: "Attaching assets to Digital Product..." });
 
       const currentProduct = await db
-        .select({ marketingAssets: productsTable.marketingAssets })
+        .select({
+          marketingAssets: productsTable.marketingAssets,
+          designSettings:  productsTable.designSettings,
+          content:         productsTable.content,
+        })
         .from(productsTable)
         .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
         .limit(1);
 
       if (currentProduct[0]) {
-        const existing = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
-        const updated  = {
-          ...existing,
+        /* ── Marketing assets ── */
+        const existingMarketing = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
+        const updatedMarketing  = {
+          ...existingMarketing,
           ...(generatedUrls.cover     ? { coverThumbnailUrl: generatedUrls.cover }     : {}),
           ...(generatedUrls.mockup    ? { bookMockupUrl:      generatedUrls.mockup }    : {}),
           ...(generatedUrls.thumbnail ? { thumbnailUrl:       generatedUrls.thumbnail } : {}),
           ...(generatedUrls.social    ? { socialPreviewUrl:   generatedUrls.social }   : {}),
         };
 
+        /* ── Document design — apply cover image to cover page background ──
+         *
+         * The ProductEditor reads designSettings.pages as:
+         *   [coverPage, ...contentPages, backCoverPage]
+         * where each page has { backgroundImage, backgroundSettings, backgroundColor, pageTextColor }.
+         *
+         * We build this array now so the editor opens with the AI cover art
+         * already applied to the cover page — instead of a blank white document.
+         */
+        const existingDs   = (currentProduct[0].designSettings ?? {}) as Record<string, unknown>;
+        const sections     = (currentProduct[0].content as { sections?: unknown[] })?.sections ?? [];
+        const totalPages   = sections.length + 2; // cover + content sections + back cover
+        const existingPages = (existingDs.pages as Record<string, unknown>[] | undefined) ?? [];
+
+        const pages = Array.from({ length: totalPages }, (_, i) => {
+          const existing = existingPages[i] ?? {};
+          if (i === 0 && generatedUrls.cover) {
+            // Cover page — set the AI-generated cover image as a full-bleed background
+            return {
+              ...existing,
+              backgroundImage: generatedUrls.cover,
+              backgroundSettings: {
+                size:     "cover",
+                position: "center center",
+                repeat:   "no-repeat",
+                opacity:  1,
+              },
+            };
+          }
+          // Content pages + back cover — keep any existing background, else leave blank (white)
+          return existing;
+        });
+
+        const updatedDesignSettings = {
+          ...existingDs,
+          pages,
+        };
+
         await db
           .update(productsTable)
-          .set({ marketingAssets: updated, updatedAt: new Date() })
+          .set({
+            marketingAssets: updatedMarketing,
+            designSettings:  updatedDesignSettings,
+            designSource:    "ai",
+            updatedAt:       new Date(),
+          })
           .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
       }
 

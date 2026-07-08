@@ -416,7 +416,7 @@ export default function ExecutionWorkspacePage() {
               </div>
               {storeUrl && productId && (
                 <a
-                  href={`/dashboard/products/${productId}#publish`}
+                  href={`/dashboard/digital-products/${productId}/edit#publish`}
                   className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-[12px] font-bold text-white transition-colors"
                 >
                   <Rocket className="w-3.5 h-3.5" />
@@ -480,12 +480,12 @@ export default function ExecutionWorkspacePage() {
               editHref = `/dashboard/launch/${launchId}?regenerate=research`;
             }
             if (stage.id === "product" && productId) {
-              viewHref = `/dashboard/products/${productId}`;
-              editHref = `/dashboard/products/${productId}`;
+              viewHref = `/dashboard/digital-products/${productId}/edit`;
+              editHref = `/dashboard/digital-products/${productId}/edit`;
             }
             if (stage.id === "design" && productId) {
-              viewHref = `/dashboard/products/${productId}`;
-              editHref = `/dashboard/design-studio`;
+              viewHref = `/dashboard/digital-products/${productId}/edit`;
+              editHref = `/dashboard/digital-products/${productId}/edit`;
             }
             if (stage.id === "marketing" && stageResult) {
               viewHref = "/dashboard/workspace?tab=content";
@@ -494,7 +494,7 @@ export default function ExecutionWorkspacePage() {
             if (stage.id === "store" && storeUrl) {
               viewHref    = storeUrl;
               externalView = true;
-              editHref    = productId ? `/dashboard/products/${productId}#publish` : undefined;
+              editHref    = productId ? `/dashboard/digital-products/${productId}/edit#publish` : undefined;
             }
 
             /* Stage-specific preview widget */

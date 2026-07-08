@@ -139,7 +139,7 @@ function buildTimeline(r: LaunchStageResults, launchId: string): TimelineEvent[]
       id: "product", emoji: "📦",
       label: `Product "${r.product.productName}" generated`,
       timestamp: r.product.completedAt,
-      href: r.product.productId ? `/dashboard/products/${r.product.productId}` : undefined,
+      href: r.product.productId ? `/dashboard/digital-products/${r.product.productId}/edit` : undefined,
     });
   }
   if (r.design?.completedAt) {
@@ -208,13 +208,13 @@ function buildContinueActions(r: LaunchStageResults, productId: string, launchId
   }
 
   if (productId) {
-    actions.push({ id: "improve_product", emoji: "📦", label: "Improve Product", detail: "Edit content, pricing, or structure", href: `/dashboard/products/${productId}` });
+    actions.push({ id: "improve_product", emoji: "📦", label: "Improve Product", detail: "Edit content, pricing, or structure", href: `/dashboard/digital-products/${productId}/edit` });
   }
 
   actions.push({ id: "more_marketing", emoji: "📣", label: "Generate More Marketing", detail: "More hooks, carousels, and posts", href: "/dashboard/workspace?tab=content" });
 
   if (r.store?.productId) {
-    actions.push({ id: "improve_store", emoji: "🛍️", label: "Improve Store", detail: "Update headline, description, or SEO", href: productId ? `/dashboard/products/${productId}#publish` : "/dashboard/store" });
+    actions.push({ id: "improve_store", emoji: "🛍️", label: "Improve Store", detail: "Update headline, description, or SEO", href: productId ? `/dashboard/digital-products/${productId}/edit#publish` : "/dashboard/store" });
   }
 
   actions.push({ id: "rerun_brain", emoji: "🧠", label: "Run Business Brain Again", detail: "Get fresh recommendations after improvements", href: `/dashboard/launch/${launchId}/workspace` });
@@ -241,10 +241,10 @@ interface SectionLink {
 function buildSectionLinks(r: LaunchStageResults, productId: string, storeUrl: string, launchId: string): SectionLink[] {
   return [
     { id: "research",  emoji: "🔍", label: "Research",        done: !!r.research, href: "/dashboard/workspace?tab=research" },
-    { id: "product",   emoji: "📦", label: "Product",         done: !!r.product,  href: productId ? `/dashboard/products/${productId}` : undefined },
+    { id: "product",   emoji: "📦", label: "Product",         done: !!r.product,  href: productId ? `/dashboard/digital-products/${productId}/edit` : undefined },
     { id: "design",    emoji: "🎨", label: "Design Assets",   done: !!r.design,   href: "/dashboard/design-studio" },
     { id: "marketing", emoji: "📣", label: "Marketing Content",done: !!r.marketing,href: "/dashboard/workspace?tab=content" },
-    { id: "store",     emoji: "🛍️", label: "Store Listing",   done: !!r.store,    href: storeUrl || (productId ? `/dashboard/products/${productId}#publish` : undefined), external: !!storeUrl },
+    { id: "store",     emoji: "🛍️", label: "Store Listing",   done: !!r.store,    href: storeUrl || (productId ? `/dashboard/digital-products/${productId}/edit#publish` : undefined), external: !!storeUrl },
     { id: "brain",     emoji: "🧠", label: "Business Brain",  done: !!r.brain,    href: `/dashboard/launch/${launchId}/workspace` },
   ];
 }
