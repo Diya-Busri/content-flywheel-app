@@ -96,6 +96,10 @@ type Scene = {
   startTime?: number;
   /** Per-clip audio (e.g. voiceover from Template Studio). When set, used for this clip in playback and export. */
   audioUrl?: string | null;
+  /** Original image URL saved before animation — used for undo / Restore Original. */
+  originalImageUrl?: string | null;
+  /** Per-scene animation progress state. */
+  animationState?: "rendering" | "complete" | "failed" | null;
 };
 
 function isBackgroundEl(el: SceneElement): el is BackgroundElement {
@@ -1456,8 +1460,8 @@ function VideoTimelineInner() {
   const [aiImagePrompt, setAiImagePrompt] = useState("");
   const [aiImageLoading, setAiImageLoading] = useState(false);
   const [aiGeneratedImages, setAiGeneratedImages] = useState<string[]>([]);
-  // Animate scene
-  const [animatingSceneIndex, setAnimatingSceneIndex] = useState<number | null>(null);
+  // Animate scene — Set of scene IDs currently being rendered/polled
+  const [animatingScenes, setAnimatingScenes] = useState<Set<string>>(new Set());
   /** Index of scene whose trailing transition badge popover is open (i.e. transition between scene[i] and scene[i+1]) */
   const [transitionBadgeOpen, setTransitionBadgeOpen] = useState<number | null>(null);
   const [transitionBadgePos, setTransitionBadgePos] = useState<{ x: number; y: number } | null>(null);
@@ -2884,43 +2888,90 @@ function VideoTimelineInner() {
 
   const animateSceneImage = useCallback(async (sceneIndex: number) => {
     const scene = scenes[sceneIndex];
-    const media = scene ? getSceneBackgroundMedia(scene) : null;
+    if (!scene) return;
+    const media = getSceneBackgroundMedia(scene);
     if (!media?.url) {
       toast({ title: "No image to animate", description: "Add an image to this scene first", variant: "destructive" });
       return;
     }
-    setAnimatingSceneIndex(sceneIndex);
+    if (media.type === "video") {
+      toast({ title: "Already a video", description: "Remove the current video to animate a new image", variant: "destructive" });
+      return;
+    }
+
+    const sceneId = scene.id;
+    const originalImageUrl = media.url;
+    const motionPrompt = `Subtle cinematic motion for: ${scene.title || "this scene"}. Keep composition identical, add gentle camera movement only.`;
+
+    // Preserve original + mark as rendering
+    setAnimatingScenes(prev => new Set([...prev, sceneId]));
+    setScenes(prev => prev.map(s => s.id !== sceneId ? s : {
+      ...s,
+      originalImageUrl,
+      animationState: "rendering" as const,
+    }));
+
+    const onSuccess = (videoUrl: string) => {
+      setScenes(prev => prev.map(s => s.id !== sceneId ? s : {
+        ...s,
+        elements: s.elements.map((el, ei) => ei === 0
+          ? { ...el, media: { url: videoUrl, type: "video" as const } }
+          : el),
+        animationState: "complete" as const,
+      }));
+      setAnimatingScenes(prev => { const n = new Set(prev); n.delete(sceneId); return n; });
+      toast({ title: "Scene animated ✨", description: "Background replaced with video" });
+    };
+
+    const onFailure = (msg: string) => {
+      setScenes(prev => prev.map(s => s.id !== sceneId ? s : { ...s, animationState: "failed" as const }));
+      setAnimatingScenes(prev => { const n = new Set(prev); n.delete(sceneId); return n; });
+      toast({ title: "Animation failed", description: msg, variant: "destructive" });
+    };
+
     try {
-      const res = await fetch("/api/chat/coach/generate-image", {
+      // Submit to Fal Kling animation queue (correct endpoint)
+      const res = await fetch("/api/content-studio/ai-story/animate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `Subtle cinematic motion animation of: ${scene.title || "this scene"}. Keep composition identical, add gentle camera movement only.`,
-          aspectRatio: "16:9",
-          sourceImageUrl: media.url,
-        }),
+        body: JSON.stringify({ imageUrl: originalImageUrl, motionPrompt, aspectRatio }),
       });
-      const data = await res.json().catch(() => ({})) as { url?: string; videoUrl?: string; error?: string };
+      const data = await res.json().catch(() => ({})) as {
+        requestId?: string; videoUrl?: string; error?: string; code?: string;
+      };
+
       if (!res.ok) {
-        toast({ title: "Animation failed", description: data.error || "Try again", variant: "destructive" });
+        onFailure(data.code === "NO_VIDEO_CREDITS"
+          ? "You need 1 video credit to animate a scene"
+          : (data.error || "Try again"));
         return;
       }
-      const animUrl = data.videoUrl ?? data.url;
-      if (animUrl) {
-        setScenes((prev) => prev.map((s, si) => si !== sceneIndex ? s : {
-          ...s,
-          elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url: animUrl, type: "video" as const } } : el),
-        }));
-        toast({ title: "Scene animated ✨" });
-      } else {
-        toast({ title: "No animation returned", variant: "destructive" });
+
+      // Synchronous result (rare — Fal returned video directly)
+      if (data.videoUrl) { onSuccess(data.videoUrl); return; }
+
+      // Async queue: poll status every 5 s for up to 5 minutes
+      if (data.requestId) {
+        const rid = data.requestId;
+        for (let i = 0; i < 60; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          try {
+            const sr = await fetch(`/api/content-studio/ai-story/animate/status?requestId=${encodeURIComponent(rid)}`);
+            const sd = await sr.json().catch(() => ({})) as { status?: string; videoUrl?: string; error?: string };
+            if (sd.status === "COMPLETED" && sd.videoUrl) { onSuccess(sd.videoUrl); return; }
+            if (sd.status === "FAILED") { onFailure(sd.error || "Animation job failed"); return; }
+            // IN_QUEUE / IN_PROGRESS → keep polling
+          } catch { /* network blip — keep polling */ }
+        }
+        onFailure("Animation timed out — please try again");
+        return;
       }
+
+      onFailure("Unexpected response from animation service");
     } catch (err) {
-      toast({ title: "Animation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
-    } finally {
-      setAnimatingSceneIndex(null);
+      onFailure(err instanceof Error ? err.message : "Try again");
     }
-  }, [scenes, toast]);
+  }, [scenes, toast, aspectRatio]);
 
   const searchStockPhotos = useCallback(async (query: string) => {
     if (!query.trim()) return;
@@ -4745,16 +4796,50 @@ function VideoTimelineInner() {
                       </div>
                     )}
                     {/* Animate selected scene button */}
-                    {selectedSceneIndex !== null && (
-                      <button
-                        type="button"
-                        onClick={() => animateSceneImage(selectedSceneIndex)}
-                        disabled={animatingSceneIndex !== null}
-                        className="w-full mt-1.5 py-1 rounded border border-[#f97316]/40 bg-[#f97316]/10 hover:bg-[#f97316]/20 disabled:opacity-50 text-white text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
-                      >
-                        {animatingSceneIndex === selectedSceneIndex ? <><span className="animate-spin">⟳</span> Animating…</> : <><Film className="h-3 w-3" /> Animate Scene {selectedSceneIndex + 1}</>}
-                      </button>
-                    )}
+                    {selectedSceneIndex !== null && (() => {
+                      const selScene = scenes[selectedSceneIndex];
+                      const selId = selScene?.id ?? "";
+                      const isAnimating = animatingScenes.has(selId);
+                      const animState = selScene?.animationState;
+                      return (
+                        <div className="mt-1.5 flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => animateSceneImage(selectedSceneIndex)}
+                            disabled={isAnimating}
+                            className="w-full py-1 rounded border border-[#f97316]/40 bg-[#f97316]/10 hover:bg-[#f97316]/20 disabled:opacity-50 text-white text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                          >
+                            {isAnimating
+                              ? <><span className="animate-spin">⟳</span> Animating…</>
+                              : animState === "failed"
+                                ? <><Film className="h-3 w-3" /> Retry Animation</>
+                                : <><Film className="h-3 w-3" /> Animate Scene {selectedSceneIndex + 1}</>}
+                          </button>
+                          {animState === "failed" && (
+                            <p className="text-[9px] text-red-400 text-center">Animation failed — original image preserved</p>
+                          )}
+                          {animState === "complete" && selScene?.originalImageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const orig = selScene.originalImageUrl!;
+                                setScenes(prev => prev.map(s => s.id !== selId ? s : {
+                                  ...s,
+                                  elements: s.elements.map((el, ei) => ei === 0
+                                    ? { ...el, media: { url: orig, type: "image" as const } }
+                                    : el),
+                                  animationState: null,
+                                  originalImageUrl: null,
+                                }));
+                              }}
+                              className="w-full py-1 rounded border border-white/20 bg-white/5 hover:bg-white/10 text-white/70 text-[9px] font-medium flex items-center justify-center gap-1 transition-colors"
+                            >
+                              ↩ Restore Original Image
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Stock photo search */}
