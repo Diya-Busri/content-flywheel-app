@@ -35,6 +35,7 @@ import type { WorkspaceCardStatus } from "@/components/execution-workspace/Works
 import { BehindTheBuildSection } from "@/components/execution-workspace/BehindTheBuildSection";
 import { LaunchEngine } from "@/components/execution-workspace/LaunchEngine";
 import { BusinessBrainPanel } from "@/components/execution-workspace/BusinessBrainPanel";
+import { DesignAssetPanel } from "@/components/execution-workspace/DesignAssetPanel";
 import type { LaunchStageResults, LaunchStatus } from "@/db/schema/launch-schema";
 
 /* ─── Project shape (matches what GET /api/launch/[launchId] returns) ────────── */
@@ -202,34 +203,6 @@ function ResearchPreview({ r }: { r: NonNullable<LaunchStageResults["research"]>
   );
 }
 
-function DesignPreview({ d }: { d: NonNullable<LaunchStageResults["design"]> }) {
-  const images = [
-    { url: d.coverUrl,     label: "Cover"     },
-    { url: d.mockupUrl,    label: "Mockup"    },
-    { url: d.thumbnailUrl, label: "Thumbnail" },
-    { url: d.socialUrl,    label: "Social"    },
-  ].filter(i => i.url);
-
-  if (images.length === 0) return null;
-
-  return (
-    <div className="grid grid-cols-4 gap-1.5">
-      {images.map(({ url, label }) => (
-        <div key={label} className="relative rounded-lg overflow-hidden border border-border/30 bg-muted/20 aspect-square">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={url!}
-            alt={label}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute bottom-0 left-0 right-0 bg-black/40 px-1 py-0.5">
-            <span className="text-[8px] text-white/80 font-medium">{label}</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function MarketingPreview({ m }: { m: NonNullable<LaunchStageResults["marketing"]> }) {
   const rows = [
@@ -502,8 +475,8 @@ export default function ExecutionWorkspacePage() {
             if (status === "complete" && stageResult) {
               if (stage.id === "research" && results.research)
                 previewNode = <ResearchPreview r={results.research} />;
-              if (stage.id === "design"   && results.design)
-                previewNode = <DesignPreview d={results.design} />;
+              if (stage.id === "design" && results.design && productId)
+                previewNode = <DesignAssetPanel design={results.design} productId={productId} />;
               if (stage.id === "marketing" && results.marketing)
                 previewNode = <MarketingPreview m={results.marketing} />;
               if (stage.id === "store"    && results.store)

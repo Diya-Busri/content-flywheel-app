@@ -1,42 +1,61 @@
 /**
  * POST /api/launch/design
  * ─────────────────────────
- * Streaming image generation for the AI Execution pipeline (Phase 1.4).
+ * Streaming image generation for the AI Execution pipeline (Phase 1.4b).
  *
- * Generates 4 product marketing assets with gpt-image-1 sequentially,
- * streaming events so the execution dashboard can show images appearing live.
+ * Generates assets sequentially / in parallel, streaming events so the
+ * execution dashboard shows images appearing live.
+ *
+ * Phase 1: Cover Concepts (3 styles in parallel) — Minimal, Bold, Dark
+ * Phase 2: Mockup, Thumbnail, Social (sequential)
+ * Phase 3: Instagram carousel (text-only, fast)
+ * Phase 4: Save everything to DB
  *
  * Stream event sequence:
  *   step              — a named step is starting
- *   step-done         — a named step completed
+ *   step-done         — a named step completed (may carry extra fields)
  *   asset-generating  — { assetId, label } — image generation started
  *   asset-done        — { assetId, label, url } — image ready (show it)
  *   asset-error       — { assetId, label, message } — image failed (non-fatal)
- *   done              — { assets, assetsCount } — all complete
+ *   done              — { assets, assetsCount, concepts, carouselBundleId }
  *   error             — fatal error
  *
- * Assets generated:
- *   cover     — Portrait product cover (1024×1536)
- *   mockup    — 3D book-on-desk scene (1024×1024)
- *   thumbnail — Store listing thumbnail (1024×1024)
- *   social    — Square social media preview (1024×1024)
- *
  * Saves to productsTable.marketingAssets:
- *   coverThumbnailUrl, bookMockupUrl, thumbnailUrl, socialPreviewUrl
+ *   coverThumbnailUrl  — first successful cover concept
+ *   bookMockupUrl      — 3D mockup
+ *   thumbnailUrl       — store thumbnail (used by marketplace cards)
+ *   socialPreviewUrl   — social preview
+ *   coverConcepts      — all 3 concept objects { style, label, url }
  */
 
 export const dynamic     = "force-dynamic";
-export const maxDuration = 300; // Image gen: ~30-45s × 4 images
+export const maxDuration = 300; // 3 covers parallel (~40s) + 3 sequential (~120s) + carousel (~15s) + saves
 
 import { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { contentBundlesTable } from "@/db/schema/bundles-schema";
+import { designsTable } from "@/db/schema/designs-schema";
+import type { DesignData, DesignElement } from "@/db/schema/designs-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { upload } from "@/lib/storage";
 
-/* ─── Asset definitions ──────────────────────────────────────────────────────── */
+/* ─── Cover concept definitions ──────────────────────────────────────────────── */
+
+interface CoverConcept {
+  style: string;
+  label: string;
+}
+
+const COVER_CONCEPTS: CoverConcept[] = [
+  { style: "minimal", label: "Modern Minimal" },
+  { style: "bold",    label: "Bold Marketing" },
+  { style: "dark",    label: "Dark Professional" },
+];
+
+/* ─── Regular asset definitions ──────────────────────────────────────────────── */
 
 interface DesignAsset {
   id:    string;
@@ -44,11 +63,10 @@ interface DesignAsset {
   size:  "1024x1024" | "1024x1536";
 }
 
-const DESIGN_ASSETS: DesignAsset[] = [
-  { id: "cover",     label: "Product Cover",    size: "1024x1536" },
-  { id: "mockup",    label: "3D Mockup",         size: "1024x1024" },
-  { id: "thumbnail", label: "Store Thumbnail",   size: "1024x1024" },
-  { id: "social",    label: "Social Preview",    size: "1024x1024" },
+const REGULAR_ASSETS: DesignAsset[] = [
+  { id: "mockup",    label: "3D Mockup",       size: "1024x1024" },
+  { id: "thumbnail", label: "Store Thumbnail", size: "1024x1024" },
+  { id: "social",    label: "Social Preview",  size: "1024x1024" },
 ];
 
 /* ─── Prompt builder ─────────────────────────────────────────────────────────── */
@@ -64,17 +82,23 @@ function buildImagePrompt(
   const fmt  = format || "guide";
 
   switch (assetId) {
-    case "cover":
-      return `Professional digital product cover for a ${fmt} titled "${name}". Topic: ${n}. Bold clean typography on a premium gradient background. No people. Modern design aesthetic. Portrait orientation.`;
+    case "cover:minimal":
+      return `Clean modern minimal digital product cover for a ${fmt} titled "${name}". Topic: ${n}. White or soft grey background. Elegant thin sans-serif typography. Subtle geometric lines or abstract shapes as decoration. No people. Plenty of whitespace. Premium editorial feel. Portrait orientation 2:3.`;
+
+    case "cover:bold":
+      return `Bold high-energy digital product cover for a ${fmt} titled "${name}". Topic: ${n}. Vivid gradient background (deep purple to electric blue, or vibrant orange to red). Large impactful block typography. Dynamic diagonal elements. Energetic marketing aesthetic. No people. Portrait orientation 2:3.`;
+
+    case "cover:dark":
+      return `Premium dark professional digital product cover for a ${fmt} titled "${name}". Topic: ${n}. Deep charcoal or midnight navy background. Gold or white accent typography and thin lines. Executive luxury aesthetic. Abstract dark texture or subtle pattern. No people. Portrait orientation 2:3.`;
 
     case "mockup":
-      return `Realistic 3D product mockup: a ${fmt} titled "${name}" on a minimal clean white desk. Soft drop shadow, professional product photography. No people. Clean background.`;
+      return `Realistic 3D product mockup: a ${fmt} titled "${name}" resting on a minimal clean white desk. Soft drop shadow. Professional product photography. No people. Neutral background.`;
 
     case "thumbnail":
-      return `Digital marketplace listing thumbnail for "${name}" (${n}). Minimalist design, bold title, professional color palette. Square format. Clean premium aesthetic.`;
+      return `Digital marketplace listing thumbnail for "${name}" (${n}). Minimalist design. Bold title text. Professional colour palette. Square format. Clean premium aesthetic. No people.`;
 
     case "social":
-      return `Eye-catching square social media promotional image for "${name}". ${n} themed. Bold visual hierarchy, shareable design. No real people. Modern clean aesthetic.`;
+      return `Eye-catching square social media promotional image for "${name}". ${n} themed. Bold visual hierarchy. Shareable modern design. No real people. Clean contemporary aesthetic.`;
 
     default:
       return `Professional marketing image for "${name}" in ${n}`;
@@ -90,8 +114,8 @@ async function generateAndStoreImage(
   format:      string,
   userId:      string,
   apiKey:      string,
+  size:        "1024x1024" | "1024x1536" = "1024x1024",
 ): Promise<string> {
-  const asset  = DESIGN_ASSETS.find(a => a.id === assetId)!;
   const prompt = buildImagePrompt(assetId, productName, niche, format);
 
   const res = await fetch("https://api.openai.com/v1/images/generations", {
@@ -101,7 +125,7 @@ async function generateAndStoreImage(
       model:   "gpt-image-1",
       prompt,
       n:       1,
-      size:    asset.size,
+      size,
       quality: "auto",
     }),
     signal: AbortSignal.timeout(120_000),
@@ -116,24 +140,229 @@ async function generateAndStoreImage(
   const b64  = data.data?.[0]?.b64_json;
   if (!b64) throw new Error("No image data returned");
 
-  const buffer = Buffer.from(b64, "base64");
-
-  // Upload to Blob if configured, otherwise fall back to data URL
+  const buffer  = Buffer.from(b64, "base64");
   const useBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
+
   if (useBlob) {
     try {
       const blob = await upload(
-        `launch-design/${userId}/${assetId}-${Date.now()}.png`,
+        `launch-design/${userId}/${assetId.replace(":", "-")}-${Date.now()}.png`,
         buffer,
         { access: "public", contentType: "image/png", addRandomSuffix: false },
       );
       return blob.url;
     } catch (blobErr) {
-      console.warn(`[launch/design] Blob upload failed for ${assetId}, using data URL:`, blobErr);
+      console.warn(`[launch/design] Blob upload failed for ${assetId}:`, blobErr);
     }
   }
 
   return `data:image/png;base64,${b64}`;
+}
+
+/* ─── Carousel content generation ───────────────────────────────────────────── */
+
+interface CarouselSlideContent {
+  headline:    string;
+  body:        string;
+  accentColor: string;
+}
+
+const SLIDE_LABELS = [
+  "Hook",
+  "The Problem",
+  "Why It Matters",
+  "The Solution",
+  "Take Action",
+];
+
+async function generateCarouselContent(
+  productName: string,
+  niche:       string,
+  apiKey:      string,
+): Promise<CarouselSlideContent[]> {
+  const prompt = `Create a 5-slide Instagram carousel promoting a digital product called "${productName}" in the ${niche} niche.
+
+Return ONLY a valid JSON array — no markdown, no code fences:
+[
+  { "headline": "...", "body": "...", "accentColor": "#hex" },
+  { "headline": "...", "body": "...", "accentColor": "#hex" },
+  { "headline": "...", "body": "...", "accentColor": "#hex" },
+  { "headline": "...", "body": "...", "accentColor": "#hex" },
+  { "headline": "...", "body": "...", "accentColor": "#hex" }
+]
+
+Slide structure:
+1. Hook — bold question or provocative statement to stop the scroll (max 8 words)
+2. The Problem — the pain point the audience feels right now (max 12 words)
+3. Why It Matters — cost of not solving it (max 12 words)
+4. The Solution — what "${productName}" gives them (max 12 words)
+5. Take Action — specific CTA mentioning the product (max 10 words)
+
+Rules:
+- headline: 4-8 punchy words, ALL sentence case
+- body: 10-20 words, benefit-driven, conversational
+- accentColor: choose vivid hex from this palette: #e94560 #f59e0b #10b981 #3b82f6 #8b5cf6 — vary each slide`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body:    JSON.stringify({
+      model:       "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "Return only valid JSON arrays. No markdown, no commentary." },
+        { role: "user",   content: prompt },
+      ],
+      temperature: 0.7,
+      max_tokens:  700,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!res.ok) throw new Error(`Carousel text gen ${res.status}`);
+
+  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+  let text = data.choices?.[0]?.message?.content?.trim() ?? "[]";
+  if (text.startsWith("```")) {
+    text = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  }
+
+  const slides = JSON.parse(text) as CarouselSlideContent[];
+  return slides.slice(0, 5);
+}
+
+/* ─── Carousel DesignData builder ────────────────────────────────────────────── */
+
+const SLIDE_BG_COLORS = ["#0f172a", "#1a1a2e", "#0f3460", "#1e1b4b", "#0c1a2e"];
+
+function buildCarouselSlideData(
+  slide:      CarouselSlideContent,
+  index:      number,
+  total:      number,
+): DesignData {
+  const bg = SLIDE_BG_COLORS[index % SLIDE_BG_COLORS.length];
+
+  const elements: DesignElement[] = [
+    // Accent bar
+    {
+      id:           `s${index}-bar`,
+      type:         "shape",
+      x:            80,
+      y:            80,
+      width:        80,
+      height:       6,
+      shapeType:    "rectangle",
+      fill:         slide.accentColor,
+      borderRadius: 3,
+    },
+    // Slide counter
+    {
+      id:         `s${index}-count`,
+      type:       "text",
+      x:          80,
+      y:          112,
+      width:      200,
+      height:     36,
+      content:    `${index + 1} / ${total}`,
+      fontSize:   14,
+      fontFamily: "Inter",
+      color:      "#ffffff60",
+      fontWeight: "400",
+    },
+    // Headline
+    {
+      id:          `s${index}-headline`,
+      type:        "text",
+      x:           80,
+      y:           400,
+      width:       920,
+      height:      240,
+      content:     slide.headline,
+      fontSize:    66,
+      fontFamily:  "Inter",
+      color:       "#ffffff",
+      fontWeight:  "700",
+      lineHeight:  1.1,
+    },
+    // Body
+    {
+      id:          `s${index}-body`,
+      type:        "text",
+      x:           80,
+      y:           660,
+      width:       840,
+      height:      120,
+      content:     slide.body,
+      fontSize:    28,
+      fontFamily:  "Inter",
+      color:       "#ffffffb3",
+      fontWeight:  "400",
+      lineHeight:  1.45,
+    },
+    // Bottom separator
+    {
+      id:        `s${index}-line`,
+      type:      "shape",
+      x:         80,
+      y:         956,
+      width:     920,
+      height:    2,
+      shapeType: "rectangle",
+      fill:      "#ffffff18",
+    },
+    // Accent dot at bottom-right
+    {
+      id:           `s${index}-dot`,
+      type:         "shape",
+      x:            980,
+      y:            944,
+      width:        24,
+      height:       24,
+      shapeType:    "rectangle",
+      fill:         slide.accentColor,
+      borderRadius: 12,
+    },
+  ];
+
+  return {
+    width:      1080,
+    height:     1080,
+    background: bg,
+    elements,
+  };
+}
+
+/* ─── Carousel DB insert ─────────────────────────────────────────────────────── */
+
+async function createCarouselBundle(
+  userId:       string,
+  productName:  string,
+  slides:       CarouselSlideContent[],
+): Promise<string> {
+  // Insert bundle record
+  const [bundle] = await db
+    .insert(contentBundlesTable)
+    .values({
+      userId,
+      title:      `${productName} — Instagram Carousel`,
+      style:      "dark-pro",
+      slideCount: slides.length,
+    })
+    .returning({ id: contentBundlesTable.id });
+
+  const bundleId = bundle.id;
+
+  // Insert slide designs
+  await db.insert(designsTable).values(
+    slides.map((slide, i) => ({
+      userId,
+      title:      `${SLIDE_LABELS[i] ?? `Slide ${i + 1}`}`,
+      data:       buildCarouselSlideData(slide, i, slides.length),
+      bundleId,
+      slideIndex: i,
+    })),
+  );
+
+  return bundleId;
 }
 
 /* ─── Streaming generator ────────────────────────────────────────────────────── */
@@ -158,31 +387,83 @@ function streamDesignGeneration(
 
   void (async () => {
     const generatedUrls: Record<string, string> = {};
+    const successfulConcepts: Array<{ style: string; label: string; url: string }> = [];
+    let carouselBundleId: string | undefined;
 
     try {
       /* ── Step 0: prep ── */
       await send({ type: "step", id: "prep", label: "Reading product details..." });
       await send({ type: "step-done", id: "prep" });
 
-      /* ── Generate each asset sequentially ── */
-      for (const asset of DESIGN_ASSETS) {
+      /* ── Phase 1: Generate 3 cover concepts in parallel ── */
+      await send({ type: "step", id: "concepts", label: "Creating 3 cover concepts..." });
+
+      // Announce all three as generating simultaneously
+      await Promise.all(
+        COVER_CONCEPTS.map(c =>
+          send({ type: "asset-generating", assetId: `cover:${c.style}`, label: `${c.label} Cover` }),
+        ),
+      );
+
+      const conceptResults = await Promise.allSettled(
+        COVER_CONCEPTS.map(async (concept) => {
+          const url = await generateAndStoreImage(
+            `cover:${concept.style}`, productName, niche, format, userId, apiKey, "1024x1536",
+          );
+          generatedUrls[`cover:${concept.style}`] = url;
+          await send({
+            type:    "asset-done",
+            assetId: `cover:${concept.style}`,
+            label:   `${concept.label} Cover`,
+            url,
+            conceptStyle: concept.style,
+          });
+          return { style: concept.style, label: concept.label, url };
+        }),
+      );
+
+      for (const result of conceptResults) {
+        if (result.status === "fulfilled") {
+          successfulConcepts.push(result.value);
+        }
+      }
+
+      if (successfulConcepts.length === 0) {
+        await send({ type: "asset-error", assetId: "cover", label: "Cover", message: "All cover concepts failed" });
+      }
+
+      await send({ type: "step-done", id: "concepts" });
+
+      /* ── Phase 2: Generate mockup, thumbnail, social sequentially ── */
+      for (const asset of REGULAR_ASSETS) {
         await send({ type: "asset-generating", assetId: asset.id, label: asset.label });
 
         try {
           const url = await generateAndStoreImage(
-            asset.id, productName, niche, format, userId, apiKey,
+            asset.id, productName, niche, format, userId, apiKey, asset.size,
           );
           generatedUrls[asset.id] = url;
           await send({ type: "asset-done", assetId: asset.id, label: asset.label, url });
-        } catch (assetErr) {
-          const msg = assetErr instanceof Error ? assetErr.message : String(assetErr);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
           console.error(`[launch/design] Asset ${asset.id} failed:`, msg);
           await send({ type: "asset-error", assetId: asset.id, label: asset.label, message: msg });
-          // Non-fatal — continue with remaining assets
         }
       }
 
-      /* ── Save to product record ── */
+      /* ── Phase 3: Generate Instagram carousel ── */
+      await send({ type: "step", id: "carousel", label: "Creating Instagram carousel..." });
+
+      try {
+        const slideContents = await generateCarouselContent(productName, niche, apiKey);
+        carouselBundleId   = await createCarouselBundle(userId, productName, slideContents);
+        await send({ type: "step-done", id: "carousel", bundleId: carouselBundleId });
+      } catch (carouselErr) {
+        console.warn("[launch/design] Carousel generation failed (non-fatal):", carouselErr);
+        await send({ type: "step-done", id: "carousel" }); // non-fatal
+      }
+
+      /* ── Phase 4: Save to product record ── */
       await send({ type: "step", id: "saving", label: "Attaching assets to Digital Product..." });
 
       const currentProduct = await db
@@ -196,37 +477,30 @@ function streamDesignGeneration(
         .limit(1);
 
       if (currentProduct[0]) {
-        /* ── Marketing assets ── */
-        const existingMarketing = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
-        const updatedMarketing  = {
+        const primaryCoverUrl    = successfulConcepts[0]?.url;
+        const existingMarketing  = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
+
+        const updatedMarketing = {
           ...existingMarketing,
-          ...(generatedUrls.cover     ? { coverThumbnailUrl: generatedUrls.cover }     : {}),
-          ...(generatedUrls.mockup    ? { bookMockupUrl:      generatedUrls.mockup }    : {}),
-          ...(generatedUrls.thumbnail ? { thumbnailUrl:       generatedUrls.thumbnail } : {}),
-          ...(generatedUrls.social    ? { socialPreviewUrl:   generatedUrls.social }   : {}),
+          ...(primaryCoverUrl               ? { coverThumbnailUrl: primaryCoverUrl }             : {}),
+          ...(generatedUrls.mockup          ? { bookMockupUrl:     generatedUrls.mockup }         : {}),
+          ...(generatedUrls.thumbnail       ? { thumbnailUrl:      generatedUrls.thumbnail }      : {}),
+          ...(generatedUrls.social          ? { socialPreviewUrl:  generatedUrls.social }         : {}),
+          ...(successfulConcepts.length > 0 ? { coverConcepts:     successfulConcepts }            : {}),
         };
 
-        /* ── Document design — apply cover image to cover page background ──
-         *
-         * The ProductEditor reads designSettings.pages as:
-         *   [coverPage, ...contentPages, backCoverPage]
-         * where each page has { backgroundImage, backgroundSettings, backgroundColor, pageTextColor }.
-         *
-         * We build this array now so the editor opens with the AI cover art
-         * already applied to the cover page — instead of a blank white document.
-         */
-        const existingDs   = (currentProduct[0].designSettings ?? {}) as Record<string, unknown>;
-        const sections     = (currentProduct[0].content as { sections?: unknown[] })?.sections ?? [];
-        const totalPages   = sections.length + 2; // cover + content sections + back cover
+        /* ── Update cover page background with primary concept ── */
+        const existingDs    = (currentProduct[0].designSettings ?? {}) as Record<string, unknown>;
+        const sections      = (currentProduct[0].content as { sections?: unknown[] })?.sections ?? [];
+        const totalPages    = sections.length + 2;
         const existingPages = (existingDs.pages as Record<string, unknown>[] | undefined) ?? [];
 
         const pages = Array.from({ length: totalPages }, (_, i) => {
           const existing = existingPages[i] ?? {};
-          if (i === 0 && generatedUrls.cover) {
-            // Cover page — set the AI-generated cover image as a full-bleed background
+          if (i === 0 && primaryCoverUrl) {
             return {
               ...existing,
-              backgroundImage: generatedUrls.cover,
+              backgroundImage: primaryCoverUrl,
               backgroundSettings: {
                 size:     "cover",
                 position: "center center",
@@ -235,20 +509,14 @@ function streamDesignGeneration(
               },
             };
           }
-          // Content pages + back cover — keep any existing background, else leave blank (white)
           return existing;
         });
-
-        const updatedDesignSettings = {
-          ...existingDs,
-          pages,
-        };
 
         await db
           .update(productsTable)
           .set({
             marketingAssets: updatedMarketing,
-            designSettings:  updatedDesignSettings,
+            designSettings:  { ...existingDs, pages },
             designSource:    "ai",
             updatedAt:       new Date(),
           })
@@ -257,11 +525,18 @@ function streamDesignGeneration(
 
       await send({ type: "step-done", id: "saving" });
 
-      const assetsCount = Object.keys(generatedUrls).length;
+      const assetsCount =
+        successfulConcepts.length +
+        (generatedUrls.mockup    ? 1 : 0) +
+        (generatedUrls.thumbnail ? 1 : 0) +
+        (generatedUrls.social    ? 1 : 0);
+
       await send({
-        type:        "done",
-        assets:      generatedUrls,
+        type:            "done",
+        assets:          generatedUrls,
         assetsCount,
+        concepts:        successfulConcepts,
+        carouselBundleId: carouselBundleId ?? null,
       });
 
     } catch (err) {

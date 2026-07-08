@@ -1,44 +1,31 @@
 /**
- * Launch Pipeline — Design Agent (Phase 1.4)
+ * Launch Pipeline — Design Agent (Phase 1.4b)
  * ──────────────────────────────────────────────
  * Calls /api/launch/design in streaming mode and maps NDJSON events to
  * live AgentStep updates in the execution dashboard.
  *
- * The user sees each image appear as it renders:
- *   Reading product details → Generating Product Cover [image appears] →
- *   Generating 3D Mockup [image appears] → Generating Store Thumbnail →
- *   Generating Social Preview → Attaching to Digital Product ✓
+ * Phase 1: 3 cover concepts generated in parallel (Minimal, Bold, Dark)
+ * Phase 2: Mockup, Thumbnail, Social — sequential
+ * Phase 3: Instagram carousel auto-created in Design Studio
  *
- * Steps carry an optional `imageUrl` field — when set, the AgentCard
- * renders the image inline below the step label.
- *
- * On completion: saves stageResults.design.{coverUrl, mockupUrl, …}
- * and advances currentStage → "marketing" at 60% overall progress.
+ * On completion: saves stageResults.design with concepts[], carouselBundleId,
+ * and advances currentStage → "marketing" at 60%.
  */
 
 import type { ExecutionContext, AgentStep } from "./types";
 import type { LaunchStageResults } from "@/db/schema/launch-schema";
 
-/* ─── Asset → step mapping ───────────────────────────────────────────────────── */
-
-const ASSET_STEPS: Array<{ assetId: string; label: string }> = [
-  { assetId: "cover",     label: "Product Cover"  },
-  { assetId: "mockup",    label: "3D Mockup"       },
-  { assetId: "thumbnail", label: "Store Thumbnail" },
-  { assetId: "social",    label: "Social Preview"  },
-];
-
 /* ─── Initial step list ──────────────────────────────────────────────────────── */
 
 function buildInitialSteps(): AgentStep[] {
   return [
-    { id: "prep",   label: "Reading product details...", status: "running" },
-    ...ASSET_STEPS.map(a => ({
-      id:     `asset:${a.assetId}`,
-      label:  a.label,
-      status: "pending" as const,
-    })),
-    { id: "saving", label: "Attaching assets to Digital Product", status: "pending" },
+    { id: "prep",      label: "Reading product details...",        status: "running" },
+    { id: "concepts",  label: "Product Cover — 3 styles",          status: "pending" },
+    { id: "asset:mockup",    label: "3D Mockup",                   status: "pending" },
+    { id: "asset:thumbnail", label: "Store Thumbnail",             status: "pending" },
+    { id: "asset:social",    label: "Social Preview",              status: "pending" },
+    { id: "carousel",        label: "Instagram Carousel",          status: "pending" },
+    { id: "saving",          label: "Attaching assets to product", status: "pending" },
   ];
 }
 
@@ -77,16 +64,16 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
   const { stageResults, callbacks, saveProgress } = ctx;
 
   /* Pull product details from previous stage */
-  const product    = stageResults.product;
-  const productId  = product?.productId  ?? "";
+  const product     = stageResults.product;
+  const productId   = product?.productId  ?? "";
   const productName = product?.productName ?? ctx.goal;
 
   /* Pull niche/format from research if available */
-  const research   = stageResults.research;
-  const niche      = typeof (research as Record<string, unknown> | undefined)?.query === "string"
+  const research = stageResults.research;
+  const niche    = typeof (research as Record<string, unknown> | undefined)?.query === "string"
     ? (research as { query: string }).query
     : ctx.goal;
-  const format     = "guide"; // Will be read from product record server-side
+  const format   = "guide";
 
   if (!productId) {
     throw new Error("Design Agent: no productId in stageResults — run Product Agent first");
@@ -123,7 +110,12 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
   let buf = "";
 
   const generatedAssets: Record<string, string> = {};
-  let assetsCount = 0;
+  const concepts: Array<{ style: string; label: string; url: string }> = [];
+  let assetsCount     = 0;
+  let carouselBundleId: string | undefined;
+
+  /** Map cover concept imageUrl to the "concepts" step, using last received URL */
+  let latestConceptUrl: string | undefined;
 
   streamLoop: while (true) {
     const { done, value } = await reader.read();
@@ -138,67 +130,122 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
       if (!trimmed) continue;
 
       let event: Record<string, unknown>;
-      try {
-        event = JSON.parse(trimmed) as Record<string, unknown>;
-      } catch { continue; }
+      try { event = JSON.parse(trimmed) as Record<string, unknown>; }
+      catch { continue; }
 
       switch (event.type as string) {
 
         /* ── Standard step lifecycle ── */
         case "step": {
-          setStep(event.id as string, "running", { label: event.label as string | undefined });
+          const stepId = event.id as string;
+          const label  = event.label as string | undefined;
+          setStep(stepId, "running", { label });
           break;
         }
 
         case "step-done": {
-          setStep(event.id as string, "done");
+          const stepId = event.id as string;
+          if (stepId === "carousel" && event.bundleId) {
+            carouselBundleId = event.bundleId as string;
+            setStep("carousel", "done", { label: "Instagram Carousel ✓" });
+          } else {
+            setStep(stepId, "done");
+          }
           break;
         }
 
-        /* ── Asset generation started ── */
+        /* ── Asset generating ── */
         case "asset-generating": {
           const assetId = event.assetId as string;
-          setStep(`asset:${assetId}`, "running", {
-            label: `Generating ${event.label as string}...`,
-          });
+
+          if (assetId.startsWith("cover:")) {
+            // Already in "running" from the "concepts" step event
+          } else {
+            setStep(`asset:${assetId}`, "running", {
+              label: `Generating ${event.label as string}...`,
+            });
+          }
           break;
         }
 
-        /* ── Asset ready — show image immediately ── */
+        /* ── Asset ready ── */
         case "asset-done": {
-          const assetId = event.assetId as string;
-          const url     = event.url as string;
-          generatedAssets[assetId] = url;
-          setStep(`asset:${assetId}`, "done", {
-            label:    event.label as string,
-            imageUrl: url,
-          });
+          const assetId     = event.assetId as string;
+          const url         = event.url as string;
+
+          if (assetId.startsWith("cover:")) {
+            // Accumulate concepts; update the concepts step with latest image
+            latestConceptUrl = url;
+            concepts.push({
+              style: (event.conceptStyle as string) ?? assetId.split(":")[1],
+              label: event.label as string,
+              url,
+            });
+            generatedAssets[assetId] = url;
+            // Update concepts step image with the first concept that arrives
+            if (concepts.length === 1) {
+              setStep("concepts", "running", { imageUrl: url, label: "Product Cover — 3 styles" });
+            } else {
+              // Update imageUrl to latest
+              setStep("concepts", "running", { imageUrl: url });
+            }
+          } else {
+            generatedAssets[assetId] = url;
+            setStep(`asset:${assetId}`, "done", {
+              label:    event.label as string,
+              imageUrl: url,
+            });
+          }
           break;
         }
 
         /* ── Asset failed (non-fatal) ── */
         case "asset-error": {
           const assetId = event.assetId as string;
-          setStep(`asset:${assetId}`, "error", {
-            label: `${event.label as string} — failed`,
-          });
+          if (assetId.startsWith("cover:")) {
+            // Non-fatal — other concepts may succeed
+          } else {
+            setStep(`asset:${assetId}`, "error", {
+              label: `${event.label as string} — failed`,
+            });
+          }
           break;
         }
 
         /* ── All done ── */
         case "done": {
-          assetsCount = event.assetsCount as number ?? Object.keys(generatedAssets).length;
+          assetsCount      = (event.assetsCount as number) ?? Object.keys(generatedAssets).length;
+          carouselBundleId = carouselBundleId ?? (event.carouselBundleId as string | undefined);
+
+          const eventConcepts = event.concepts as Array<{ style: string; label: string; url: string }> | undefined;
+          if (Array.isArray(eventConcepts)) {
+            // Use the server's authoritative list
+            concepts.length = 0;
+            concepts.push(...eventConcepts);
+          }
+
+          // Mark concepts step done with last concept image
+          if (latestConceptUrl) {
+            setStep("concepts", "done", { imageUrl: latestConceptUrl });
+          } else {
+            setStep("concepts", "done");
+          }
 
           callbacks.onProgress(98, "Saving design results...");
 
+          const firstConceptUrl = concepts[0]?.url;
+
           const stageResultsPatch: Partial<LaunchStageResults> = {
             design: {
-              coverUrl:     generatedAssets.cover,
-              mockupUrl:    generatedAssets.mockup,
-              thumbnailUrl: generatedAssets.thumbnail,
-              socialUrl:    generatedAssets.social,
+              coverUrl:         firstConceptUrl,
+              mockupUrl:        generatedAssets.mockup,
+              thumbnailUrl:     generatedAssets.thumbnail,
+              socialUrl:        generatedAssets.social,
               assetsCount,
-              completedAt:  new Date().toISOString(),
+              completedAt:      new Date().toISOString(),
+              concepts:         concepts.length > 0 ? concepts : undefined,
+              selectedConceptUrl: firstConceptUrl,
+              carouselBundleId: carouselBundleId,
             },
           };
 
