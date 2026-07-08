@@ -46,6 +46,7 @@ interface AssetRoles {
 interface Props {
   design:    DesignResult;
   productId: string;
+  launchId?: string;
 }
 
 /* ─── Utility ────────────────────────────────────────────────────────────────── */
@@ -254,7 +255,7 @@ function ThumbnailOption({
 
 /* ─── Main panel ─────────────────────────────────────────────────────────────── */
 
-export function DesignAssetPanel({ design, productId }: Props) {
+export function DesignAssetPanel({ design, productId, launchId }: Props) {
   /* Derive initial cover selection */
   const initCoverKey = (): string | null => {
     const first = design.concepts?.[0];
@@ -321,7 +322,17 @@ export function DesignAssetPanel({ design, productId }: Props) {
     };
     setRoles(next);
     await persist(next);
-  }, [roles, persist]);
+    // Also persist selectedConceptUrl to the launch project stageResults
+    if (launchId && concept.url) {
+      fetch(`/api/launch/${launchId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          stageResults: { design: { selectedConceptUrl: concept.url } },
+        }),
+      }).catch(() => { /* non-fatal */ });
+    }
+  }, [roles, persist, launchId]);
 
   /* Select a thumbnail source */
   const selectThumb = useCallback(async (source: ThumbSource) => {

@@ -78,7 +78,24 @@ import TemplatesClient from "@/app/dashboard/templates/TemplatesClient";
 import HistoryClient from "@/app/dashboard/history/HistoryClient";
 import { FeaturePreviewGate } from "@/components/feature-preview-gate";
 
-type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "archived" | "designs";
+type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "archived" | "designs" | "workspaces";
+
+type WorkspaceProject = {
+  id: string;
+  goal: string;
+  projectName: string;
+  status: string;
+  businessScore: number;
+  thumbnailUrl: string | null;
+  productId: string | null;
+  hasResearch: boolean;
+  hasProduct: boolean;
+  hasDesign: boolean;
+  hasMarketing: boolean;
+  hasStore: boolean;
+  updatedAt: string;
+  createdAt: string;
+};
 
 type TemplatePackItem = {
   id: string;
@@ -422,6 +439,9 @@ export default function LibraryFlow() {
 
   /** Map of productId → launchProjectId for "Open Launch Workspace" links */
   const [productLaunchMap, setProductLaunchMap] = useState<Record<string, string>>({});
+  /** Full project list for the Workspaces tab */
+  const [workspaceProjects, setWorkspaceProjects] = useState<WorkspaceProject[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
 
   const showThumbnail = (item: LibraryItem) =>
     Boolean(item.thumbnail && !thumbnailErrors.has(item.id));
@@ -565,9 +585,28 @@ export default function LibraryFlow() {
     if (tab === "youtube") { fetchYouTubePosts(); return; }
     if (tab === "images") { fetchImages(); return; }
     if (tab === "designs") { fetchDesignBundles(); return; }
+    if (tab === "workspaces") { fetchWorkspaces(); return; }
     if (tab === "template-packs") fetchTemplatePacks();
     else fetchItems();
   }, [tab]);
+
+  const fetchWorkspaces = async () => {
+    setWorkspacesLoading(true);
+    try {
+      const res = await fetch("/api/projects");
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json() as { projects: WorkspaceProject[] };
+      const projects = data.projects ?? [];
+      setWorkspaceProjects(projects);
+      // Also keep productLaunchMap in sync
+      const map: Record<string, string> = {};
+      for (const p of projects) {
+        if (p.productId) map[p.productId] = p.id;
+      }
+      setProductLaunchMap(prev => ({ ...prev, ...map }));
+    } catch { /* non-fatal */ }
+    finally { setWorkspacesLoading(false); }
+  };
 
   // Build productId → launchId map once on mount (for "Open Launch Workspace" links)
   useEffect(() => {
@@ -902,6 +941,10 @@ export default function LibraryFlow() {
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 mb-6">
           <div className="overflow-x-auto pb-1 sm:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
           <TabsList data-tour="library-tabs" className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A] flex-nowrap whitespace-nowrap w-max">
+            <TabsTrigger value="workspaces" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+              <Rocket className="w-3.5 h-3.5 shrink-0" aria-hidden />
+              Launch Workspaces
+            </TabsTrigger>
             <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
             <TabsTrigger value="bundles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Bundles</TabsTrigger>
@@ -1102,6 +1145,130 @@ export default function LibraryFlow() {
                     </Card>
                   ))}
                 </div>
+              )}
+            </div>
+          ) : tab === "workspaces" ? (
+            <div className="space-y-4">
+              {workspacesLoading ? (
+                <div className="py-16 flex flex-col items-center justify-center">
+                  <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">Loading workspaces…</p>
+                </div>
+              ) : workspaceProjects.length === 0 ? (
+                <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                  <CardContent className="py-16 text-center">
+                    <Rocket className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No launch workspaces yet</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                      Launch with AI builds a complete business workspace — research, product, design, marketing, and store — all in one place.
+                    </p>
+                    <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
+                      <Link href="/dashboard/launch">
+                        <Rocket className="w-4 h-4" />
+                        Start a Launch
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {workspaceProjects.length} workspace{workspaceProjects.length !== 1 ? "s" : ""}
+                    </p>
+                    <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
+                      <Link href="/dashboard/launch">
+                        <Rocket className="w-3.5 h-3.5" />
+                        New Launch
+                      </Link>
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {workspaceProjects.map((ws) => {
+                      const stages = [
+                        { key: "research", label: "Research", done: ws.hasResearch },
+                        { key: "product", label: "Product", done: ws.hasProduct },
+                        { key: "design", label: "Design", done: ws.hasDesign },
+                        { key: "marketing", label: "Marketing", done: ws.hasMarketing },
+                        { key: "store", label: "Store", done: ws.hasStore },
+                      ] as const;
+                      const doneCount = stages.filter(s => s.done).length;
+                      const isComplete = doneCount === 5;
+                      return (
+                        <Card key={ws.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden group hover:shadow-md transition-shadow">
+                          {/* Thumbnail */}
+                          <div className="relative w-full h-40 bg-gradient-to-br from-orange-500/15 to-amber-500/10 dark:from-orange-900/30 dark:to-amber-900/20 overflow-hidden">
+                            {ws.thumbnailUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={ws.thumbnailUrl}
+                                alt={ws.projectName}
+                                className="w-full h-full object-contain"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-orange-400">
+                                <Rocket className="w-10 h-10" />
+                              </div>
+                            )}
+                            {/* Status badge */}
+                            <div className="absolute top-2 right-2">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                                isComplete
+                                  ? "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30"
+                                  : ws.status === "running"
+                                    ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                                    : "bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-500/30"
+                              }`}>
+                                {isComplete ? "Complete" : ws.status === "running" ? "In progress" : "Draft"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <CardContent className="p-4 space-y-3">
+                            {/* Name */}
+                            <div>
+                              <p className="font-semibold text-gray-900 dark:text-white text-sm leading-tight line-clamp-2 group-hover:text-orange-500 transition-colors">
+                                {ws.projectName}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{ws.goal}</p>
+                            </div>
+
+                            {/* Stage dots */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {stages.map(s => (
+                                <span
+                                  key={s.key}
+                                  title={s.label}
+                                  className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                    s.done
+                                      ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                                      : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600"
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${s.done ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`} />
+                                  {s.label}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Last updated + CTA */}
+                            <div className="flex items-center justify-between pt-1">
+                              <p className="text-xs text-gray-400 dark:text-gray-500">
+                                {new Date(ws.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                              </p>
+                              <Button asChild size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 h-7">
+                                <Link href={`/dashboard/launch/${ws.id}/workspace`}>
+                                  Open Workspace
+                                </Link>
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           ) : tab === "designs" ? (

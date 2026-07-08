@@ -557,7 +557,7 @@ export default function ExecutionWorkspacePage() {
               if (stage.id === "research" && results.research)
                 previewNode = <ResearchPreview r={results.research} />;
               if (stage.id === "design" && results.design && productId)
-                previewNode = <DesignAssetPanel design={results.design} productId={productId} />;
+                previewNode = <DesignAssetPanel design={results.design} productId={productId} launchId={launchId} />;
               if (stage.id === "marketing" && results.marketing)
                 previewNode = <MarketingPreview m={results.marketing} />;
               if (stage.id === "store"    && results.store)
