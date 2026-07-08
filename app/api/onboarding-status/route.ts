@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import Stripe from "stripe";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
@@ -8,6 +9,8 @@ import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
 import { emailCampaignsTable } from "@/db/schema/email-marketing-schema";
 import { eq, and, isNull, count } from "drizzle-orm";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export const dynamic = "force-dynamic";
 
@@ -69,17 +72,39 @@ export async function GET() {
   });
 
   // chargesEnabled is the authoritative signal for the checklist.
-  // payoutsEnabled can lag (defaults to false for users who connected before that column
-  // was added). The Payments card in Settings shows the live nuanced status via Stripe API.
-  const stripeCharges = profile[0]?.stripeConnectChargesEnabled ?? false;
-  const stripePayouts = profile[0]?.stripeConnectPayoutsEnabled ?? false;
+  // DB-first fast path; if DB is stale (account exists but chargesEnabled=false),
+  // fall back to a live Stripe check and sync the DB so subsequent requests are fast.
+  const accountId    = profile[0]?.stripeConnectAccountId ?? null;
+  let stripeCharges  = profile[0]?.stripeConnectChargesEnabled ?? false;
+  let stripePayouts  = profile[0]?.stripeConnectPayoutsEnabled ?? false;
+
+  if (!stripeCharges && accountId) {
+    try {
+      const account = await stripe.accounts.retrieve(accountId);
+      stripeCharges = account.charges_enabled ?? false;
+      stripePayouts = account.payouts_enabled ?? false;
+      // Sync back to DB so the next call is instant
+      if (stripeCharges) {
+        await db.update(profilesTable)
+          .set({
+            stripeConnectChargesEnabled: stripeCharges,
+            stripeConnectPayoutsEnabled: stripePayouts,
+          })
+          .where(eq(profilesTable.userId, userId));
+      }
+    } catch (err) {
+      console.error("[onboarding-status] Stripe live-check failed:", err);
+    }
+  }
+
   const hasStripeConnect = !!stripeCharges;
 
   console.log("[onboarding-status] Stripe state:", {
-    accountId:      !!(profile[0]?.stripeConnectAccountId),
+    accountId:      !!accountId,
     chargesEnabled: stripeCharges,
     payoutsEnabled: stripePayouts,
     hasStripeConnect,
+    liveCheck:      !!(profile[0]?.stripeConnectChargesEnabled === false && accountId),
   });
   const hasBrandVoice = !!(brandVoice[0]?.brandName?.trim());
   const hasPromoCode = Number(promoCodes[0]?.count ?? 0) > 0;
