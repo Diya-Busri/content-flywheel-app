@@ -189,22 +189,25 @@ const ACTION_LABELS: Record<BrainRecommendation["actionType"], string> = {
 };
 
 function RecommendationCard({
-  rec, productId, storeUrl,
+  rec, productId, storeUrl, launchId,
 }: {
-  rec: BrainRecommendation; productId: string; storeUrl: string;
+  rec: BrainRecommendation; productId: string; storeUrl: string; launchId: string;
 }) {
   const p = PRIORITY_STYLES[rec.priority];
   const [expanded, setExpanded] = useState(false);
 
-  /* Resolve actionHref — substitute real productId/storeUrl */
-  const resolvedHref = rec.actionHref
-    ?.replace("[id]",        productId)
-    ?.replace("[launchId]",  "")
-    ?? (rec.actionType === "edit_product"      ? `/dashboard/products/${productId}`
-      : rec.actionType === "edit_store"        ? `/dashboard/products/${productId}#publish`
-      : rec.actionType === "regenerate_design" ? "/dashboard/design-studio"
-      : rec.actionType === "edit_marketing"    ? "/dashboard/workspace?tab=content"
+  /* Resolve actionHref — substitute real productId / launchId / storeUrl */
+  const raw = rec.actionHref
+    ?.replace("[id]",       productId)
+    ?.replace("[launchId]", launchId)
+    ?? (rec.actionType === "edit_product"      ? `/dashboard/digital-products/${productId}/edit`
+      : rec.actionType === "edit_store"        ? `/dashboard/digital-products/${productId}/edit#publish`
+      : rec.actionType === "regenerate_design" ? `/dashboard/digital-products/${productId}/edit`
+      : rec.actionType === "edit_marketing"    ? `/dashboard/launch/${launchId}/workspace`
       : undefined);
+
+  /* Guard: never render a button if a placeholder bracket wasn't resolved */
+  const resolvedHref = raw && !raw.includes("[") ? raw : undefined;
 
   return (
     <div className={[
@@ -493,6 +496,7 @@ export function BusinessBrainPanel({
                 rec={rec}
                 productId={productId}
                 storeUrl={storeUrl}
+                launchId={launchId}
               />
             ))}
           </div>
