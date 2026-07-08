@@ -6,12 +6,15 @@
  * Flow:
  *  1. Load project + stageResults from DB
  *  2. Build a structured critique prompt from all available data
- *  3. Call Claude to produce a BrainResult JSON
+ *  3. Call GPT-4o-mini to produce a BrainResult JSON
  *  4. Save result to stageResults.brain in DB
  *  5. Return { brain: BrainResult }
  *
- * Non-streaming: the whole review takes ~15s and produces one JSON object.
+ * Non-streaming: the whole review takes ~10-15s and produces one JSON object.
  * The client shows animated loading messages while it runs.
+ *
+ * Uses OpenAI (same key as all other launch agents) — NOT Anthropic — so no
+ * additional environment variable is required.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,12 +23,12 @@ import { db } from "@/db";
 import { launchProjectsTable } from "@/db/schema/launch-schema";
 import type { LaunchStageResults, BrainResult } from "@/db/schema/launch-schema";
 import { eq, and } from "drizzle-orm";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-// 60s matches Vercel Hobby plan cap; response fits in ~1400 tokens so this is ample.
+// 60s is ample for a single GPT-4o-mini JSON call (~2000 output tokens ≈ 8-12s).
 export const maxDuration = 60;
 
-const ai = new Anthropic();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /* ─── Prompt builder ─────────────────────────────────────────────────────────── */
 
@@ -79,9 +82,7 @@ function buildBrainPrompt(results: LaunchStageResults, goal: string): string {
       : null,
   };
 
-  return `You are an experienced founder and digital product launch consultant who has reviewed hundreds of digital product launches. You are reviewing a creator's AI-generated launch before it goes live.
-
-Your job: give an honest, specific business review that increases the creator's chance of making sales.
+  return `Review this creator's AI-generated launch and produce a founder-quality business critique that increases their chance of making sales.
 
 GOAL: "${goal}"
 
@@ -189,13 +190,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ brain: results.brain });
   }
 
-  /* Call Claude */
+  /* Call OpenAI — same provider used by all other launch agents */
   let rawText = "";
   try {
-    const msg = await ai.messages.create({
-      model:      "claude-haiku-4-5",  // Haiku is 3-4× faster than Sonnet; Brain JSON fits in ~1400 tokens
-      max_tokens: 2000,                // actual response ~1200-1600 tokens; keeps latency under 30s
+    const completion = await openai.chat.completions.create({
+      model:      "gpt-4o-mini",  // fast + cheap; Brain JSON fits in ~1400 tokens
+      max_tokens: 2000,
+      temperature: 0.3,           // deterministic enough for structured JSON
+      response_format: { type: "json_object" },  // guarantees valid JSON output
       messages: [
+        {
+          role:    "system",
+          content: "You are an experienced founder and digital product launch consultant. Always respond with valid JSON only.",
+        },
         {
           role:    "user",
           content: buildBrainPrompt(results, project.goal),
@@ -203,12 +210,9 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    rawText = msg.content
-      .filter(b => b.type === "text")
-      .map(b => (b as { type: "text"; text: string }).text)
-      .join("");
+    rawText = completion.choices[0]?.message?.content ?? "";
   } catch (err) {
-    console.error("[brain] Claude error:", err);
+    console.error("[brain] OpenAI error:", err);
     return NextResponse.json({ error: "AI analysis failed" }, { status: 500 });
   }
 
