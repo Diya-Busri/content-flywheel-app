@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft, Type, ImageIcon, Square, Trash2, Copy, Loader2, Check,
-  Download, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Minus, Plus,
+  Download, Bold, Italic, AlignLeft, AlignCenter, AlignRight, AlignJustify, Minus, Plus,
   ChevronDown, FlipHorizontal, FlipVertical, RotateCw, Sparkles,
   AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter,
   MoveLeft, MoveRight, MoveUp, MoveDown, Undo2, Redo2,
   Underline, Strikethrough, ZoomIn, ZoomOut, FileDown, Highlighter,
   LayoutTemplate, Images, Layers, X, Settings2, Palette,
-  Grid3x3, Smartphone, Lock, Unlock, ArrowUp, ArrowDown, MessageSquare, Send, Package,
+  Grid3x3, Smartphone, Lock, Unlock, ArrowUp, ArrowDown, MessageSquare, Send, Package, WrapText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -403,6 +403,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [data, setData] = useState<DesignData>({ width: 800, height: 1100, background: "#ffffff", elements: [] });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
@@ -575,6 +576,7 @@ export function DesignEditor({ designId }: { designId: string }) {
     };
     updateData((prev) => ({ ...prev, elements: [...prev.elements, el] }));
     setSelectedId(el.id);
+    setEditingId(el.id);
   }
 
   function addShape(shapeType = "rect") {
@@ -873,9 +875,16 @@ export function DesignEditor({ designId }: { designId: string }) {
     if ((e.target as HTMLElement).dataset.resize || (e.target as HTMLElement).dataset.rotate) return;
     e.stopPropagation();
     e.preventDefault(); // prevent page scroll while dragging on touch
-    // Skip interaction if element is locked
+    // Always select on pointer down — this was the primary selection bug
+    setSelectedId(id);
     const el = data.elements.find((x) => x.id === id)!;
-    if (el?.locked) { setSelectedId(id); return; } // allow select but no drag
+    if (!el) return;
+    // Second tap on an already-selected text element → enter inline edit mode
+    if (selectedIdRef.current === id && el.type === "text" && !el.locked) {
+      setEditingId(id);
+      return;
+    }
+    if (el.locked) { return; } // allow select but no drag
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
     // Pointer capture keeps events flowing even if finger slides off the element
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -959,6 +968,45 @@ export function DesignEditor({ designId }: { designId: string }) {
     window.addEventListener("pointerup", onUp);
   }
 
+  /**
+   * Edge (midpoint) resize — constrains to single axis.
+   * edge: "n" | "s" | "e" | "w"
+   */
+  function onResizeEdgePointerDown(
+    e: React.PointerEvent,
+    id: string,
+    edge: "n" | "s" | "e" | "w"
+  ) {
+    e.stopPropagation(); e.preventDefault();
+    const el = data.elements.find((x) => x.id === id)!;
+    resizeRef.current = {
+      startX: e.clientX, startY: e.clientY,
+      origW: el.width, origH: el.height,
+    };
+    const origX = el.x, origY = el.y;
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const onMove = (ev: PointerEvent) => {
+      if (!resizeRef.current) return;
+      const dx = (ev.clientX - resizeRef.current.startX) / scale;
+      const dy = (ev.clientY - resizeRef.current.startY) / scale;
+      const { origW, origH } = resizeRef.current;
+      let newW = origW, newH = origH, newX = origX, newY = origY;
+      if (edge === "e") { newW = Math.max(20, origW + dx); }
+      else if (edge === "w") { newW = Math.max(20, origW - dx); newX = origX + (origW - newW); }
+      else if (edge === "s") { newH = Math.max(20, origH + dy); }
+      else { newH = Math.max(20, origH - dy); newY = origY + (origH - newH); } // n
+      updateElement(id, { width: newW, height: newH, x: newX, y: newY }, false);
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+      pushHistory(historyRef.current[historyIdx.current]);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   function onRotatePointerDown(e: React.PointerEvent, id: string) {
     e.stopPropagation(); e.preventDefault();
     const el = data.elements.find((x) => x.id === id)!;
@@ -990,7 +1038,7 @@ export function DesignEditor({ designId }: { designId: string }) {
   }
 
   function onCanvasClick(e: React.MouseEvent) {
-    if ((e.target as HTMLElement) === canvasRef.current) setSelectedId(null);
+    if ((e.target as HTMLElement) === canvasRef.current) { setSelectedId(null); setEditingId(null); }
   }
 
   // Keyboard shortcuts — use refs to avoid stale closures and unnecessary re-registration
@@ -1186,12 +1234,12 @@ export function DesignEditor({ designId }: { designId: string }) {
           ref={containerRef}
           className={`flex-1 flex items-center justify-center overflow-auto p-2 sm:p-8 pb-editor-toolbar md:pb-8 ${selectedEl ? "pt-14" : ""} ${isDark ? "bg-[#151515]" : "bg-gray-100"}`}
           style={{ backgroundImage: isDark ? "radial-gradient(circle, #2A2A2A 1px, transparent 1px)" : "radial-gradient(circle, #d1d5db 1px, transparent 1px)", backgroundSize: "24px 24px" }}
-          onClick={() => { setSelectedId(null); setActivePanel(null); }}
+          onClick={() => { setSelectedId(null); setEditingId(null); setActivePanel(null); }}
         >
           <div style={{ width: data.width * scale, height: data.height * scale, position: "relative", flexShrink: 0 }}>
             <div
               ref={canvasRef}
-              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${getProxiedBackgroundImageUrl(data.backgroundImage) ?? data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
+              style={{ width: data.width, height: data.height, background: buildBg(data), backgroundImage: data.backgroundImage && !(data.backgroundImageBlur ?? 0) ? `url(${getProxiedBackgroundImageUrl(data.backgroundImage) ?? data.backgroundImage})` : undefined, backgroundSize: data.backgroundImageFit ?? "cover", backgroundPosition: "center", position: "absolute", top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: "top left", overflow: "visible", boxShadow: "0 4px 40px rgba(0,0,0,0.25)" }}
               onClick={onCanvasClick}
             >
               {/* Blurred background image layer */}
@@ -1215,9 +1263,12 @@ export function DesignEditor({ designId }: { designId: string }) {
               )}
               {[...data.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((el) => (
                 <CanvasElement key={el.id} el={el} selected={el.id === selectedId}
+                  isEditing={el.id === editingId}
+                  onEditEnd={() => setEditingId(null)}
                   onPointerDown={onElementPointerDown}
                   onResizePointerDown={onResizePointerDown}
                   onResizeCornerPointerDown={onResizeCornerPointerDown}
+                  onResizeEdgePointerDown={onResizeEdgePointerDown}
                   onRotatePointerDown={onRotatePointerDown}
                   onUpdate={(patch) => updateElement(el.id, patch)} />
               ))}
@@ -1335,6 +1386,57 @@ export function DesignEditor({ designId }: { designId: string }) {
                   <Plus className="w-4 h-4" />
                   <span className="text-[9px] font-medium leading-none">Bigger</span>
                 </button>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Text alignment */}
+                {(["left", "center", "right", "justify"] as const).map((a) => {
+                  const Icon = a === "left" ? AlignLeft : a === "center" ? AlignCenter : a === "right" ? AlignRight : AlignJustify;
+                  const label = a === "left" ? "Left" : a === "center" ? "Center" : a === "right" ? "Right" : "Justify";
+                  const active = (selectedEl.textAlign ?? "left") === a;
+                  return (
+                    <button key={a} type="button"
+                      onClick={() => updateElement(selectedEl.id, { textAlign: a })}
+                      className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${active ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                      title={`Align ${label.toLowerCase()}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="text-[9px] font-medium leading-none">{label}</span>
+                    </button>
+                  );
+                })}
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Auto Fit */}
+                <div className="flex flex-col items-center gap-0.5">
+                  <select
+                    value={selectedEl.autoFit ?? "auto"}
+                    onChange={(e) => updateElement(selectedEl.id, { autoFit: e.target.value })}
+                    className={`h-7 text-[10px] rounded-lg border px-1.5 cursor-pointer ${isDark ? "bg-[#1A1A1A] border-[#3A3A3A] text-gray-200" : "bg-white border-gray-200 text-gray-700"}`}
+                    title="Auto fit lines"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="1">1 Line</option>
+                    <option value="2">2 Lines</option>
+                    <option value="3">3 Lines</option>
+                    <option value="4">4 Lines</option>
+                    <option value="5">5 Lines</option>
+                    <option value="unlimited">Unlimited</option>
+                  </select>
+                  <span className="text-[9px] font-medium leading-none">Auto Fit</span>
+                </div>
+                <div className={`w-px h-6 mx-0.5 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
+
+                {/* Balance Lines */}
+                <button
+                  type="button"
+                  onClick={() => updateElement(selectedEl.id, { balanceLines: !selectedEl.balanceLines })}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[44px] transition-colors ${selectedEl.balanceLines ? "bg-orange-500 text-white" : isDark ? "text-gray-300 hover:bg-white/10" : "text-gray-600 hover:bg-gray-100"}`}
+                  title="Balance lines"
+                >
+                  <WrapText className="w-4 h-4" />
+                  <span className="text-[9px] font-medium leading-none">Balance</span>
+                </button>
+
                 <div className={`w-px h-6 mx-1 ${isDark ? "bg-[#3A3A3A]" : "bg-gray-200"}`} />
               </>
             )}
@@ -1927,15 +2029,22 @@ function ToolBtn({ icon, label, onClick, isDark, danger }: { icon: React.ReactNo
 
 // ── Canvas element ─────────────────────────────────────────────────────────
 
-function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onResizeCornerPointerDown, onRotatePointerDown, onUpdate }: {
+function CanvasElement({ el, selected, isEditing, onEditEnd, onPointerDown, onResizePointerDown, onResizeCornerPointerDown, onResizeEdgePointerDown, onRotatePointerDown, onUpdate }: {
   el: DesignElement; selected: boolean;
+  isEditing?: boolean;
+  onEditEnd?: () => void;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
   onResizePointerDown: (e: React.PointerEvent, id: string) => void;
   onResizeCornerPointerDown: (e: React.PointerEvent, id: string, corner: "nw" | "ne" | "sw" | "se") => void;
+  onResizeEdgePointerDown: (e: React.PointerEvent, id: string, edge: "n" | "s" | "e" | "w") => void;
   onRotatePointerDown: (e: React.PointerEvent, id: string) => void;
   onUpdate: (patch: Partial<DesignElement>) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  // Enter edit mode when parent signals it (new element added, or second-click)
+  useEffect(() => { if (isEditing) setEditing(true); }, [isEditing]);
+  // Clear editing when element is deselected — prevents ghost text editors
+  useEffect(() => { if (!selected) setEditing(false); }, [selected]);
   // Pinch-to-resize state — tracks the initial pinch distance + element size
   const pinchRef = useRef<{ startDist: number; origW: number; origH: number } | null>(null);
 
@@ -1992,6 +2101,21 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
   };
   const onTouchEnd = () => { pinchRef.current = null; };
 
+  // Lock badge shown on selected locked elements
+  const lockedBadge = el.locked && selected ? (
+    <div style={{
+      position: "absolute", top: -26, left: "50%", transform: "translateX(-50%)",
+      background: "#374151", border: "2px solid white",
+      borderRadius: 12, padding: "2px 8px", zIndex: 1001,
+      display: "flex", alignItems: "center", gap: 3,
+      fontSize: 10, color: "white", fontWeight: 600, whiteSpace: "nowrap",
+      pointerEvents: "none",
+    }}>
+      <Lock style={{ width: 9, height: 9 }} />
+      LOCKED
+    </div>
+  ) : null;
+
   const rotateHandle = selected && !el.locked ? (
     <div
       data-rotate="true"
@@ -2007,35 +2131,87 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
     </div>
   ) : null;
 
-  // 4-corner resize handles, shown when selected and not locked
+  // 4-corner + 4-edge resize handles, shown when selected and not locked
   const cornerHandles = selected && !el.locked ? (
     <>
       <CornerHandle corner="nw" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "nw")} />
       <CornerHandle corner="ne" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "ne")} />
       <CornerHandle corner="sw" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "sw")} />
       <CornerHandle corner="se" onPointerDown={(e) => onResizeCornerPointerDown(e, el.id, "se")} />
+      <EdgeHandle edge="n" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "n")} />
+      <EdgeHandle edge="s" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "s")} />
+      <EdgeHandle edge="e" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "e")} />
+      <EdgeHandle edge="w" onPointerDown={(e) => onResizeEdgePointerDown(e, el.id, "w")} />
     </>
   ) : null;
 
   const sharedTouchProps = { onTouchStart, onTouchMove, onTouchEnd };
 
-  if (el.type === "text") return (
-    <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => !el.locked && setEditing(true)} {...sharedTouchProps}>
-      {rotateHandle}
-      {editing ? (
-        <textarea autoFocus value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} onBlur={() => setEditing(false)}
-          style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", border: "none", outline: "none", resize: "none", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, cursor: "text", touchAction: "auto" }} />
-      ) : (
-        <div style={{ width: "100%", height: "100%", background: el.textBackground ?? "transparent", fontFamily: el.fontFamily ?? "Inter", fontSize: el.fontSize ?? 32, color: el.color ?? "#1a1a1a", fontWeight: el.fontWeight ?? "normal", fontStyle: el.fontStyle ?? "normal", textDecoration: el.textDecoration, textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left", lineHeight: el.lineHeight ?? 1.3, letterSpacing: `${el.letterSpacing ?? 0}px`, wordBreak: "break-word", whiteSpace: "pre-wrap", overflow: "visible" }}>
-          {el.content}
-        </div>
-      )}
-      {cornerHandles}
-    </div>
-  );
+  if (el.type === "text") {
+    const lineClamp = el.autoFit && el.autoFit !== "auto" && el.autoFit !== "unlimited"
+      ? parseInt(el.autoFit, 10)
+      : (el.lineClamp ?? 0);
+    const clampStyle: React.CSSProperties = lineClamp > 0
+      ? { display: "-webkit-box", WebkitLineClamp: lineClamp, WebkitBoxOrient: "vertical" as const, overflow: "hidden", whiteSpace: "normal" }
+      : { whiteSpace: "pre-wrap", overflow: "visible" };
+    const sharedTextStyle: React.CSSProperties = {
+      width: "100%",
+      background: el.textBackground ?? "transparent",
+      fontFamily: el.fontFamily ?? "Inter",
+      fontSize: el.fontSize ?? 32,
+      color: el.color ?? "#1a1a1a",
+      fontWeight: el.fontWeight ?? "normal",
+      fontStyle: el.fontStyle ?? "normal",
+      textDecoration: el.textDecoration,
+      textAlign: (el.textAlign as React.CSSProperties["textAlign"]) ?? "left",
+      lineHeight: el.lineHeight ?? 1.3,
+      letterSpacing: `${el.letterSpacing ?? 0}px`,
+      wordBreak: "break-word",
+      ...(el.balanceLines ? { textWrap: "balance" } as React.CSSProperties : {}),
+    };
+    // Render paragraphs with optional paragraph spacing
+    const renderTextContent = () => {
+      if (el.paragraphSpacing && el.paragraphSpacing > 0 && lineClamp === 0) {
+        const paras = (el.content ?? "").split(/\n\n/);
+        return paras.map((para, i) => (
+          <React.Fragment key={i}>
+            <span style={{ display: "block" }}>{para}</span>
+            {i < paras.length - 1 && <span style={{ display: "block", height: el.paragraphSpacing }} />}
+          </React.Fragment>
+        ));
+      }
+      return el.content;
+    };
+    return (
+      <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} onDoubleClick={() => !el.locked && setEditing(true)} {...sharedTouchProps}>
+        {lockedBadge}
+        {rotateHandle}
+        {editing ? (
+          <textarea
+            autoFocus
+            value={el.content ?? ""}
+            onChange={(e) => onUpdate({ content: e.target.value })}
+            onFocus={(e) => {
+              // Auto-select placeholder text so any keystroke immediately replaces it
+              if (el.content === "Add your text here") e.target.select();
+            }}
+            onBlur={() => { setEditing(false); onEditEnd?.(); }}
+            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setEditing(false); onEditEnd?.(); } }}
+            style={{ ...sharedTextStyle, height: "100%", border: "none", outline: "none", resize: "none", cursor: "text", touchAction: "auto", whiteSpace: "pre-wrap" }}
+          />
+        ) : (
+          <div style={{ ...sharedTextStyle, height: "100%", ...clampStyle }}>
+            {renderTextContent()}
+          </div>
+        )}
+        {cornerHandles}
+      </div>
+    );
+  }
 
   if (el.type === "image") return (
     <div style={base} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} {...sharedTouchProps}>
+      {lockedBadge}
       {rotateHandle}
       {el.imageUrl
         // eslint-disable-next-line @next/next/no-img-element
@@ -2048,6 +2224,7 @@ function CanvasElement({ el, selected, onPointerDown, onResizePointerDown, onRes
   const shapeDef = SHAPES.find((s) => s.id === (el.shapeType ?? "rect")) ?? SHAPES[0];
   return (
     <div style={{ ...base, overflow: "visible" }} onPointerDown={(e) => onPointerDown(e, el.id)} onClick={(e) => e.stopPropagation()} {...sharedTouchProps}>
+      {lockedBadge}
       {rotateHandle}
       {shapeDef.render(el.fill ?? "#f97316", el.stroke, (el.strokeWidth ?? 0) > 0 ? el.strokeWidth : undefined)}
       {cornerHandles}
@@ -2077,6 +2254,34 @@ function CornerHandle({ corner, onPointerDown }: {
         background: "#f97316", border: "2.5px solid white", borderRadius: 5,
         cursor: cursors[corner], zIndex: 999, touchAction: "none",
         // Transparent padding to expand the touch target without increasing visible size
+        boxSizing: "content-box",
+      }}
+    />
+  );
+}
+
+/** Edge (midpoint) resize handle — single-axis resize (N/S = height, E/W = width) */
+function EdgeHandle({ edge, onPointerDown }: {
+  edge: "n" | "s" | "e" | "w";
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const isHorizontal = edge === "e" || edge === "w";
+  const cursors: Record<string, string> = { n: "n-resize", s: "s-resize", e: "e-resize", w: "w-resize" };
+  const pos: React.CSSProperties =
+    edge === "n" ? { top: -7, left: "50%", transform: "translateX(-50%)" } :
+    edge === "s" ? { bottom: -7, left: "50%", transform: "translateX(-50%)" } :
+    edge === "e" ? { right: -7, top: "50%", transform: "translateY(-50%)" } :
+                   { left: -7, top: "50%", transform: "translateY(-50%)" };
+  return (
+    <div
+      data-resize="true"
+      onPointerDown={onPointerDown}
+      style={{
+        position: "absolute", ...pos,
+        width: isHorizontal ? 14 : 36,
+        height: isHorizontal ? 36 : 14,
+        background: "white", border: "2px solid #f97316", borderRadius: 4,
+        cursor: cursors[edge], zIndex: 999, touchAction: "none",
         boxSizing: "content-box",
       }}
     />
@@ -2291,9 +2496,9 @@ function CanvasPanel({ isDark, data, onUpdate, onApplyPalette, onApplyTemplate, 
       <div className={`rounded-xl p-3 text-xs space-y-1 ${isDark ? "bg-white/5 text-gray-400" : "bg-gray-50 text-gray-500"}`}>
         <p className="font-semibold">Shortcuts</p>
         <p>⌘Z undo · ⌘⇧Z redo · ⌘D duplicate</p>
-        <p>Double-click text to edit</p>
+        <p>Click to select · Click again to edit text</p>
         <p>Orange circle above = rotate</p>
-        <p>Orange corner = resize</p>
+        <p>Orange corner = resize · Del = delete</p>
       </div>
     </div>
   );
@@ -2452,40 +2657,6 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
             <label className={lbl}>Content</label>
             <textarea value={el.content ?? ""} onChange={(e) => onUpdate({ content: e.target.value })} rows={3} className={`w-full text-xs rounded-md border px-2 py-1.5 resize-none ${sel}`} />
           </div>
-          {/* AI Rewrite actions */}
-          <div>
-            <p className={lbl}><Sparkles className="w-3 h-3 inline mr-1 text-orange-500" />AI Rewrite</p>
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { action: "viral",        label: "Make Viral" },
-                { action: "hook",         label: "Rewrite Hook" },
-                { action: "shorten",      label: "Shorten" },
-                { action: "expand",       label: "Expand" },
-                { action: "cta",          label: "Write CTA" },
-                { action: "luxury",       label: "Luxury Tone" },
-                { action: "casual",       label: "Casual" },
-                { action: "professional", label: "Professional" },
-                { action: "motivational", label: "Motivational" },
-                { action: "wellness",     label: "Wellness" },
-              ] as { action: string; label: string }[]).map(({ action, label }) => (
-                <button
-                  key={action}
-                  onClick={() => runAiRewrite(action)}
-                  disabled={!!aiRewriteAction}
-                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
-                    aiRewriteAction === action
-                      ? "bg-orange-500 text-white border-orange-500"
-                      : isDark
-                        ? "border-white/10 text-gray-300 hover:border-orange-500/60 hover:text-orange-400 disabled:opacity-40"
-                        : "border-gray-200 text-gray-600 hover:border-orange-400 hover:text-orange-500 disabled:opacity-40"
-                  }`}
-                >
-                  {aiRewriteAction === action ? <Loader2 className="w-2.5 h-2.5 animate-spin inline" /> : label}
-                </button>
-              ))}
-            </div>
-            {aiRewriteError && <p className="text-[10px] text-red-500 mt-1">{aiRewriteError}</p>}
-          </div>
           <div>
             <label className={lbl}>Font</label>
             <select value={el.fontFamily ?? "Inter"} onChange={(e) => onUpdate({ fontFamily: e.target.value })} className={`w-full h-8 text-xs rounded-md border px-2 ${sel}`}>
@@ -2523,11 +2694,39 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
             <Button size="sm" variant={el.fontStyle === "italic" ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ fontStyle: el.fontStyle === "italic" ? "normal" : "italic" })}><Italic className="w-3.5 h-3.5" /></Button>
             <Button size="sm" variant={(el.textDecoration ?? "").includes("underline") ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textDecoration: (el.textDecoration ?? "").includes("underline") ? (el.textDecoration ?? "").replace("underline","").trim() || undefined : ((el.textDecoration ?? "") + " underline").trim() })}><Underline className="w-3.5 h-3.5" /></Button>
             <Button size="sm" variant={(el.textDecoration ?? "").includes("line-through") ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textDecoration: (el.textDecoration ?? "").includes("line-through") ? (el.textDecoration ?? "").replace("line-through","").trim() || undefined : ((el.textDecoration ?? "") + " line-through").trim() })}><Strikethrough className="w-3.5 h-3.5" /></Button>
-            {(["left", "center", "right"] as const).map((a) => (
-              <Button key={a} size="sm" variant={el.textAlign === a ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textAlign: a })}>
-                {a === "left" ? <AlignLeft className="w-3.5 h-3.5" /> : a === "center" ? <AlignCenter className="w-3.5 h-3.5" /> : <AlignRight className="w-3.5 h-3.5" />}
-              </Button>
-            ))}
+          </div>
+          <div className="flex gap-1">
+            {(["left", "center", "right", "justify"] as const).map((a) => {
+              const Icon = a === "left" ? AlignLeft : a === "center" ? AlignCenter : a === "right" ? AlignRight : AlignJustify;
+              return (
+                <Button key={a} size="sm" variant={(el.textAlign ?? "left") === a ? "default" : "outline"} className="h-7 flex-1" onClick={() => onUpdate({ textAlign: a })}>
+                  <Icon className="w-3.5 h-3.5" />
+                </Button>
+              );
+            })}
+          </div>
+          {/* Auto Fit */}
+          <div>
+            <label className={lbl}>Auto Fit</label>
+            <select value={el.autoFit ?? "auto"} onChange={(e) => onUpdate({ autoFit: e.target.value })} className={`w-full h-8 text-xs rounded-md border px-2 ${sel}`}>
+              <option value="auto">Auto (no limit)</option>
+              <option value="1">1 Line</option>
+              <option value="2">2 Lines</option>
+              <option value="3">3 Lines</option>
+              <option value="4">4 Lines</option>
+              <option value="5">5 Lines</option>
+              <option value="unlimited">Unlimited</option>
+            </select>
+          </div>
+          {/* Balance Lines toggle */}
+          <div className="flex items-center justify-between">
+            <label className={lbl} style={{ margin: 0 }}><WrapText className="w-3 h-3 inline mr-1" />Balance Lines</label>
+            <button
+              onClick={() => onUpdate({ balanceLines: !el.balanceLines })}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${el.balanceLines ? "bg-orange-500" : isDark ? "bg-white/20" : "bg-gray-200"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${el.balanceLines ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
           </div>
           <div>
             <label className={lbl}><Highlighter className="w-3 h-3 inline mr-1" />Text highlight</label>
@@ -2544,6 +2743,44 @@ function ElementPanel({ el, isDark, onUpdate, onDelete, onDuplicate, onAlign, pa
           <div>
             <label className={lbl}>Line height: {el.lineHeight ?? 1.3}</label>
             <input type="range" min={0.8} max={3} step={0.05} value={el.lineHeight ?? 1.3} onChange={(e) => onUpdate({ lineHeight: Number(e.target.value) })} className="w-full" />
+          </div>
+          <div>
+            <label className={lbl}>Paragraph spacing: {el.paragraphSpacing ?? 0}px</label>
+            <input type="range" min={0} max={80} step={1} value={el.paragraphSpacing ?? 0} onChange={(e) => onUpdate({ paragraphSpacing: Number(e.target.value) || undefined })} className="w-full" />
+          </div>
+          {/* AI Rewrite — grouped at bottom of text section */}
+          <div>
+            <p className={sec} style={{ marginBottom: 6 }}><Sparkles className="w-3 h-3 inline mr-1 text-orange-500" />AI Rewrite</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { action: "viral",        label: "Make Viral" },
+                { action: "hook",         label: "Rewrite Hook" },
+                { action: "shorten",      label: "Shorten" },
+                { action: "expand",       label: "Expand" },
+                { action: "cta",          label: "Write CTA" },
+                { action: "luxury",       label: "Luxury Tone" },
+                { action: "casual",       label: "Casual" },
+                { action: "professional", label: "Professional" },
+                { action: "motivational", label: "Motivational" },
+                { action: "wellness",     label: "Wellness" },
+              ] as { action: string; label: string }[]).map(({ action, label }) => (
+                <button
+                  key={action}
+                  onClick={() => runAiRewrite(action)}
+                  disabled={!!aiRewriteAction}
+                  className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                    aiRewriteAction === action
+                      ? "bg-orange-500 text-white border-orange-500"
+                      : isDark
+                        ? "border-white/10 text-gray-300 hover:border-orange-500/60 hover:text-orange-400 disabled:opacity-40"
+                        : "border-gray-200 text-gray-600 hover:border-orange-400 hover:text-orange-500 disabled:opacity-40"
+                  }`}
+                >
+                  {aiRewriteAction === action ? <Loader2 className="w-2.5 h-2.5 animate-spin inline" /> : label}
+                </button>
+              ))}
+            </div>
+            {aiRewriteError && <p className="text-[10px] text-red-500 mt-1">{aiRewriteError}</p>}
           </div>
         </div>
       )}

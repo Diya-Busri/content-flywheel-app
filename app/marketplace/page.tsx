@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import MarketplaceClient from "./MarketplaceClient";
+import { isAdmin } from "@/lib/is-admin";
 
 const SITE_URL = "https://contentflywheel.co.uk";
 
@@ -38,10 +39,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function MarketplacePage() {
+export default async function MarketplacePage() {
+  const admin = await isAdmin();
   return (
     <Suspense fallback={<div style={{ padding: "80px", textAlign: "center", color: "#9ca3af" }}>Loading…</div>}>
-      <MarketplaceClient />
+      <MarketplaceClient isAdmin={admin} />
     </Suspense>
   );
 }

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Youtube } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export function LegalPageLayout({ children }: { children: React.ReactNode }) {
@@ -95,7 +94,7 @@ export function LegalPageLayout({ children }: { children: React.ReactNode }) {
               <ul className="mt-4 flex gap-4">
                 <li>
                   <a
-                    href="https://x.com"
+                    href="https://x.com/ContentFlywhee1"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:text-white"
@@ -106,7 +105,7 @@ export function LegalPageLayout({ children }: { children: React.ReactNode }) {
                 </li>
                 <li>
                   <a
-                    href="https://instagram.com"
+                    href="https://instagram.com/content.flywheel"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:text-white"
@@ -117,13 +116,13 @@ export function LegalPageLayout({ children }: { children: React.ReactNode }) {
                 </li>
                 <li>
                   <a
-                    href="https://youtube.com"
+                    href="https://tiktok.com/@contentflywheelofficial"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:border-slate-600 dark:text-slate-400 dark:hover:text-white"
-                    aria-label="YouTube"
+                    aria-label="TikTok"
                   >
-                    <Youtube className="h-5 w-5" />
+                    <span className="text-sm font-bold">TK</span>
                   </a>
                 </li>
               </ul>

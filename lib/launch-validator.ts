@@ -185,7 +185,9 @@ export function validateDesign(
   const hasThumbnail = !!d.thumbnailDesignId || !!d.thumbnailUrl;
   const hasMockup    = !!d.mockupUrl;
   const hasSocial    = !!d.socialUrl;
-  const hasCover     = !!d.coverUrl || !!d.selectedConceptUrl;
+  // Template-based covers have no URL — they're design DB records with designId.
+  // Accept any of: a cover URL, a selected concept URL, or at least one editable design record.
+  const hasCover     = !!d.coverUrl || !!d.selectedConceptUrl || hasEditConcept;
   const assetCount   = d.assetsCount ?? 0;
 
   const checks: AssetCheck[] = [
@@ -194,7 +196,7 @@ export function validateDesign(
       "Product cover generated",
       true,
       hasConcept && hasCover,
-      "No cover concept was generated — cover image is required",
+      "No cover concepts were generated — retry the Design Agent",
     ),
     check(
       "editable-design",

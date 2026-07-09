@@ -6,8 +6,8 @@
  * Easily extended: add new tools here (Feature Flags, Cache Refresh, etc.)
  */
 
-import { useState } from "react";
-import { FlaskConical, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FlaskConical, RotateCcw, ChevronDown, ChevronUp, Clapperboard } from "lucide-react";
 
 interface AdminToolbarProps {
   isAdmin?: boolean;
@@ -16,8 +16,32 @@ interface AdminToolbarProps {
 export function AdminToolbar({ isAdmin }: AdminToolbarProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [demoMode, setDemoMode] = useState(() => {
+    try {
+      return localStorage.getItem("cf_launch_demo_mode") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      setDemoMode(localStorage.getItem("cf_launch_demo_mode") === "1");
+    } catch {}
+  }, []);
 
   if (!isAdmin) return null;
+
+  const toggleDemoMode = () => {
+    setDemoMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem("cf_launch_demo_mode", next ? "1" : "0");
+        window.dispatchEvent(new CustomEvent("cf:launch-demo-mode", { detail: { enabled: next } }));
+      } catch {}
+      return next;
+    });
+  };
 
   const reset = async () => {
     setBusy("reset");
@@ -98,6 +122,19 @@ export function AdminToolbar({ isAdmin }: AdminToolbarProps) {
           >
             <RotateCcw size={12} className="shrink-0" />
             <span className="hidden md:block">{busy === "restore" ? "Restoring…" : "Restore"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleDemoMode}
+            className={[
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white text-[11px] font-semibold transition-colors w-full",
+              demoMode ? "bg-orange-500 hover:bg-orange-600" : "bg-zinc-700 hover:bg-zinc-800",
+            ].join(" ")}
+            title="Local-only Launch with AI cinematic demo mode"
+          >
+            <Clapperboard size={12} className="shrink-0" />
+            <span className="hidden md:block">{demoMode ? "Demo Mode On" : "Demo Mode"}</span>
           </button>
         </div>
       )}

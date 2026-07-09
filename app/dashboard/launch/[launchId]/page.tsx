@@ -691,11 +691,14 @@ export default function LaunchExecutionPage() {
   }, [activeIdx, demoMode]);
 
   useEffect(() => {
-    if (overallStatus !== "completed") return;
+    // Redirect on both "completed" and "awaiting_approval" (partial success still goes to workspace).
+    // "awaiting_approval" means some non-critical assets need attention but the launch is done.
+    if (overallStatus !== "completed" && overallStatus !== "awaiting_approval") return;
     // Auto-save all stage summaries to the Founder Knowledge Base
     fetch(`/api/launch/${launchId}/save-to-library`, { method: "POST" }).catch(() => {});
     const seconds = demoMode ? 6 : 3;
-    if (demoMode) setShowCompletionReveal(true);
+    // Only show the demo reveal on a fully clean completion
+    if (demoMode && overallStatus === "completed") setShowCompletionReveal(true);
     setRedirectCountdown(seconds);
     const interval = setInterval(() => {
       setRedirectCountdown(prev => {
@@ -906,12 +909,19 @@ export default function LaunchExecutionPage() {
 
     const finalStatus: LaunchStatus = hasNeedsAttention ? "awaiting_approval" : "completed";
     setOverallStatus(finalStatus);
+
+    // Sync overall progress to the store readiness score when there are issues.
+    // This prevents the "100% vs 96%" inconsistency where the bar says complete
+    // but the readiness panel shows a lower number.
     if (hasNeedsAttention) {
-      // Override the DB status the store agent may have already written
+      const storeScore = (allResults.store as Record<string, unknown> | undefined)?.readinessScore as number | undefined;
+      const syncedPct = storeScore ? Math.min(storeScore, 97) : 97;
+      setOverallPct(syncedPct);
+
       await fetch(`/api/launch/${launchId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ status: "awaiting_approval" }),
+        body:    JSON.stringify({ status: "awaiting_approval", progress: syncedPct }),
       }).catch(() => {});
     }
   }, [buildSaveProgress, demoMode, launchId]);
@@ -971,8 +981,10 @@ export default function LaunchExecutionPage() {
           setOverallStatus("running");
         }
 
-        /* Run the pipeline (only if not already completed) */
-        if (data.status !== "completed") {
+        /* Run the pipeline (only if not already completed or awaiting review).
+         * "awaiting_approval" = all stages ran but some assets need attention —
+         * restore the completed UI and redirect, don't re-run the pipeline. */
+        if (data.status !== "completed" && data.status !== "awaiting_approval") {
           setPipelineActive(true);
           try {
             await runPipeline(data);
@@ -980,7 +992,7 @@ export default function LaunchExecutionPage() {
             setPipelineActive(false);
           }
         } else {
-          /* Already completed — restore completed UI from saved results */
+          /* Already completed (or awaiting review) — restore completed UI from saved results */
           const saved = data.stageResults ?? {} as LaunchStageResults;
           const restoredValidations: Record<number, StageValidation | undefined> = {};
           const restoredStatuses: AgentStatus[] = PIPELINE_STAGES.map((stage, si) => {
@@ -993,7 +1005,9 @@ export default function LaunchExecutionPage() {
           });
           setStageValidations(restoredValidations);
           setAgentStatuses(restoredStatuses);
-          setOverallPct(100);
+          // For "awaiting_approval" use the stored progress (synced to store readiness).
+          // For "completed" fall back to 100.
+          setOverallPct(data.status === "awaiting_approval" ? (data.progress ?? 97) : 100);
 
           /* Restore per-card completion summaries */
           const summaries: Record<number, string> = {};
