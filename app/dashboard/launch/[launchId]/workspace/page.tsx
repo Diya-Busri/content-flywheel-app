@@ -378,11 +378,15 @@ export default function ExecutionWorkspacePage() {
   }, [loadProject]);
 
   useEffect(() => {
-    if (!isComplete || !readDemoMode()) return;
+    // Use project?.status directly — isComplete is declared after the early-return guard
+    // so referencing it here (before that guard) would cause a TDZ ReferenceError.
+    const done =
+      project?.status === "completed" || project?.status === "awaiting_approval";
+    if (!done || !readDemoMode()) return;
     setShowDemoReveal(true);
     const timeout = setTimeout(() => setShowDemoReveal(false), 2000);
     return () => clearTimeout(timeout);
-  }, [isComplete]);
+  }, [project?.status]);
 
   /* ── Regenerate handler ── */
   const handleRegenerate = useCallback(async (stageId: string) => {
