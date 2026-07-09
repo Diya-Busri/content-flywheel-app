@@ -49,13 +49,12 @@ type RecommendedCreator = {
   followerCount: number;
 };
 
-const SORT_TABS: { id: Sort; label: string; emoji: string }[] = [
-  { id: "trending",     label: "Trending",    emoji: "🔥" },
-  { id: "best-sellers", label: "Best Sellers", emoji: "⭐" },
-  { id: "newest",       label: "New",          emoji: "🆕" },
-  { id: "price-asc",   label: "Low Price",    emoji: "💸" },
-  { id: "price-desc",  label: "High Price",   emoji: "💰" },
-  { id: "free",        label: "Free",          emoji: "🎁" },
+const TAB_DEFS: { id: string; label: string; emoji: string; sort: Sort }[] = [
+  { id: "featured",     label: "Featured",     emoji: "⭐", sort: "trending"     },
+  { id: "trending",     label: "Trending",     emoji: "🔥", sort: "trending"     },
+  { id: "best-sellers", label: "Best Sellers", emoji: "🏆", sort: "best-sellers" },
+  { id: "new",          label: "New",          emoji: "🆕", sort: "newest"       },
+  { id: "free",         label: "Free",         emoji: "🎁", sort: "free"         },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -662,12 +661,19 @@ function ProductCard({
           </button>
 
           {/* Title */}
-          <h3 style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: 700, color: "#111827", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: "38px" }}>
+          <h3 style={{ margin: "0 0 5px", fontSize: "14px", fontWeight: 700, color: "#111827", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: "38px" }}>
             {item.title}
           </h3>
 
+          {/* Description snippet */}
+          {item.description && (
+            <p style={{ margin: "0 0 6px", fontSize: "11px", color: "#6b7280", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+              {item.description}
+            </p>
+          )}
+
           {/* Star rating — always reserve height so cards align */}
-          <div style={{ minHeight: "24px", marginBottom: "8px" }}>
+          <div style={{ minHeight: "22px", marginBottom: "8px" }}>
             {item.avgRating !== null && item.reviewCount > 0 && (
               <StarRow rating={item.avgRating} count={item.reviewCount} />
             )}
@@ -705,6 +711,7 @@ function ProductCard({
                   </span>
                 );
               })()}
+              <TrustScoreBadge userId={item.creatorUserId} size="sm" />
             </Link>
           </div>
         </div>
@@ -807,45 +814,45 @@ function CreatorCard({
 }) {
   const bg = creator.accentColor ?? "#f97316";
   return (
-    <div style={{ flexShrink: 0, width: "200px", borderRadius: "16px", background: "#fff", border: "1px solid #f0f0f0", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", transition: "box-shadow 0.15s", position: "relative" }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.10)"; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)"; }}
+    <div style={{ flexShrink: 0, width: "200px", borderRadius: "14px", background: "#fff", border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", transition: "box-shadow 0.15s, border-color 0.15s", position: "relative" }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 20px rgba(0,0,0,0.10)"; (e.currentTarget as HTMLDivElement).style.borderColor = "#fdba74"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)"; (e.currentTarget as HTMLDivElement).style.borderColor = "#e5e7eb"; }}
     >
-      {/* Banner stripe */}
-      <div style={{ height: "52px", background: bg, opacity: 0.85, position: "relative" }}>
+      {/* Colour strip */}
+      <div style={{ height: "44px", background: `linear-gradient(135deg, ${bg}, ${bg}cc)`, position: "relative" }}>
         {isAdmin && onCreatorAdminAction && (
           <CreatorAdminMenu creator={creator} onAction={onCreatorAdminAction} />
         )}
       </div>
-      <div style={{ padding: "0 14px 14px", marginTop: "-20px" }}>
+      <div style={{ padding: "0 12px 12px", marginTop: "-18px" }}>
         {/* Avatar */}
         {creator.profileImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={creator.profileImageUrl} alt={creator.displayName}
-            style={{ width: "44px", height: "44px", borderRadius: "50%", border: "3px solid #fff", objectFit: "cover", marginBottom: "8px" }} />
+            style={{ width: "40px", height: "40px", borderRadius: "50%", border: "3px solid #fff", objectFit: "cover", marginBottom: "6px" }} />
         ) : (
-          <div style={{ width: "44px", height: "44px", borderRadius: "50%", background: bg, border: "3px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: 800, color: "#fff", marginBottom: "8px" }}>
+          <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: bg, border: "3px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: 800, color: "#fff", marginBottom: "6px" }}>
             {creatorInitials(creator.displayName)}
           </div>
         )}
-        <p style={{ margin: "0 0 2px", fontSize: "13px", fontWeight: 800, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{creator.displayName}</p>
-        <p style={{ margin: "0 0 8px", fontSize: "11px", color: "#6b7280" }}>
-          {creator.productCount} product{creator.productCount !== 1 ? "s" : ""}
-          {creator.followerCount > 0 && ` · ${creator.followerCount} follower${creator.followerCount !== 1 ? "s" : ""}`}
-        </p>
-        {creator.bio && (
-          <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#6b7280", lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-            {creator.bio}
-          </p>
-        )}
-        <div style={{ display: "flex", gap: "6px" }}>
+        {/* Name + level */}
+        <p style={{ margin: "0 0 1px", fontSize: "13px", fontWeight: 800, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{creator.displayName}</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "6px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "10px", color: "#9ca3af" }}>
+            {creator.productCount} product{creator.productCount !== 1 ? "s" : ""}
+          </span>
+          <TrustScoreBadge userId={creator.userId} size="sm" />
+        </div>
+        {/* Actions */}
+        <div style={{ display: "flex", gap: "5px" }}>
           <button
             onClick={() => onFollow(creator.userId)}
-            style={{ flex: 1, padding: "5px 0", borderRadius: "8px", fontSize: "11px", fontWeight: 700, cursor: "pointer", border: isFollowing ? "1px solid #e5e7eb" : `1px solid ${bg}`, background: isFollowing ? "#f9fafb" : bg, color: isFollowing ? "#374151" : "#fff", transition: "all 0.15s" }}
+            style={{ flex: 1, padding: "5px 0", borderRadius: "7px", fontSize: "11px", fontWeight: 700, cursor: "pointer", border: isFollowing ? "1px solid #e5e7eb" : `1px solid ${bg}`, background: isFollowing ? "#f9fafb" : bg, color: isFollowing ? "#374151" : "#fff", transition: "all 0.15s" }}
           >
             {isFollowing ? "✓ Following" : "+ Follow"}
           </button>
           <a href={`/c/${creator.userId}`}
-            style={{ padding: "5px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: 700, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", textDecoration: "none", whiteSpace: "nowrap" }}
+            style={{ padding: "5px 9px", borderRadius: "7px", fontSize: "11px", fontWeight: 700, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", textDecoration: "none", whiteSpace: "nowrap" }}
           >
             Store →
           </a>
@@ -863,6 +870,9 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
   const [niche, setNiche]         = useState("");
   const [format, setFormat]       = useState("");
   const [sort, setSort]           = useState<Sort>("trending");
+  const [activeTab, setActiveTab] = useState<string>("trending");
+  const [filterOpen, setFilterOpen] = useState<boolean>(false);
+  const [featuredItems, setFeaturedItems] = useState<MarketplaceItem[]>([]);
   const [page, setPage]           = useState(1);
   const [inputValue, setInputValue] = useState("");
   const [quickView, setQuickView]   = useState<MarketplaceItem | null>(null);
@@ -1155,6 +1165,17 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
       .catch(() => {});
   }, []);
 
+  // Fetch featured items once for the carousel
+  useEffect(() => {
+    fetch("/api/marketplace?sort=trending&page=1")
+      .then((r) => r.json())
+      .then((d) => {
+        const featured = (d.items as MarketplaceItem[]).filter((i) => i.featured);
+        if (featured.length > 0) setFeaturedItems(featured.slice(0, 10));
+      })
+      .catch(() => {});
+  }, []);
+
   // Fetch following feed + recommended creators + existing follows once
   useEffect(() => {
     fetch("/api/marketplace/following-feed")
@@ -1201,6 +1222,12 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
     });
   }, [followedCreators]);
 
+  const handleTabChange = useCallback((tabId: string, tabSort: Sort) => {
+    setActiveTab(tabId);
+    setSort(tabSort);
+    setPage(1);
+  }, []);
+
   const clearFilters = () => { setNiche(""); setFormat(""); setInputValue(""); setQ(""); setMinPrice(""); setMaxPrice(""); setMinRating(""); setPage(1); };
   const hasFilters = !!(niche || format || q || minPrice || maxPrice || minRating);
   const totalPages = data ? Math.ceil(data.total / data.pageSize) : 0;
@@ -1208,156 +1235,161 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
   return (
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Helvetica Neue', Arial, sans-serif" }}>
 
-      {/* ── Compact Hero ───────────────────────────────────────────────────────── */}
-      <div style={{ background: "#0B0B0F", padding: "28px 24px 22px", textAlign: "center" }}>
-        {/* Logo + wishlist row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "18px", position: "relative" }}>
-          <a href="/">
-            <img src="/logo.png" alt="Content Flywheel" style={{ height: "44px", objectFit: "contain" }} />
-          </a>
-          <div style={{ position: "absolute", right: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-            {wishlist.size > 0 && (
-              isSignedIn ? (
-                <Link
-                  href="/dashboard/wishlist"
-                  title={`${wishlist.size} saved`}
-                  style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}
-                >
-                  ❤️ {wishlist.size} saved
-                </Link>
-              ) : (
-                <span
-                  title="Sign in to keep your wishlist across devices"
-                  style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700 }}
-                >
-                  ❤️ {wishlist.size} saved
-                </span>
-              )
-            )}
-            {!isSignedIn && (
-              <a href="/sign-in" style={{ background: "rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "999px", padding: "6px 14px", fontSize: "12px", fontWeight: 700, color: "#fb923c", textDecoration: "none", whiteSpace: "nowrap" }}>
-                Sign in →
-              </a>
-            )}
-            {isSignedIn && (
-              <a href="/dashboard" style={{ background: "rgba(249,115,22,0.12)", border: "1px solid rgba(249,115,22,0.25)", borderRadius: "999px", padding: "6px 14px", fontSize: "12px", fontWeight: 700, color: "#fb923c", textDecoration: "none", whiteSpace: "nowrap" }}>
-                Dashboard
-              </a>
+      {/* ── Compact Hero ─────────────────────────────────────────────────────── */}
+      {/* ── Compact Hero ─────────────────────────────────────────────────────── */}
+      <div style={{ background: "#0B0B0F", padding: "14px 24px 18px" }}>
+        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          {/* Top row: logo + nav */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+            <a href="/"><img src="/logo.png" alt="Content Flywheel" style={{ height: "34px", objectFit: "contain" }} /></a>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {wishlist.size > 0 && (
+                isSignedIn
+                  ? <Link href="/dashboard/wishlist" style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}>❤️ {wishlist.size} saved</Link>
+                  : <span style={{ background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)", borderRadius: "999px", padding: "5px 12px", display: "flex", alignItems: "center", gap: "5px", color: "#f9a8d4", fontSize: "12px", fontWeight: 700 }}>❤️ {wishlist.size}</span>
+              )}
+              {!isSignedIn
+                ? <a href="/sign-in" style={{ background: "rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: "999px", padding: "5px 13px", fontSize: "12px", fontWeight: 700, color: "#fb923c", textDecoration: "none" }}>Sign in →</a>
+                : <a href="/dashboard" style={{ background: "rgba(249,115,22,0.12)", border: "1px solid rgba(249,115,22,0.25)", borderRadius: "999px", padding: "5px 13px", fontSize: "12px", fontWeight: 700, color: "#fb923c", textDecoration: "none" }}>Dashboard</a>
+              }
+            </div>
+          </div>
+          {/* Search */}
+          <div style={{ maxWidth: "560px", margin: "0 auto", position: "relative" }}>
+            <Search style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#6b7280", width: "15px", height: "15px", pointerEvents: "none" }} />
+            <input
+              ref={searchRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Search products, niches, formats…"
+              style={{ width: "100%", padding: "10px 40px 10px 42px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", fontSize: "14px", background: "#1a1a22", color: "#fff", outline: "none", boxSizing: "border-box" }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = "#f97316"; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
+            />
+            {inputValue && (
+              <button onClick={() => { setInputValue(""); setQ(""); }} style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#6b7280", cursor: "pointer", padding: "4px", display: "flex" }}>
+                <X style={{ width: "14px", height: "14px" }} />
+              </button>
             )}
           </div>
         </div>
+      </div>
 
-        <h1 style={{ margin: "0 0 8px", fontSize: "clamp(22px,4vw,38px)", fontWeight: 800, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.15 }}>
-          Digital Product Marketplace
-        </h1>
-        <p style={{ margin: "0 0 20px", fontSize: "15px", color: "#6b7280" }}>
-          Templates, guides, courses & more from independent creators
-        </p>
-
-        {/* Search */}
-        <div style={{ maxWidth: "540px", margin: "0 auto 16px", position: "relative" }}>
-          <Search style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)", color: "#6b7280", width: "17px", height: "17px", pointerEvents: "none" }} />
-          <input
-            ref={searchRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Search products, niches, formats…"
-            style={{ width: "100%", padding: "12px 44px 12px 48px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.08)", fontSize: "15px", background: "#1a1a22", color: "#fff", outline: "none", boxSizing: "border-box", transition: "border-color 0.15s" }}
-            onFocus={(e) => { (e.currentTarget as HTMLInputElement).style.borderColor = "#f97316"; }}
-            onBlur={(e) => { (e.currentTarget as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.08)"; }}
-          />
-          {inputValue && (
-            <button onClick={() => { setInputValue(""); setQ(""); }} style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#6b7280", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center" }}>
-              <X style={{ width: "15px", height: "15px" }} />
-            </button>
-          )}
-        </div>
-
-        {/* Sort tabs + leaderboard inline */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-          {SORT_TABS.map((tab) => (
+      {/* ── Tab Bar (sticky) ─────────────────────────────────────────────────── */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 20 }}>
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "stretch", overflowX: "auto", scrollbarWidth: "none" }}>
+          {TAB_DEFS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setSort(tab.id); setPage(1); }}
+              onClick={() => handleTabChange(tab.id, tab.sort)}
               style={{
-                padding: "6px 14px", borderRadius: "100px", border: "none", cursor: "pointer",
-                fontSize: "12px", fontWeight: 700, transition: "all 0.15s",
-                background: sort === tab.id ? "#f97316" : "rgba(255,255,255,0.08)",
-                color: sort === tab.id ? "#fff" : "#9ca3af",
-                boxShadow: sort === tab.id ? "0 3px 10px rgba(249,115,22,0.35)" : "none",
+                padding: "13px 16px",
+                border: "none",
+                borderBottom: `3px solid ${activeTab === tab.id ? "#f97316" : "transparent"}`,
+                background: "transparent",
+                color: activeTab === tab.id ? "#f97316" : "#6b7280",
+                fontSize: "13px",
+                fontWeight: activeTab === tab.id ? 800 : 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.15s",
+                flexShrink: 0,
               }}
             >
               {tab.emoji} {tab.label}
             </button>
           ))}
-          <a href="/marketplace/leaderboard" style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12px", fontWeight: 700, color: "#fbbf24", textDecoration: "none", background: "rgba(251,191,36,0.1)", padding: "6px 12px", borderRadius: "999px", border: "1px solid rgba(251,191,36,0.2)", marginLeft: "4px" }}>
+          <a href="/marketplace/leaderboard" style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 700, color: "#fbbf24", textDecoration: "none", padding: "0 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
             🏆 Top Sellers
           </a>
+          <button
+            onClick={() => setFilterOpen((o) => !o)}
+            style={{
+              marginLeft: "auto", padding: "7px 13px", borderRadius: "8px",
+              border: `1px solid ${hasFilters ? "#fdba74" : "#e5e7eb"}`,
+              background: hasFilters ? "#fff7ed" : "#fff",
+              color: hasFilters ? "#ea580c" : "#374151",
+              fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+              display: "flex", alignItems: "center", gap: "5px", alignSelf: "center",
+            }}
+          >
+            ⚙️ Filters{hasFilters ? ` (${[niche, format, minPrice, maxPrice, minRating].filter(Boolean).length})` : ""}
+          </button>
         </div>
-      </div>
 
-      {/* ── Filters bar ─────────────────────────────────────────────────────────── */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 24px", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ maxWidth: "1200px", margin: "0 auto", display: "flex", gap: "12px", alignItems: "center", overflowX: "auto", padding: "10px 0", scrollbarWidth: "none" }}>
-          <span style={{ fontSize: "12px", fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: "0.05em" }}>Filter</span>
-
-          <select value={niche} onChange={(e) => { setNiche(e.target.value); setPage(1); }}
-            style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: niche ? "#fff7ed" : "#fff", color: niche ? "#ea580c" : "#374151", cursor: "pointer", fontWeight: niche ? 700 : 400 }}>
-            <option value="">All niches</option>
-            {(data?.niches ?? []).map((n) => <option key={n} value={n.toLowerCase()}>{n}</option>)}
-          </select>
-
-          <select value={format} onChange={(e) => { setFormat(e.target.value); setPage(1); }}
-            style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: format ? "#fff7ed" : "#fff", color: format ? "#ea580c" : "#374151", cursor: "pointer", fontWeight: format ? 700 : 400 }}>
-            <option value="">All formats</option>
-            {(data?.formats ?? []).map((f) => <option key={f} value={f.toLowerCase()}>{f}</option>)}
-          </select>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}>
-            <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>£</span>
-            <input type="number" value={minPrice} onChange={(e) => { setMinPrice(e.target.value); setPage(1); }} placeholder="Min" min={0}
-              style={{ width: "56px", padding: "6px 8px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: "#fff" }} />
-            <span style={{ fontSize: "12px", color: "#d1d5db" }}>–</span>
-            <input type="number" value={maxPrice} onChange={(e) => { setMaxPrice(e.target.value); setPage(1); }} placeholder="Max" min={0}
-              style={{ width: "56px", padding: "6px 8px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: "#fff" }} />
+        {/* Collapsible filter panel */}
+        {filterOpen && (
+          <div style={{ borderTop: "1px solid #f3f4f6", padding: "12px 24px", background: "#fafafa" }}>
+            <div style={{ maxWidth: "1200px", margin: "0 auto", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              <select value={niche} onChange={(e) => { setNiche(e.target.value); setPage(1); }}
+                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: niche ? "#fff7ed" : "#fff", color: niche ? "#ea580c" : "#374151", cursor: "pointer", fontWeight: niche ? 700 : 400 }}>
+                <option value="">All niches</option>
+                {(data?.niches ?? []).map((n) => <option key={n} value={n.toLowerCase()}>{n}</option>)}
+              </select>
+              <select value={format} onChange={(e) => { setFormat(e.target.value); setPage(1); }}
+                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: format ? "#fff7ed" : "#fff", color: format ? "#ea580c" : "#374151", cursor: "pointer", fontWeight: format ? 700 : 400 }}>
+                <option value="">All formats</option>
+                {(data?.formats ?? []).map((f) => <option key={f} value={f.toLowerCase()}>{f}</option>)}
+              </select>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>£</span>
+                <input type="number" value={minPrice} onChange={(e) => { setMinPrice(e.target.value); setPage(1); }} placeholder="Min" min={0}
+                  style={{ width: "58px", padding: "6px 8px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }} />
+                <span style={{ fontSize: "12px", color: "#d1d5db" }}>–</span>
+                <input type="number" value={maxPrice} onChange={(e) => { setMaxPrice(e.target.value); setPage(1); }} placeholder="Max" min={0}
+                  style={{ width: "58px", padding: "6px 8px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }} />
+              </div>
+              <select value={minRating} onChange={(e) => { setMinRating(e.target.value); setPage(1); }}
+                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: minRating ? "#fff7ed" : "#fff", color: minRating ? "#ea580c" : "#374151", cursor: "pointer", fontWeight: minRating ? 700 : 400 }}>
+                <option value="">Any rating</option>
+                <option value="4">⭐ 4.0+</option>
+                <option value="3">⭐ 3.0+</option>
+              </select>
+              <select
+                value={sort === "price-asc" ? "price-asc" : sort === "price-desc" ? "price-desc" : ""}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setSort(e.target.value as Sort);
+                  } else {
+                    setSort(TAB_DEFS.find((t) => t.id === activeTab)?.sort ?? "trending");
+                  }
+                  setPage(1);
+                }}
+                style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", cursor: "pointer" }}>
+                <option value="">Price: default</option>
+                <option value="price-asc">Price: low → high</option>
+                <option value="price-desc">Price: high → low</option>
+              </select>
+              {hasFilters && (
+                <button onClick={clearFilters}
+                  style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <X style={{ width: "12px", height: "12px" }} /> Clear all
+                </button>
+              )}
+              {data && (
+                <span style={{ marginLeft: "auto", fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>
+                  {data.total.toLocaleString()} product{data.total !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
           </div>
-
-          <select value={minRating} onChange={(e) => { setMinRating(e.target.value); setPage(1); }}
-            style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px", background: minRating ? "#fff7ed" : "#fff", color: minRating ? "#ea580c" : "#374151", cursor: "pointer", fontWeight: minRating ? 700 : 400 }}>
-            <option value="">All ratings</option>
-            <option value="4">⭐ 4.0+</option>
-            <option value="3">⭐ 3.0+</option>
-          </select>
-
-          {hasFilters && (
-            <button onClick={clearFilters}
-              style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "4px" }}>
-              <X style={{ width: "12px", height: "12px" }} /> Clear
-            </button>
-          )}
-
-          {data && (
-            <span style={{ marginLeft: "auto", fontSize: "12px", color: "#9ca3af", whiteSpace: "nowrap", fontWeight: 600 }}>
-              {data.total.toLocaleString()} product{data.total !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* ── AI Recommended For You ───────────────────────────────────────────── */}
-      {recommended.length > 0 && !hasFilters && (
-        <div style={{ background: "linear-gradient(to right, #0f0f18, #1a0f2e)", borderBottom: "1px solid rgba(139,92,246,0.2)", padding: "20px 0" }}>
+      {/* ── Featured Carousel ─────────────────────────────────────────────────── */}
+      {featuredItems.length > 0 && !hasFilters && (
+        <div style={{ background: "linear-gradient(135deg, #0f0f1a 0%, #1a0f2e 100%)", padding: "24px 0" }}>
           <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-              <Sparkles style={{ width: "16px", height: "16px", color: "#a78bfa" }} />
-              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#e9d5ff" }}>Recommended for you</h2>
-              <span style={{ fontSize: "11px", color: "#7c3aed", background: "rgba(124,58,237,0.15)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>AI picks</span>
+              <span style={{ fontSize: "16px" }}>⭐</span>
+              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#fff" }}>Featured Products</h2>
+              <span style={{ fontSize: "11px", color: "#f97316", background: "rgba(249,115,22,0.15)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700, border: "1px solid rgba(249,115,22,0.3)" }}>Handpicked</span>
             </div>
-            <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
-              {recommended.map((item) => (
-                <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
-                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); }} isAdmin={isAdmin} onAdminAction={handleAdminAction} />
+            <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
+              {featuredItems.map((item) => (
+                <div key={item.id} style={{ flexShrink: 0, width: "260px" }}>
+                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); setFilterOpen(true); }} isAdmin={isAdmin} onAdminAction={handleAdminAction} />
                 </div>
               ))}
             </div>
@@ -1365,14 +1397,33 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         </div>
       )}
 
-      {/* ── Following strip ──────────────────────────────────────────────────── */}
-      {followingFeed.length > 0 && !hasFilters && (
-        <div style={{ background: "linear-gradient(to right, #0c1220, #0f1a2e)", borderBottom: "1px solid rgba(59,130,246,0.2)", padding: "20px 0" }}>
+      {/* ── AI Recommended For You ────────────────────────────────────────────── */}
+      {recommended.length > 0 && !hasFilters && (
+        <div style={{ background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "20px 0" }}>
           <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-              <span style={{ fontSize: "16px" }}>👥</span>
-              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#bfdbfe" }}>From creators you follow</h2>
-              <span style={{ fontSize: "11px", color: "#3b82f6", background: "rgba(59,130,246,0.15)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>New</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+              <Sparkles style={{ width: "15px", height: "15px", color: "#8b5cf6" }} />
+              <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#111827" }}>Recommended for you</h2>
+              <span style={{ fontSize: "10px", color: "#7c3aed", background: "rgba(124,58,237,0.1)", padding: "2px 7px", borderRadius: "999px", fontWeight: 700 }}>AI picks</span>
+            </div>
+            <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
+              {recommended.map((item) => (
+                <div key={item.id} style={{ flexShrink: 0, width: "220px" }}>
+                  <ProductCard item={item} inWishlist={wishlist.has(item.id)} onWishlist={toggleWishlist} onQuickView={setQuickView} onNicheClick={(n) => { setNiche(n); setPage(1); setFilterOpen(true); }} isAdmin={isAdmin} onAdminAction={handleAdminAction} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Following Feed ────────────────────────────────────────────────────── */}
+      {followingFeed.length > 0 && !hasFilters && (
+        <div style={{ background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "20px 0" }}>
+          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+              <span style={{ fontSize: "15px" }}>👥</span>
+              <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#111827" }}>From creators you follow</h2>
             </div>
             <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
               {followingFeed.map((item) => (
@@ -1385,90 +1436,40 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         </div>
       )}
 
-      {/* ── Recommended Creators strip ───────────────────────────────────────── */}
-      {recommendedCreators.length > 0 && !hasFilters && (
-        <div style={{ background: "linear-gradient(to right, #0d1117, #141b27)", borderBottom: "1px solid rgba(99,102,241,0.2)", padding: "20px 0" }}>
-          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-              <span style={{ fontSize: "16px" }}>✨</span>
-              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#c7d2fe" }}>Creators to discover</h2>
-              <span style={{ fontSize: "11px", color: "#6366f1", background: "rgba(99,102,241,0.15)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>Explore</span>
-            </div>
-            <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
-              {recommendedCreators.map((creator) => (
-                <CreatorCard
-                  key={creator.userId}
-                  creator={creator}
-                  isFollowing={followedCreators.has(creator.userId)}
-                  onFollow={toggleFollowCreator}
-                  isAdmin={isAdmin}
-                  onCreatorAdminAction={handleCreatorAdminAction}
-                />
-              ))}
-            </div>
+      {/* ── Main Product Grid ─────────────────────────────────────────────────── */}
+      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 24px 48px" }}>
+
+        {/* Section heading */}
+        {!loading && data && data.items.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+            <span style={{ fontSize: "15px" }}>{TAB_DEFS.find((t) => t.id === activeTab)?.emoji}</span>
+            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "#111827" }}>
+              {activeTab === "featured" ? "Trending" : TAB_DEFS.find((t) => t.id === activeTab)?.label} Products
+            </h2>
+            {data && (
+              <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600, marginLeft: "4px" }}>
+                {data.total.toLocaleString()} {hasFilters ? "result" : "product"}{data.total !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── New this week strip ──────────────────────────────────────────────── */}
-      {newItems.length > 0 && !hasFilters && (
-        <ProductStrip
-          title="New this week"
-          icon={<span style={{ fontSize: "16px" }}>🆕</span>}
-          items={newItems}
-          wishlist={wishlist}
-          onWishlist={toggleWishlist}
-          onQuickView={setQuickView}
-          onNicheClick={(n) => { setNiche(n); setPage(1); }}
-          isAdmin={isAdmin}
-          onAdminAction={handleAdminAction}
-        />
-      )}
-
-      {/* ── Recently viewed strip ────────────────────────────────────────────── */}
-      {recentlyViewed.length > 0 && !hasFilters && (
-        <ProductStrip
-          title="Recently viewed"
-          icon={<span style={{ fontSize: "16px" }}>👁️</span>}
-          items={recentlyViewed}
-          wishlist={wishlist}
-          onWishlist={toggleWishlist}
-          onQuickView={setQuickView}
-          onNicheClick={(n) => { setNiche(n); setPage(1); }}
-          onRemoveItem={removeRecentlyViewed}
-          onClearAll={clearRecentlyViewed}
-          isAdmin={isAdmin}
-          onAdminAction={handleAdminAction}
-        />
-      )}
-
-      {/* ── Quick category chips ─────────────────────────────────────────────── */}
-      {(data?.niches ?? []).length > 0 && !hasFilters && (
-        <div style={{ background: "#fff", borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
-          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px", display: "flex", gap: "8px", overflowX: "auto", scrollbarWidth: "none" }}>
-            {(data?.niches ?? []).slice(0, 16).map((n) => (
+        {/* Quick niche chips (only when no niche filter active) */}
+        {!niche && (data?.niches ?? []).length > 0 && !hasFilters && (
+          <div style={{ display: "flex", gap: "8px", overflowX: "auto", scrollbarWidth: "none", marginBottom: "18px" }}>
+            {(data?.niches ?? []).slice(0, 14).map((n) => (
               <button
                 key={n}
-                onClick={() => { setNiche(n.toLowerCase()); setPage(1); }}
-                style={{ flexShrink: 0, padding: "5px 14px", borderRadius: "999px", border: "1px solid #e5e7eb", background: niche === n.toLowerCase() ? "#f97316" : "#f9fafb", color: niche === n.toLowerCase() ? "#fff" : "#374151", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s" }}
+                onClick={() => { setNiche(n.toLowerCase()); setPage(1); setFilterOpen(true); }}
+                style={{ flexShrink: 0, padding: "4px 12px", borderRadius: "999px", border: "1px solid #e5e7eb", background: "#f9fafb", color: "#374151", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#fff7ed"; e.currentTarget.style.borderColor = "#fdba74"; e.currentTarget.style.color = "#ea580c"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#f9fafb"; e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.color = "#374151"; }}
               >
                 {n}
               </button>
             ))}
-            {niche && (
-              <button
-                onClick={() => { setNiche(""); setPage(1); }}
-                style={{ flexShrink: 0, padding: "5px 14px", borderRadius: "999px", border: "1px solid #fecaca", background: "#fef2f2", color: "#dc2626", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
-              >
-                ✕ Clear
-              </button>
-            )}
           </div>
-        </div>
-      )}
-
-      {/* ── Product grid ────────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 24px 48px" }}>
+        )}
 
         {loading ? (
           <div className="mp-grid">
@@ -1476,9 +1477,9 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
           </div>
         ) : data?.items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "72px 24px" }}>
-            <div style={{ fontSize: "64px", marginBottom: "16px", opacity: 0.6 }}>🔍</div>
+            <div style={{ fontSize: "56px", marginBottom: "16px", opacity: 0.5 }}>🔍</div>
             <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: 700, color: "#374151" }}>No products found</h2>
-            <p style={{ color: "#9ca3af", fontSize: "15px", marginBottom: "20px", maxWidth: "320px", margin: "0 auto 24px" }}>
+            <p style={{ color: "#9ca3af", fontSize: "15px", maxWidth: "320px", margin: "0 auto 24px" }}>
               {q ? `No results for "${q}". Try different keywords.` : "No products match your current filters."}
             </p>
             {hasFilters && (
@@ -1498,7 +1499,7 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
                   inWishlist={wishlist.has(item.id)}
                   onWishlist={toggleWishlist}
                   onQuickView={setQuickView}
-                  onNicheClick={(n) => { setNiche(n); setPage(1); }}
+                  onNicheClick={(n) => { setNiche(n); setPage(1); setFilterOpen(true); }}
                   isAdmin={isAdmin}
                   onAdminAction={handleAdminAction}
                   isSelected={selectedProducts.has(item.id)}
@@ -1507,11 +1508,10 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
               ))}
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "40px" }}>
                 <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                  style={{ padding: "8px 18px", borderRadius: "10px", border: "1px solid #e5e7eb", background: page === 1 ? "#f9fafb" : "#fff", color: page === 1 ? "#d1d5db" : "#374151", fontWeight: 700, fontSize: "13px", cursor: page === 1 ? "default" : "pointer", transition: "all 0.15s" }}>
+                  style={{ padding: "8px 18px", borderRadius: "10px", border: "1px solid #e5e7eb", background: page === 1 ? "#f9fafb" : "#fff", color: page === 1 ? "#d1d5db" : "#374151", fontWeight: 700, fontSize: "13px", cursor: page === 1 ? "default" : "pointer" }}>
                   ← Prev
                 </button>
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -1524,7 +1524,7 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
                   ) : null;
                 })}
                 <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                  style={{ padding: "8px 18px", borderRadius: "10px", border: "1px solid #e5e7eb", background: page === totalPages ? "#f9fafb" : "#fff", color: page === totalPages ? "#d1d5db" : "#374151", fontWeight: 700, fontSize: "13px", cursor: page === totalPages ? "default" : "pointer", transition: "all 0.15s" }}>
+                  style={{ padding: "8px 18px", borderRadius: "10px", border: "1px solid #e5e7eb", background: page === totalPages ? "#f9fafb" : "#fff", color: page === totalPages ? "#d1d5db" : "#374151", fontWeight: 700, fontSize: "13px", cursor: page === totalPages ? "default" : "pointer" }}>
                   Next →
                 </button>
               </div>
@@ -1533,7 +1533,48 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         )}
       </div>
 
-      {/* Footer */}
+      {/* ── Creators to Discover ─────────────────────────────────────────────── */}
+      {recommendedCreators.length > 0 && !hasFilters && (
+        <div style={{ background: "#fff", borderTop: "1px solid #f0f0f0", borderBottom: "1px solid #f0f0f0", padding: "24px 0" }}>
+          <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+              <span style={{ fontSize: "16px" }}>✨</span>
+              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#111827" }}>Creators to Discover</h2>
+            </div>
+            <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
+              {recommendedCreators.map((creator) => (
+                <CreatorCard
+                  key={creator.userId}
+                  creator={creator}
+                  isFollowing={followedCreators.has(creator.userId)}
+                  onFollow={toggleFollowCreator}
+                  isAdmin={isAdmin}
+                  onCreatorAdminAction={handleCreatorAdminAction}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Recently Viewed ───────────────────────────────────────────────────── */}
+      {recentlyViewed.length > 0 && !hasFilters && (
+        <ProductStrip
+          title="Recently Viewed"
+          icon={<span style={{ fontSize: "16px" }}>👁️</span>}
+          items={recentlyViewed}
+          wishlist={wishlist}
+          onWishlist={toggleWishlist}
+          onQuickView={setQuickView}
+          onNicheClick={(n) => { setNiche(n); setPage(1); }}
+          onRemoveItem={removeRecentlyViewed}
+          onClearAll={clearRecentlyViewed}
+          isAdmin={isAdmin}
+          onAdminAction={handleAdminAction}
+        />
+      )}
+
+      {/* ── Footer ────────────────────────────────────────────────────────────── */}
       <div style={{ textAlign: "center", padding: "28px 24px", borderTop: "1px solid #e5e7eb" }}>
         <p style={{ margin: 0, fontSize: "13px", color: "#9ca3af" }}>
           Powered by <a href="/" style={{ color: "#f97316", fontWeight: 700, textDecoration: "none" }}>Content Flywheel</a>
@@ -1542,49 +1583,37 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         </p>
       </div>
 
-      {/* ── Quick-view panel ─────────────────────────────────────────────────── */}
+      {/* ── Quick-view panel ──────────────────────────────────────────────────── */}
       {quickView && (
         <div onClick={() => setQuickView(null)}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "stretch", justifyContent: "flex-end", backdropFilter: "blur(2px)" }}>
           <div onClick={(e) => e.stopPropagation()}
             style={{ width: "100%", maxWidth: "460px", background: "#fff", overflowY: "auto", boxShadow: "-8px 0 48px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", animation: "slideInRight 0.22s cubic-bezier(.4,0,.2,1)" }}>
-
-            {/* Modal header */}
             <div style={{ position: "sticky", top: 0, background: "#fff", borderBottom: "1px solid #f3f4f6", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 10 }}>
               <span style={{ fontSize: "11px", fontWeight: 800, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.07em" }}>Quick View</span>
               <button onClick={() => setQuickView(null)} style={{ background: "#f3f4f6", border: "none", borderRadius: "50%", width: "28px", height: "28px", fontSize: "16px", color: "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
             </div>
-
-            {/* Thumbnail */}
             <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#0f0f12 0%,#1a1a2e 100%)", flexShrink: 0, overflow: "hidden", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {quickView.thumbnailUrl
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={quickView.thumbnailUrl} alt={quickView.title} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                : <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}><ShoppingBag style={{ width: "52px", height: "52px", color: "rgba(255,255,255,0.5)" }} /></div>
+                : <ShoppingBag style={{ width: "52px", height: "52px", color: "rgba(255,255,255,0.5)" }} />
               }
               {quickView.nativePrice === 0 && (
                 <span style={{ position: "absolute", top: "12px", left: "12px", background: "#10b981", color: "#fff", fontSize: "11px", fontWeight: 800, padding: "4px 12px", borderRadius: "999px" }}>FREE</span>
               )}
             </div>
-
-            {/* Content */}
             <div style={{ padding: "24px", flex: 1 }}>
               <span style={{ fontSize: "10px", color: "#f97316", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em", background: "rgba(249,115,22,0.08)", padding: "3px 8px", borderRadius: "999px", border: "1px solid rgba(249,115,22,0.2)" }}>
                 {quickView.niche} · {quickView.format}
               </span>
               <h2 style={{ margin: "12px 0 10px", fontSize: "20px", fontWeight: 800, color: "#111827", lineHeight: 1.25 }}>{quickView.title}</h2>
-
               {quickView.avgRating !== null && quickView.reviewCount > 0 && (
-                <div style={{ marginBottom: "14px" }}>
-                  <StarRow rating={quickView.avgRating} count={quickView.reviewCount} size={15} />
-                </div>
+                <div style={{ marginBottom: "14px" }}><StarRow rating={quickView.avgRating} count={quickView.reviewCount} size={15} /></div>
               )}
-
               {quickView.description && (
                 <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#4b5563", lineHeight: 1.7 }}>{quickView.description}</p>
               )}
-
-              {/* Creator row */}
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", padding: "12px", background: "#f9fafb", borderRadius: "12px" }}>
                 <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: avatarColor(quickView.creatorUserId), display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 800, color: "#fff", flexShrink: 0 }}>
                   {creatorInitials(quickView.creatorName)}
@@ -1602,18 +1631,12 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
                   View profile →
                 </Link>
               </div>
-
               <div style={{ fontSize: "30px", fontWeight: 900, color: quickView.nativePrice === 0 ? "#10b981" : "#111827", marginBottom: "20px", letterSpacing: "-0.03em" }}>
                 {priceDisplay(quickView)}
               </div>
-
               <a href={`/product/${quickView.id}`}
-                style={{ display: "block", width: "100%", padding: "14px", borderRadius: "14px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontSize: "15px", fontWeight: 800, textAlign: "center", textDecoration: "none", boxShadow: "0 4px 18px rgba(249,115,22,0.4)", boxSizing: "border-box", letterSpacing: "0.01em" }}>
-                {quickView.nativePrice === 0 ? "Get for Free →" : "Buy Now →"}
-              </a>
-              <a href={`/product/${quickView.id}`}
-                style={{ display: "block", textAlign: "center", marginTop: "12px", fontSize: "12px", color: "#9ca3af", textDecoration: "none" }}>
-                View full product page →
+                style={{ display: "block", width: "100%", padding: "14px", borderRadius: "14px", background: "linear-gradient(135deg,#f97316,#ea580c)", color: "#fff", fontSize: "15px", fontWeight: 800, textAlign: "center", textDecoration: "none", boxShadow: "0 4px 18px rgba(249,115,22,0.4)", boxSizing: "border-box" }}>
+                {quickView.nativePrice === 0 ? "Get for Free →" : "View Product →"}
               </a>
             </div>
           </div>
@@ -1621,26 +1644,11 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
       )}
 
       <style>{`
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-        @keyframes slideInRight {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-        .mp-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-          gap: 18px;
-          align-items: stretch;
-        }
-        @media (max-width: 640px) {
-          .mp-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        }
-        @media (max-width: 400px) {
-          .mp-grid { grid-template-columns: 1fr; }
-        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .mp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; align-items: stretch; }
+        @media (max-width: 640px) { .mp-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; } }
+        @media (max-width: 400px) { .mp-grid { grid-template-columns: 1fr; } }
         .mp-card-link:hover .mp-quick-view { opacity: 1 !important; }
         .mp-creator-link:hover span { color: #f97316 !important; }
         ::-webkit-scrollbar { display: none; }
@@ -1649,39 +1657,25 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
 
-      {/* ── Bulk action toolbar (admin, floats at bottom when items are selected) ── */}
+      {/* ── Bulk action toolbar ───────────────────────────────────────────────── */}
       {isAdmin && selectedProducts.size > 0 && typeof document !== "undefined" && createPortal(
         <div style={{ position: "fixed", bottom: "28px", left: "50%", transform: "translateX(-50%)", zIndex: 9999, display: "flex", alignItems: "center", gap: "8px", background: "#1f1f2e", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "14px", padding: "10px 16px", boxShadow: "0 12px 40px rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", animation: "slideInUp 0.18s cubic-bezier(.4,0,.2,1)", whiteSpace: "nowrap" }}>
-          <span style={{ fontSize: "12px", fontWeight: 700, color: "#e5e7eb" }}>
-            {selectedProducts.size} selected
-          </span>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "#e5e7eb" }}>{selectedProducts.size} selected</span>
           <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.15)" }} />
           <button onClick={selectAllProducts} style={{ fontSize: "12px", fontWeight: 700, color: "#9ca3af", background: "transparent", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "6px" }}
-            onMouseEnter={(e) => { (e.currentTarget).style.color = "#fff"; }} onMouseLeave={(e) => { (e.currentTarget).style.color = "#9ca3af"; }}>
-            Select all
-          </button>
+            onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}>Select all</button>
           <button onClick={clearSelection} style={{ fontSize: "12px", fontWeight: 700, color: "#9ca3af", background: "transparent", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "6px" }}
-            onMouseEnter={(e) => { (e.currentTarget).style.color = "#fff"; }} onMouseLeave={(e) => { (e.currentTarget).style.color = "#9ca3af"; }}>
-            Clear
-          </button>
+            onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}>Clear</button>
           <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.15)" }} />
-          <button disabled={bulkBusy} onClick={() => execBulkAction("feature")} style={{ fontSize: "12px", fontWeight: 700, color: "#a78bfa", background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
-            ⭐ Feature
-          </button>
-          <button disabled={bulkBusy} onClick={() => execBulkAction("hide")} style={{ fontSize: "12px", fontWeight: 700, color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
-            Hide
-          </button>
-          <button disabled={bulkBusy} onClick={() => execBulkAction("archive")} style={{ fontSize: "12px", fontWeight: 700, color: "#fb923c", background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
-            Archive
-          </button>
-          <button disabled={bulkBusy} onClick={() => execBulkAction("remove")} style={{ fontSize: "12px", fontWeight: 700, color: "#f87171", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>
-            Delete
-          </button>
+          <button disabled={bulkBusy} onClick={() => execBulkAction("feature")} style={{ fontSize: "12px", fontWeight: 700, color: "#a78bfa", background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>⭐ Feature</button>
+          <button disabled={bulkBusy} onClick={() => execBulkAction("hide")} style={{ fontSize: "12px", fontWeight: 700, color: "#fbbf24", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>Hide</button>
+          <button disabled={bulkBusy} onClick={() => execBulkAction("archive")} style={{ fontSize: "12px", fontWeight: 700, color: "#fb923c", background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>Archive</button>
+          <button disabled={bulkBusy} onClick={() => execBulkAction("remove")} style={{ fontSize: "12px", fontWeight: 700, color: "#f87171", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "8px", padding: "5px 12px", cursor: "pointer" }}>Delete</button>
         </div>,
         document.body
       )}
 
-      {/* ── Admin confirm modal (products) ─────────────────────────────────── */}
+      {/* ── Admin modals ──────────────────────────────────────────────────────── */}
       {adminConfirm && (
         <AdminConfirmModal
           action={adminConfirm.action}
@@ -1691,7 +1685,6 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         />
       )}
 
-      {/* ── Creator admin confirm modal ────────────────────────────────────── */}
       {creatorConfirm && (
         <CreatorAdminConfirmModal
           action={creatorConfirm.action}
@@ -1703,7 +1696,6 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
         />
       )}
 
-      {/* ── Admin toast ────────────────────────────────────────────────────── */}
       {(adminBusy || adminToast) && typeof document !== "undefined" && createPortal(
         <div style={{ position: "fixed", bottom: "28px", left: "50%", transform: "translateX(-50%)", zIndex: 99997, pointerEvents: "none" }}>
           <div style={{ background: adminToast?.ok === false ? "#dc2626" : adminToast?.ok ? "#16a34a" : "#1f1f2e", color: "#fff", borderRadius: "12px", padding: "10px 20px", fontSize: "13px", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.25)", animation: "fadeInScale 0.15s ease", whiteSpace: "nowrap" }}>
