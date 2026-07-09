@@ -3,6 +3,7 @@ import { TrustScoreBadge } from "@/components/TrustScoreBadge";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { productReviewsTable } from "@/db/schema/product-reviews-schema";
 import { eq, and, isNull, ne, desc } from "drizzle-orm";
 import { notFound } from "next/navigation";
@@ -121,6 +122,14 @@ export default async function ProductSalesPage({
   }
 
   if (!product) notFound();
+
+  // Guard: 404 if the product's creator account has been deleted
+  const [creatorProfile] = await db
+    .select({ deletedAt: profilesTable.deletedAt })
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, product.userId))
+    .limit(1);
+  if (!creatorProfile || creatorProfile.deletedAt !== null) notFound();
 
   let bv: { brandName: string | null; targetAudience: string | null } | undefined;
   try {

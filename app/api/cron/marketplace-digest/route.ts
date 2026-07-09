@@ -5,7 +5,8 @@ import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { emailContactsTable } from "@/db/schema/email-marketing-schema";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
-import { isNull, desc, eq, inArray, sql, gte } from "drizzle-orm";
+import { profilesTable } from "@/db/schema/profiles-schema";
+import { isNull, desc, eq, inArray, sql, gte, and } from "drizzle-orm";
 import { Resend } from "resend";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,13 @@ export async function GET(request: Request) {
   // ── Fetch new products (last 7 days) ──────────────────────────────────────
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
+  // Collect non-deleted, non-hidden seller IDs to exclude deleted accounts from digest
+  const activeProfiles = await db
+    .select({ userId: profilesTable.userId })
+    .from(profilesTable)
+    .where(and(isNull(profilesTable.deletedAt), isNull(profilesTable.hiddenFromMarketplace as never)));
+  const activeSellerSet = new Set(activeProfiles.map((p) => p.userId));
+
   const rows = await db
     .select({
       id: productsTable.id,
@@ -53,6 +61,7 @@ export async function GET(request: Request) {
       return (
         ma.isNativePublished === true &&
         !ma.comingSoon &&
+        activeSellerSet.has(r.userId) && // exclude deleted/hidden creators
         new Date(r.createdAt) >= sevenDaysAgo
       );
     })

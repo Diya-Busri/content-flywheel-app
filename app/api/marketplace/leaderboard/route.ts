@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/db";
 import { creatorScoresTable } from "@/db/schema/creator-scores-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { creatorFollowsTable } from "@/db/schema/creator-follows-schema";
-import { eq, desc, sql, and, count } from "drizzle-orm";
+import { eq, desc, sql, and, count, isNull } from "drizzle-orm";
 import { getCreatorLevel } from "@/lib/rewards-config";
 
 export type LeaderboardTab =
@@ -60,6 +61,10 @@ export async function GET(req: NextRequest) {
       accentColor:  storeSettingsTable.accentColor,
     })
     .from(creatorScoresTable)
+    .innerJoin(profilesTable, and(
+      eq(profilesTable.userId, creatorScoresTable.userId),
+      isNull(profilesTable.deletedAt),     // exclude deleted accounts
+    ))
     .leftJoin(storeSettingsTable, eq(storeSettingsTable.userId, creatorScoresTable.userId))
     .where(eq(creatorScoresTable.leaderboardOptIn, true))
     .orderBy(desc(orderCol))

@@ -3,9 +3,11 @@ import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { creatorFollowsTable } from "@/db/schema/creator-follows-schema";
 import { creatorScoresTable } from "@/db/schema/creator-scores-schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import FollowButton from "@/components/FollowButton";
 import type { MarketingAssets } from "@/db/schema/products-schema";
@@ -48,6 +50,14 @@ export default async function CreatorProfilePage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = await params;
+
+  // Guard: 404 for deleted or non-existent accounts
+  const [profile] = await db
+    .select({ deletedAt: profilesTable.deletedAt })
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, userId))
+    .limit(1);
+  if (!profile || profile.deletedAt !== null) notFound();
 
   const [brandVoice, storeSettings] = await Promise.all([
     db.select().from(brandVoiceTable).where(eq(brandVoiceTable.userId, userId)).limit(1)

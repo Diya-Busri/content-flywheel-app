@@ -1,7 +1,8 @@
 import { MetadataRoute } from "next";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
-import { isNull } from "drizzle-orm";
+import { profilesTable } from "@/db/schema/profiles-schema";
+import { isNull, and, inArray } from "drizzle-orm";
 import type { MarketingAssets } from "@/db/schema/products-schema";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://contentflywheel.co.uk";
@@ -20,26 +21,36 @@ const STATIC_PAGES: MetadataRoute.Sitemap = [
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Fetch all non-deleted products
-  let productRows: { id: string; updatedAt: Date; marketingAssets: MarketingAssets | null }[] = [];
+  // Fetch all non-deleted products with their creator's deletion status
+  let productRows: { id: string; updatedAt: Date; marketingAssets: MarketingAssets | null; userId: string }[] = [];
+  let activeSellerIds: Set<string> = new Set();
   try {
-    productRows = await db
-      .select({
-        id: productsTable.id,
-        updatedAt: productsTable.updatedAt,
-        marketingAssets: productsTable.marketingAssets,
-      })
-      .from(productsTable)
-      .where(isNull(productsTable.deletedAt));
+    const [products, activeProfiles] = await Promise.all([
+      db
+        .select({
+          id: productsTable.id,
+          updatedAt: productsTable.updatedAt,
+          marketingAssets: productsTable.marketingAssets,
+          userId: productsTable.userId,
+        })
+        .from(productsTable)
+        .where(isNull(productsTable.deletedAt)),
+      db
+        .select({ userId: profilesTable.userId })
+        .from(profilesTable)
+        .where(isNull(profilesTable.deletedAt)),
+    ]);
+    productRows = products;
+    activeSellerIds = new Set(activeProfiles.map((p) => p.userId));
   } catch {
     // If DB is unavailable during build, return static pages only
     return STATIC_PAGES;
   }
 
-  // Filter to published products only
+  // Filter to published products from non-deleted creators only
   const publishedProducts = productRows.filter((p) => {
     const ma = p.marketingAssets ?? {};
-    return ma.isNativePublished === true && !ma.comingSoon;
+    return ma.isNativePublished === true && !ma.comingSoon && activeSellerIds.has(p.userId);
   });
 
   const productEntries: MetadataRoute.Sitemap = publishedProducts.map((p) => ({

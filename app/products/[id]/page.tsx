@@ -1,6 +1,7 @@
 import { db } from "@/db/db";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productsTable } from "@/db/schema/products-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -14,6 +15,14 @@ export default async function ProductsListingPage({
   params: { id: string };
 }) {
   const userId = params.id;
+
+  // Guard: 404 for deleted or non-existent accounts
+  const [profile] = await db
+    .select({ deletedAt: profilesTable.deletedAt })
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, userId))
+    .limit(1);
+  if (!profile || profile.deletedAt !== null) notFound();
 
   const [brandVoice] = await db
     .select()

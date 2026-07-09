@@ -23,14 +23,14 @@ export async function GET(
   }
 
   try {
-    // Verify the creator exists
+    // Verify the creator exists and has not been deleted
     const [profile] = await db
-      .select({ userId: profilesTable.userId })
+      .select({ userId: profilesTable.userId, deletedAt: profilesTable.deletedAt })
       .from(profilesTable)
       .where(eq(profilesTable.userId, userId))
       .limit(1);
 
-    if (!profile) {
+    if (!profile || profile.deletedAt !== null) {
       return NextResponse.json({ error: "Creator not found" }, { status: 404 });
     }
 

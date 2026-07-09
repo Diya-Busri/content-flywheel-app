@@ -56,12 +56,12 @@ export async function GET(request: NextRequest) {
   const productCountMap: Record<string, number> = {};
   for (const r of productCounts) productCountMap[r.userId] = r.count;
 
-  // Fetch profile info (membership/status for active-seller check)
+  // Fetch profile info (membership/status for active-seller check + deletedAt for safety)
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
   const [profiles, brandRows, storeRows, followerRows] = await Promise.all([
-    db.select({ userId: profilesTable.userId, email: profilesTable.email, membership: profilesTable.membership, status: profilesTable.status })
+    db.select({ userId: profilesTable.userId, email: profilesTable.email, membership: profilesTable.membership, status: profilesTable.status, deletedAt: profilesTable.deletedAt, hiddenFromMarketplace: profilesTable.hiddenFromMarketplace })
       .from(profilesTable)
-      .where(inArray(profilesTable.userId, eligibleUserIds)),
+      .where(and(inArray(profilesTable.userId, eligibleUserIds), isNull(profilesTable.deletedAt))),
     db.select({ userId: brandVoiceTable.userId, brandName: brandVoiceTable.brandName })
       .from(brandVoiceTable)
       .where(inArray(brandVoiceTable.userId, eligibleUserIds)),
@@ -80,11 +80,12 @@ export async function GET(request: NextRequest) {
   const storeMap      = Object.fromEntries(storeRows.map((r) => [r.userId, r]));
   const followerMap   = Object.fromEntries(followerRows.map((r) => [r.followedId, Number(r.cnt)]));
 
-  // Filter to active sellers only
+  // Filter to active, non-deleted, non-hidden sellers only
   const creators = eligibleUserIds
     .filter((uid) => {
       const p = profileMap[uid];
-      if (!p) return false;
+      if (!p) return false; // not in map means deleted (we filtered above)
+      if (p.hiddenFromMarketplace) return false;
       const isAdmin = adminEmail.length > 0 && (p.email ?? "").trim().toLowerCase() === adminEmail;
       const isActive = p.membership === "pro" && ["active", "trialing"].includes((p.status ?? "").toLowerCase());
       return isAdmin || isActive;

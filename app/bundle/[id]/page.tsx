@@ -2,6 +2,7 @@ import { db } from "@/db/db";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -52,6 +53,14 @@ export default async function BundlePage({
     .limit(1);
 
   if (!bundle) notFound();
+
+  // Guard: 404 if the bundle creator's account has been deleted
+  const [creatorProfile] = await db
+    .select({ deletedAt: profilesTable.deletedAt })
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, bundle.creatorUserId))
+    .limit(1);
+  if (!creatorProfile || creatorProfile.deletedAt !== null) notFound();
 
   const products =
     bundle.productIds.length > 0

@@ -5,7 +5,7 @@ import { creatorFollowsTable } from "@/db/schema/creator-follows-schema";
 import { productsTable } from "@/db/schema/products-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
-import { eq, inArray, isNull, desc } from "drizzle-orm";
+import { eq, inArray, isNull, desc, and } from "drizzle-orm";
 import type { MarketingAssets } from "@/db/schema/products-schema";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,14 @@ export async function GET() {
   const followingIds = follows.map((f) => f.followedId);
   if (followingIds.length === 0) return NextResponse.json({ items: [], followingIds: [] });
 
+  // Filter out deleted/hidden followed creators before fetching their products
+  const activeFollowedProfiles = await db
+    .select({ userId: profilesTable.userId })
+    .from(profilesTable)
+    .where(and(inArray(profilesTable.userId, followingIds), isNull(profilesTable.deletedAt)));
+  const activeFollowingIds = activeFollowedProfiles.map((p) => p.userId);
+  if (activeFollowingIds.length === 0) return NextResponse.json({ items: [], followingIds });
+
   // Their published products (not deleted, not archived, isNativePublished)
   const rows = await db
     .select({
@@ -39,7 +47,7 @@ export async function GET() {
       userId: productsTable.userId,
     })
     .from(productsTable)
-    .where(inArray(productsTable.userId, followingIds) && isNull(productsTable.deletedAt))
+    .where(and(inArray(productsTable.userId, activeFollowingIds), isNull(productsTable.deletedAt)))
     .orderBy(desc(productsTable.createdAt))
     .limit(12);
 

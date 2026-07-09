@@ -3,6 +3,7 @@ import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
+import { profilesTable } from "@/db/schema/profiles-schema";
 import { isNull, desc, eq, inArray, and } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,13 @@ export async function GET(req: NextRequest) {
   const theme  = searchParams.get("theme") === "dark" ? "dark" : "light";
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
 
+  // ── Fetch active (non-deleted) seller IDs first ────────────────────────────
+  const activeProfiles = await db
+    .select({ userId: profilesTable.userId })
+    .from(profilesTable)
+    .where(and(isNull(profilesTable.deletedAt), isNull(profilesTable.hiddenFromMarketplace as never)));
+  const activeSellerSet = new Set(activeProfiles.map((p) => p.userId));
+
   // ── Fetch products ─────────────────────────────────────────────────────────
   const rows = await db
     .select({ id: productsTable.id, title: productsTable.title, niche: productsTable.niche, format: productsTable.format, marketingAssets: productsTable.marketingAssets, userId: productsTable.userId })
@@ -42,6 +50,7 @@ export async function GET(req: NextRequest) {
     .filter((r) => {
       const ma = (r.marketingAssets ?? {}) as MA;
       if (!ma.isNativePublished || ma.comingSoon) return false;
+      if (!activeSellerSet.has(r.userId)) return false; // exclude deleted/hidden creators
       if (userId && r.userId !== userId) return false;
       if (niche && r.niche.toLowerCase() !== niche) return false;
       return true;
