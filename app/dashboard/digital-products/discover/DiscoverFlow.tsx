@@ -2017,19 +2017,39 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                           <p className="text-sm text-muted-foreground mb-1">What&apos;s included:</p>
                           <p className="text-sm text-foreground mb-3">{p.included}</p>
                           <p className="text-sm text-muted-foreground mb-4">Why it sells: {p.why}</p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleSelectProduct(p);
-                              setStep(4);
-                            }}
-                          >
-                            Create This Product
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleSelectProduct(p);
+                                setStep(4);
+                              }}
+                            >
+                              Create This Product
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="relative z-10 cursor-pointer border-orange-500/40 text-orange-500 hover:bg-orange-500/10 gap-1.5"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const nicheName = selectedNiche?.name ?? customNiche.trim();
+                                const goal = encodeURIComponent(
+                                  `I want to build a ${p.name}${nicheName ? ` for ${nicheName}` : ""}`
+                                );
+                                router.push(`/dashboard/launch?goal=${goal}`);
+                              }}
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              Launch with AI
+                            </Button>
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
@@ -2898,27 +2918,59 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                 )}
               </Button>
             </div>
-            <div className="flex justify-between">
-              <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => setStep(6)}>← Back</Button>
-              <Button
-                type="button"
-                className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowVideoPromptModal(true);
-                }}
-                disabled={!productFormat || generating}
-              >
-                {generating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  "Create My Product →"
-                )}
-              </Button>
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between">
+                <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => setStep(6)}>← Back</Button>
+                <Button
+                  type="button"
+                  className="relative z-10 cursor-pointer bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowVideoPromptModal(true);
+                  }}
+                  disabled={!productFormat || generating}
+                >
+                  {generating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    "Create My Product →"
+                  )}
+                </Button>
+              </div>
+
+              {/* Alternative: take discovery into the full Launch with AI pipeline */}
+              <div className="rounded-xl border border-orange-500/20 bg-orange-500/[0.04] px-4 py-3 flex items-center gap-3">
+                <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-semibold text-foreground">Want the full pipeline instead?</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Launch with AI builds the product, designs assets, writes marketing, and sets up your store — end to end.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-orange-500/40 text-orange-500 hover:bg-orange-500/10 gap-1.5"
+                  onClick={() => {
+                    const nicheName   = selectedNiche?.name ?? customNiche.trim();
+                    const productName = selectedProduct?.name ?? customProductName.trim();
+                    const goalText    = productName
+                      ? `I want to build a ${productName}${nicheName ? ` for ${nicheName}` : ""}`
+                      : nicheName
+                        ? `I want to create a digital product for ${nicheName}`
+                        : "";
+                    router.push(`/dashboard/launch${goalText ? `?goal=${encodeURIComponent(goalText)}` : ""}`);
+                  }}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Launch with AI
+                </Button>
+              </div>
             </div>
 
             <Dialog open={showVideoPromptModal} onOpenChange={setShowVideoPromptModal}>

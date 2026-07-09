@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Sparkles, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, Package2, ExternalLink, Upload, PenLine } from "lucide-react";
+import { Package, Sparkles, ArrowRight, ChevronRight, Home, X, BookOpen, Layers, Loader2, CheckCircle2, XCircle, Package2, ExternalLink, Upload, PenLine, Search } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 const SELLING_GUIDE_BANNER_KEY = "digital-products-selling-guide-banner-dismissed";
@@ -361,7 +361,7 @@ export default function DigitalProductsLanding() {
                 Digital Products
               </h1>
               <p className="text-gray-500 dark:text-[#A0A0A0] text-sm">
-                Create a product or use the full AI launch pipeline
+                Discover your idea, build it with AI, or create from what you have
               </p>
             </div>
             <Link
@@ -374,38 +374,41 @@ export default function DigitalProductsLanding() {
           </div>
         </div>
 
-        {/* ── Start creating ── */}
-        <div className="mb-8">
+        {/* ── Primary paths ── */}
+        <div className="mb-3">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#555] mb-3">Start here</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* I Know What I Want — marketing content for existing product */}
+
+            {/* Help Me Discover — niche & product idea research */}
             <Link
-              href="/dashboard/digital-products/create"
-              className="group flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-6 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
+              href="/dashboard/digital-products/discover"
+              className="group flex flex-col gap-4 rounded-2xl border border-blue-500/25 dark:border-blue-500/15 bg-blue-500/5 dark:bg-blue-500/[0.07] p-6 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-200"
             >
               <div className="flex items-start justify-between">
-                <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                  <Package className="w-5 h-5 text-orange-500" />
+                <div className="w-11 h-11 rounded-xl bg-blue-500/15 flex items-center justify-center">
+                  <Search className="w-5 h-5 text-blue-500" />
                 </div>
-                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-4 h-4 text-blue-400/50 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="font-semibold text-gray-900 dark:text-white">Create Marketing Content</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">Help Me Discover</p>
+                  <span className="text-[10px] font-bold uppercase tracking-wide bg-blue-500/15 text-blue-500 px-1.5 py-0.5 rounded-full shrink-0">Discovery</span>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Already have a product file? Upload it and AI generates video scripts, captions, and marketing copy for it.
+                  Not sure what to create yet? Explore profitable niches, analyse competitors, validate demand, and surface product ideas tailored to your audience.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["Has a file ready", "Wants marketing assets"].map((tag) => (
-                  <span key={tag} className="text-[11px] font-medium bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2.5 py-1 rounded-full">
+                {["Niche research", "Competitor analysis", "Product ideas"].map((tag) => (
+                  <span key={tag} className="text-[11px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full">
                     {tag}
                   </span>
                 ))}
               </div>
             </Link>
 
-            {/* Launch with AI — full pipeline */}
+            {/* Launch with AI — full execution pipeline */}
             <Link
               href="/dashboard/launch"
               className="group flex flex-col gap-4 rounded-2xl border border-orange-500/30 dark:border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/8 p-6 hover:border-orange-500/60 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-200"
@@ -422,41 +425,60 @@ export default function DigitalProductsLanding() {
                   <span className="text-[10px] font-bold uppercase tracking-wide bg-orange-500/15 text-orange-500 px-1.5 py-0.5 rounded-full shrink-0">Full pipeline</span>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Not sure what to make? AI researches your market, creates the product, designs assets, and writes your marketing — end to end.
+                  Have an idea you&apos;re ready to build? AI researches the market, creates your product, designs assets, and writes your full marketing campaign — end to end.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["Idea → product → launch", "Hands-free"].map((tag) => (
+                {["Idea → product → launch", "Hands-free execution"].map((tag) => (
                   <span key={tag} className="text-[11px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 px-2.5 py-1 rounded-full">
                     {tag}
                   </span>
                 ))}
               </div>
             </Link>
+          </div>
+        </div>
+
+        {/* ── Already have a product ── */}
+        <div className="mb-8">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-[#555] mb-3 mt-6">Already have a product</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+            {/* Create Marketing Content */}
+            <Link
+              href="/dashboard/digital-products/create"
+              className="group flex flex-col gap-3 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-5 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
+            >
+              <div className="flex items-start justify-between">
+                <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                  <Package className="w-4 h-4 text-orange-500" />
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-0.5">Create Marketing Content</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Upload a product file and AI generates scripts, captions, and copy for it.
+                </p>
+              </div>
+            </Link>
 
             {/* Upload Existing */}
             <Link
               href="/dashboard/digital-products/upload"
-              className="group flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-6 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
+              className="group flex flex-col gap-3 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-5 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
             >
               <div className="flex items-start justify-between">
-                <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                  <Upload className="w-5 h-5 text-orange-500" />
+                <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                  <Upload className="w-4 h-4 text-orange-500" />
                 </div>
-                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
               </div>
               <div>
-                <p className="font-semibold text-gray-900 dark:text-white mb-1">Upload Existing</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Already made something in Canva or Notion? Upload your PDF or file and start selling.
+                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-0.5">Upload Existing</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Already made something in Canva or Notion? Upload your PDF and start selling.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {["Has a file ready", "PDF / Canva / Notion"].map((tag) => (
-                  <span key={tag} className="text-[11px] font-medium bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2.5 py-1 rounded-full">
-                    {tag}
-                  </span>
-                ))}
               </div>
             </Link>
 
@@ -464,26 +486,19 @@ export default function DigitalProductsLanding() {
             <button
               type="button"
               onClick={() => setBlankOpen(true)}
-              className="group flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-6 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200 text-left"
+              className="group flex flex-col gap-3 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-5 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200 text-left"
             >
               <div className="flex items-start justify-between">
-                <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                  <PenLine className="w-5 h-5 text-orange-500" />
+                <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                  <PenLine className="w-4 h-4 text-orange-500" />
                 </div>
-                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
               </div>
               <div>
-                <p className="font-semibold text-gray-900 dark:text-white mb-1">Start from Scratch</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Open a blank canvas and build with AI assistance. Great for colouring books, journals, and custom designs.
+                <p className="font-semibold text-gray-900 dark:text-white text-sm mb-0.5">Start from Scratch</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Open a blank canvas with AI assistance. Great for colouring books, journals, and custom designs.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {["Full creative control", "AI-assisted"].map((tag) => (
-                  <span key={tag} className="text-[11px] font-medium bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2.5 py-1 rounded-full">
-                    {tag}
-                  </span>
-                ))}
               </div>
             </button>
           </div>

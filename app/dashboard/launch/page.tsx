@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Rocket, ArrowRight, Loader2, Sparkles, Compass,
@@ -143,11 +143,24 @@ function InvalidState({ suggestion }: { suggestion: string }) {
 /* ─── Main page ──────────────────────────────────────────────────────────────── */
 
 export default function LaunchPage() {
-  const router       = useRouter();
-  const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const router        = useRouter();
+  const searchParams  = useSearchParams();
+  const textareaRef   = useRef<HTMLTextAreaElement>(null);
   const [mode,    setMode]    = useState<"launch" | "discover">("launch");
   const [goal,    setGoal]    = useState("");
   const [phase,   setPhase]   = useState<Phase>("idle");
+  const [fromDiscover, setFromDiscover] = useState(false);
+
+  /* Pre-fill goal from ?goal= (set when arriving from Help Me Discover) */
+  useEffect(() => {
+    const prefill = searchParams.get("goal");
+    if (prefill) {
+      setGoal(decodeURIComponent(prefill));
+      setFromDiscover(true);
+      textareaRef.current?.focus();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [error,   setError]   = useState<string | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
 
@@ -283,6 +296,22 @@ export default function LaunchPage() {
           <p className="text-center text-[14px] text-muted-foreground mb-10 leading-relaxed">
             Describe your idea. The AI handles every step — Research → Product → Design → Marketing → Store.
           </p>
+
+          {/* "Arrived from Discover" context banner */}
+          {fromDiscover && (
+            <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-blue-500/25 bg-blue-500/[0.06] px-4 py-2.5">
+              <span className="text-[13px]">🔍</span>
+              <p className="text-[12px] text-blue-400 font-medium flex-1">
+                Your discovery is pre-filled below — review and launch when ready.
+              </p>
+              <button
+                onClick={() => setFromDiscover(false)}
+                className="text-blue-400/50 hover:text-blue-400 transition-colors text-[11px] shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Goal input card */}
           <div className={[
