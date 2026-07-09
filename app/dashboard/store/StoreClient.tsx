@@ -40,8 +40,10 @@ import {
   Heart,
   UserCheck,
   Rocket,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
+import { TRUST_FACTOR_META, getTrustLevel, TRUST_LEVELS } from "@/lib/trust-score-config";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,18 @@ type RecentOrder = {
 };
 type DayRevenue = { date: string; cents: number; orders: number };
 type TopProduct = { productId: string; title: string; orders: number; revenueCents: number };
+
+// ── Trust Score Types ─────────────────────────────────────────────────────────
+type TrustLevel = "building" | "developing" | "trusted" | "excellent" | "elite";
+type TrustBreakdown = Record<string, number>;
+type TrustScoreData = {
+  score: number; level: TrustLevel; breakdown: TrustBreakdown;
+  recommendations: string[]; publicOptIn: boolean;
+  adminSuppressed: boolean; adminOverrideScore: number | null;
+  lastCalculatedAt: string;
+};
+type TrustHistoryEntry = { score: number; level: string; trigger: string; calculatedAt: string };
+type ReputationEvent = { id: string; eventType: string; description: string; scoreDelta: number | null; createdAt: string };
 type ProductPerformance = {
   productId: string; title: string; views: number; orders: number;
   revenueCents: number; wishlistSaves: number; avgRating: number | null;
@@ -103,7 +117,7 @@ interface Customer {
 
 const STORE_BASE = "https://contentflywheel.co.uk/c";
 
-type Tab = "products" | "bundles" | "orders" | "promo" | "affiliates" | "customers" | "email" | "analytics" | "payouts" | "settings";
+type Tab = "products" | "bundles" | "orders" | "promo" | "affiliates" | "customers" | "email" | "analytics" | "payouts" | "settings" | "trust-score";
 
 const TABS: { id: string; label: string; icon: React.ReactNode; href?: string }[] = [
   { id: "products",   label: "Products",       icon: <ShoppingBag className="w-3.5 h-3.5" /> },
@@ -113,8 +127,9 @@ const TABS: { id: string; label: string; icon: React.ReactNode; href?: string }[
   { id: "email",      label: "Email",          icon: <Mail className="w-3.5 h-3.5" /> },
   { id: "analytics",  label: "Analytics",      icon: <TrendingUp className="w-3.5 h-3.5" /> },
   { id: "promo",      label: "Promo Codes",    icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "affiliates", label: "Affiliates",     icon: <Users className="w-3.5 h-3.5" /> },
-  { id: "payouts",    label: "Payouts",        icon: <CreditCard className="w-3.5 h-3.5" /> },
+  { id: "affiliates",   label: "Affiliates",     icon: <Users className="w-3.5 h-3.5" /> },
+  { id: "trust-score", label: "Trust Score",   icon: <Shield className="w-3.5 h-3.5" /> },
+  { id: "payouts",      label: "Payouts",       icon: <CreditCard className="w-3.5 h-3.5" /> },
   { id: "reviews",    label: "Reviews",        icon: <Star className="w-3.5 h-3.5" />,     href: "/dashboard/reviews" },
   { id: "webhooks",   label: "Webhooks",       icon: <Zap className="w-3.5 h-3.5" />,      href: "/dashboard/webhooks" },
   { id: "referral",   label: "Invite Creators",icon: <UserPlus className="w-3.5 h-3.5" />,  href: "/dashboard/referral" },
@@ -139,6 +154,59 @@ function FormatBadge({ format }: { format?: string }) {
     </Badge>
   );
 }
+
+// ── Trust Score Helpers ───────────────────────────────────────────────────────
+
+function TrustShieldIcon({ color = "#f97316", size = 20 }: { color?: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L3 6V12C3 17.55 6.84 22.74 12 24C17.16 22.74 21 17.55 21 12V6L12 2Z"
+        fill={color} fillOpacity="0.15" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 12L11 14L15 10" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TrustScoreDonut({ score, color }: { score: number; color: string }) {
+  const r = 42, circ = 2 * Math.PI * r, dash = (score / 100) * circ;
+  return (
+    <svg width="108" height="108" viewBox="0 0 108 108">
+      <circle cx="54" cy="54" r={r} fill="none" stroke="#f3f4f6" strokeWidth="10" />
+      <circle cx="54" cy="54" r={r} fill="none" stroke={color} strokeWidth="10"
+        strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ * 0.25}
+        strokeLinecap="round" style={{ transition: "stroke-dasharray 1s cubic-bezier(.4,0,.2,1)" }} />
+      <text x="54" y="50" textAnchor="middle" fontSize="22" fontWeight="900" fill="#111827">{score}</text>
+      <text x="54" y="64" textAnchor="middle" fontSize="11" fontWeight="600" fill="#9ca3af">/100</text>
+    </svg>
+  );
+}
+
+function TrustProgressBar({ value, color, height = 7 }: { value: number; color: string; height?: number }) {
+  return (
+    <div style={{ width: "100%", height: `${height}px`, borderRadius: "999px", background: "#f3f4f6", overflow: "hidden" }}>
+      <div style={{ width: `${Math.max(2, value)}%`, height: "100%", borderRadius: "999px", background: color, transition: "width 0.8s cubic-bezier(.4,0,.2,1)" }} />
+    </div>
+  );
+}
+
+function TrustSparkline({ data, color }: { data: number[]; color: string }) {
+  if (data.length < 2) return null;
+  const max = Math.max(...data, 10), min = Math.min(...data);
+  const w = 180, h = 40;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / (max - min + 1)) * (h - 6) - 3;
+    return `${x},${y}`;
+  });
+  return (
+    <svg width={w} height={h} style={{ overflow: "visible" }}>
+      <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts[pts.length - 1].split(",")[0]} cy={pts[pts.length - 1].split(",")[1]} r={3} fill={color} />
+    </svg>
+  );
+}
+
+function trustFactorColor(v: number) { return v >= 70 ? "#10b981" : v >= 40 ? "#f59e0b" : "#ef4444"; }
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 
@@ -471,6 +539,15 @@ export function StoreClient({ userId }: StoreClientProps) {
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [libraryPickerPublishing, setLibraryPickerPublishing] = useState<string | null>(null);
 
+  // Trust Score
+  const [trustData, setTrustData] = useState<TrustScoreData | null>(null);
+  const [trustHistory, setTrustHistory] = useState<TrustHistoryEntry[]>([]);
+  const [trustEvents, setTrustEvents] = useState<ReputationEvent[]>([]);
+  const [trustLoading, setTrustLoading] = useState(false);
+  const [trustRecalculating, setTrustRecalculating] = useState(false);
+  const [trustToggling, setTrustToggling] = useState(false);
+  const [trustSubTab, setTrustSubTab] = useState<"breakdown" | "history" | "tips">("breakdown");
+
   // Analytics + Customers + Email (shared fetch)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
@@ -517,8 +594,39 @@ export function StoreClient({ userId }: StoreClientProps) {
     } catch {} finally { setAnalyticsLoading(false); }
   }, []);
 
+  const fetchTrustScore = useCallback(async () => {
+    setTrustLoading(true);
+    try {
+      const res = await fetch("/api/trust-score/opt-in");
+      const data = await res.json();
+      setTrustData(data.score ?? null);
+      setTrustHistory(data.history ?? []);
+      setTrustEvents(data.events ?? []);
+    } catch {}
+    setTrustLoading(false);
+  }, []);
+
+  const handleTrustRecalculate = async () => {
+    setTrustRecalculating(true);
+    try {
+      await fetch("/api/trust-score/recalculate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trigger: "manual" }) });
+      await fetchTrustScore();
+    } catch {}
+    setTrustRecalculating(false);
+  };
+
+  const handleTrustToggleOptIn = async () => {
+    if (!trustData) return;
+    setTrustToggling(true);
+    try {
+      await fetch("/api/trust-score/opt-in", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publicOptIn: !trustData.publicOptIn }) });
+      await fetchTrustScore();
+    } catch {}
+    setTrustToggling(false);
+  };
+
   useEffect(() => {
-    fetchPromoCodes(); fetchBundles(); fetchAffiliates(); fetchLibrary(); fetchAnalytics();
+    fetchPromoCodes(); fetchBundles(); fetchAffiliates(); fetchLibrary(); fetchAnalytics(); fetchTrustScore();
     // Fetch store settings to resolve custom subdomain URL
     fetch("/api/store-settings")
       .then((r) => r.ok ? r.json() : null)
@@ -527,7 +635,7 @@ export function StoreClient({ userId }: StoreClientProps) {
       })
       .catch(() => {})
       .finally(() => setCustomDomainLoaded(true));
-  }, [fetchPromoCodes, fetchBundles, fetchAffiliates, fetchLibrary, fetchAnalytics]);
+  }, [fetchPromoCodes, fetchBundles, fetchAffiliates, fetchLibrary, fetchAnalytics, fetchTrustScore]);
 
   const handleCopy = async () => {
     try {
@@ -620,6 +728,44 @@ export function StoreClient({ userId }: StoreClientProps) {
           <StatCard label="Customers" value={analyticsLoading ? "—" : customers.length} />
           <StatCard label="Subscribers" value={analyticsLoading ? "—" : analytics?.subscriberCount ?? 0} />
         </div>
+
+        {/* ── Trust Score Summary Card ── */}
+        {trustData && (() => {
+          const lm = getTrustLevel(trustData.score);
+          return (
+            <div
+              onClick={() => setActiveTab("trust-score")}
+              className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 mb-5 flex items-center gap-4 flex-wrap cursor-pointer hover:border-orange-300 dark:hover:border-orange-700/50 transition-colors"
+              style={{ borderColor: `${lm.color}30` }}
+            >
+              <TrustShieldIcon color={lm.color} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <span className="text-sm font-bold text-gray-900 dark:text-white">Trust Score</span>
+                  <span style={{
+                    padding: "2px 10px", borderRadius: "999px",
+                    background: `${lm.color}18`, border: `1px solid ${lm.color}35`,
+                    fontSize: "12px", fontWeight: 700, color: lm.color,
+                  }}>
+                    {lm.emoji} {lm.label}
+                  </span>
+                </div>
+                <TrustProgressBar value={trustData.score} color={lm.color} />
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span style={{ fontSize: "26px", fontWeight: 900, color: lm.color, lineHeight: 1 }}>
+                  {trustData.score}<span style={{ fontSize: "13px", fontWeight: 600, color: "#9ca3af" }}>/100</span>
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveTab("trust-score"); }}
+                  className="h-8 px-3 text-xs font-semibold rounded-lg border border-gray-300 text-gray-700 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                >
+                  View details →
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Tab Nav ── */}
         <div className="border-b border-gray-200 dark:border-[#2A2A2A] mb-7">
@@ -1427,6 +1573,178 @@ export function StoreClient({ userId }: StoreClientProps) {
             </div>
           </div>
         )}
+
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        {/* TRUST SCORE TAB                                                       */}
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "trust-score" && (() => {
+          if (trustLoading) return (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <Loader2 className="w-7 h-7 animate-spin text-orange-600" />
+              <p className="text-sm text-gray-500">Loading your Trust Score…</p>
+            </div>
+          );
+
+          const score = trustData?.score ?? 0;
+          const lm = getTrustLevel(score);
+          const color = lm.color;
+          const breakdown = trustData?.breakdown ?? {};
+          const recommendations = trustData?.recommendations ?? [];
+          const historyScores = trustHistory.map((h) => h.score);
+          const prevScore = trustHistory.length >= 2 ? trustHistory[trustHistory.length - 2].score : null;
+          const scoreDelta = prevScore !== null ? score - prevScore : null;
+
+          const factorOrder = [
+            "verifiedSales", "avgRating", "reviewCount", "refundRate",
+            "productCompleteness", "profileCompleteness",
+            "followerGrowth", "accountAge", "communityScore", "responseTime",
+          ];
+
+          return (
+            <div style={{ maxWidth: "760px" }}>
+              {/* Score hero card */}
+              <div style={{
+                background: `linear-gradient(135deg, ${color}10 0%, ${color}05 100%)`,
+                border: `1px solid ${color}25`, borderRadius: "20px", padding: "24px",
+                display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap", marginBottom: "20px",
+              }}>
+                <TrustScoreDonut score={score} color={color} />
+                <div style={{ flex: 1, minWidth: "200px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
+                    <span style={{ padding: "4px 12px", borderRadius: "999px", background: `${color}18`, border: `1px solid ${color}35`, fontSize: "13px", fontWeight: 700, color }}>
+                      {lm.emoji} {lm.label}
+                    </span>
+                    {scoreDelta !== null && (
+                      <span style={{ padding: "4px 10px", borderRadius: "999px", background: scoreDelta >= 0 ? "#f0fdf4" : "#fef2f2", border: `1px solid ${scoreDelta >= 0 ? "#bbf7d0" : "#fecaca"}`, fontSize: "12px", fontWeight: 700, color: scoreDelta >= 0 ? "#16a34a" : "#dc2626" }}>
+                        {scoreDelta >= 0 ? "↑" : "↓"} {Math.abs(scoreDelta)} pts
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: "0 0 12px", fontSize: "14px", color: "#6b7280" }}>{lm.tagline}</p>
+                  <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                    {TRUST_LEVELS.map((l) => (
+                      <span key={l.id} style={{ padding: "3px 9px", borderRadius: "999px", fontSize: "11px", fontWeight: 600, background: l.id === lm.id ? `${l.color}18` : "#f3f4f6", color: l.id === lm.id ? l.color : "#9ca3af", border: l.id === lm.id ? `1px solid ${l.color}30` : "1px solid #f3f4f6" }}>
+                        {l.emoji} {l.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "flex-end", flexShrink: 0 }}>
+                  <button onClick={handleTrustRecalculate} disabled={trustRecalculating} style={{ padding: "9px 16px", borderRadius: "10px", background: "#111827", border: "none", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: trustRecalculating ? 0.6 : 1 }}>
+                    {trustRecalculating ? "Recalculating…" : "🔄 Recalculate"}
+                  </button>
+                  <button onClick={handleTrustToggleOptIn} disabled={trustToggling} style={{ padding: "9px 16px", borderRadius: "10px", background: trustData?.publicOptIn ? "#fef2f2" : "#f0fdf4", border: `1px solid ${trustData?.publicOptIn ? "#fecaca" : "#bbf7d0"}`, color: trustData?.publicOptIn ? "#dc2626" : "#16a34a", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: trustToggling ? 0.6 : 1 }}>
+                    {trustData?.publicOptIn ? "🔒 Hide from public" : "🌐 Show publicly"}
+                  </button>
+                  {trustData?.lastCalculatedAt && (
+                    <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af" }}>Updated {new Date(trustData.lastCalculatedAt).toLocaleDateString()}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Private notice */}
+              {!trustData?.publicOptIn && (
+                <div style={{ padding: "12px 16px", borderRadius: "12px", background: "#fffbeb", border: "1px solid #fde68a", fontSize: "13px", color: "#92400e", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span>⚠️</span>
+                  <span>Your Trust Score is <strong>private</strong>. Enable it publicly to build buyer confidence and unlock more visibility.</span>
+                </div>
+              )}
+
+              {/* Sub-tabs */}
+              <div style={{ display: "flex", gap: "4px", marginBottom: "18px", background: "#f9fafb", borderRadius: "12px", padding: "4px" }}>
+                {(["breakdown", "history", "tips"] as const).map((tab) => (
+                  <button key={tab} onClick={() => setTrustSubTab(tab)} style={{ flex: 1, padding: "9px 12px", borderRadius: "9px", border: "none", background: trustSubTab === tab ? "#fff" : "transparent", boxShadow: trustSubTab === tab ? "0 1px 4px rgba(0,0,0,0.08)" : "none", color: trustSubTab === tab ? "#111827" : "#6b7280", fontSize: "13px", fontWeight: trustSubTab === tab ? 700 : 500, cursor: "pointer", transition: "all 0.15s" }}>
+                    {tab === "breakdown" ? "📊 Breakdown" : tab === "history" ? "📈 History" : "💡 How to Improve"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Breakdown */}
+              {trustSubTab === "breakdown" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {factorOrder.map((key) => {
+                    const meta = TRUST_FACTOR_META[key];
+                    if (!meta) return null;
+                    const value = Math.round(breakdown[key] ?? 0);
+                    const fc = trustFactorColor(value);
+                    return (
+                      <div key={key} style={{ padding: "14px", borderRadius: "14px", background: "#fff", border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <div style={{ width: "34px", height: "34px", borderRadius: "9px", background: `${fc}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>{meta.icon}</div>
+                            <div>
+                              <p style={{ margin: "0 0 2px", fontSize: "14px", fontWeight: 700, color: "#111827" }}>{meta.label}</p>
+                              <p style={{ margin: 0, fontSize: "12px", color: "#9ca3af" }}>{meta.description}</p>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: "17px", fontWeight: 800, color: fc, minWidth: "40px", textAlign: "right" }}>{value}%</span>
+                        </div>
+                        <TrustProgressBar value={value} color={fc} />
+                        {value < 70 && <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#6b7280", paddingLeft: "44px" }}>💡 {meta.tip}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* History */}
+              {trustSubTab === "history" && (
+                <div>
+                  {trustHistory.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "48px 24px", color: "#9ca3af", fontSize: "14px" }}>No history yet — recalculate your score to start tracking.</div>
+                  ) : (
+                    <>
+                      {historyScores.length >= 2 && (
+                        <div style={{ padding: "18px", borderRadius: "14px", background: "#fff", border: "1px solid #f3f4f6", marginBottom: "14px" }}>
+                          <p style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: 700, color: "#374151" }}>Score over time</p>
+                          <TrustSparkline data={historyScores} color={color} />
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+                            <span style={{ fontSize: "11px", color: "#9ca3af" }}>{trustHistory[0] ? new Date(trustHistory[0].calculatedAt).toLocaleDateString() : ""}</span>
+                            <span style={{ fontSize: "11px", color: "#9ca3af" }}>{trustHistory[trustHistory.length - 1] ? new Date(trustHistory[trustHistory.length - 1].calculatedAt).toLocaleDateString() : ""}</span>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {trustEvents.map((ev) => (
+                          <div key={ev.id} style={{ padding: "11px 13px", borderRadius: "12px", background: "#fff", border: "1px solid #f3f4f6", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                            <div style={{ width: "30px", height: "30px", borderRadius: "8px", flexShrink: 0, background: ev.scoreDelta && ev.scoreDelta > 0 ? "#f0fdf4" : ev.scoreDelta && ev.scoreDelta < 0 ? "#fef2f2" : "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px" }}>
+                              {ev.scoreDelta && ev.scoreDelta > 0 ? "↑" : ev.scoreDelta && ev.scoreDelta < 0 ? "↓" : "•"}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ margin: 0, fontSize: "13px", color: "#374151" }}>{ev.description}</p>
+                              <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#9ca3af" }}>{new Date(ev.createdAt).toLocaleString()}</p>
+                            </div>
+                            {ev.scoreDelta !== null && <span style={{ fontSize: "12px", fontWeight: 700, color: ev.scoreDelta > 0 ? "#16a34a" : "#dc2626" }}>{ev.scoreDelta > 0 ? "+" : ""}{ev.scoreDelta} pts</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Tips */}
+              {trustSubTab === "tips" && (
+                <div>
+                  <div style={{ padding: "14px 16px", borderRadius: "14px", background: `${color}08`, border: `1px solid ${color}20`, marginBottom: "16px" }}>
+                    <p style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: 700, color: "#111827" }}>🎯 Ways to increase your Trust Score</p>
+                    <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Focus on these to build buyer confidence and unlock more visibility on the marketplace.</p>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {recommendations.length > 0 ? recommendations.map((rec, i) => (
+                      <div key={i} style={{ padding: "13px 15px", borderRadius: "12px", background: "#fff", border: "1px solid #f3f4f6", display: "flex", alignItems: "flex-start", gap: "10px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                        <div style={{ width: "26px", height: "26px", borderRadius: "7px", flexShrink: 0, background: `${color}15`, color, fontWeight: 800, fontSize: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</div>
+                        <p style={{ margin: 0, fontSize: "14px", color: "#374151", lineHeight: 1.55 }}>{rec}</p>
+                      </div>
+                    )) : (
+                      <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af" }}>Recalculate your score to get personalised improvement tips.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ══════════════════════════════════════════════════════════════════════ */}
         {/* SETTINGS TAB                                                          */}
