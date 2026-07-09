@@ -4,6 +4,7 @@ import { productReviewsTable } from "@/db/schema/product-reviews-schema";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { eq, and } from "drizzle-orm";
 import { notificationsTable } from "@/db/schema/notifications-schema";
+import { recomputeTrustScore, logReputationEvent } from "@/lib/trust-score-helpers";
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,6 +66,15 @@ export async function POST(req: NextRequest) {
         metadata: { kind: "review", rating, buyerName: buyerName || null, buyerEmail: order.buyerEmail },
       });
     } catch { /* non-fatal */ }
+
+    // Recalculate Trust Score when a new review comes in
+    logReputationEvent({
+      userId: order.creatorUserId,
+      eventType: "review_added",
+      description: `New ${rating}-star review received.`,
+      metadata: { rating, productId: order.productId },
+    }).catch(() => {});
+    recomputeTrustScore(order.creatorUserId, "review_added").catch(() => {});
 
     return NextResponse.json({ ok: true });
   } catch (err) {

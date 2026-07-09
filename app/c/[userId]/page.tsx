@@ -10,6 +10,7 @@ import Link from "next/link";
 import FollowButton from "@/components/FollowButton";
 import type { MarketingAssets } from "@/db/schema/products-schema";
 import { getCreatorLevel } from "@/lib/rewards-config";
+import { TrustScoreCard } from "@/components/TrustScoreBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -315,6 +316,11 @@ export default async function CreatorProfilePage({
             )}
           </div>
         )}
+
+        {/* Trust Score — only renders if creator has opted in publicly */}
+        <div style={{ marginBottom: "16px" }}>
+          <TrustScoreCard userId={userId} accentColor={accent} />
+        </div>
 
         {/* Social links */}
         {showSocial && (

@@ -63,6 +63,9 @@ import { productOrdersTable } from "./schema/product-orders-schema";
 import { productReviewsTable } from "./schema/product-reviews-schema";
 import { creatorFollowsTable } from "./schema/creator-follows-schema";
 import { storeSettingsTable } from "./schema/store-settings-schema";
+import { creatorTrustScoresTable } from "./schema/creator-trust-scores-schema";
+import { creatorTrustScoreHistoryTable } from "./schema/creator-trust-score-history-schema";
+import { creatorReputationEventsTable } from "./schema/creator-reputation-events-schema";
 
 // Define the schema properly
 const schema = {
@@ -132,6 +135,10 @@ const schema = {
   productReviews: productReviewsTable,
   creatorFollows: creatorFollowsTable,
   storeSettings: storeSettingsTable,
+  // Trust Score
+  creatorTrustScores: creatorTrustScoresTable,
+  creatorTrustScoreHistory: creatorTrustScoreHistoryTable,
+  creatorReputationEvents: creatorReputationEventsTable,
 };
 
 // Connection options tuned for Supabase pgBouncer (port 6543 pooler).

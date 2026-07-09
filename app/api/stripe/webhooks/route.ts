@@ -12,6 +12,7 @@ import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, sql } from "drizzle-orm";
 import { awardVideoCredits } from "@/lib/award-credits";
 import { markReferralConverted, markReferralTrialActive, checkSalesMilestones, checkRevenueMilestones, recomputeCreatorScore } from "@/lib/rewards-helpers";
+import { recomputeTrustScore, logReputationEvent } from "@/lib/trust-score-helpers";
 
 /**
  * Award video credits to a subscriber, identified by their Stripe customer ID.
@@ -321,6 +322,16 @@ async function handlePaymentSuccess(event: Stripe.Event) {
             checkRevenueMilestones(profile.userId),
             recomputeCreatorScore(profile.userId),
           ]).catch((e) => console.error("[rewards] milestone check failed:", e));
+
+          // Recalculate Trust Score on subscription conversion
+          logReputationEvent({
+            userId: profile.userId,
+            eventType: "subscription_active",
+            description: "Creator subscription became active — Trust Score recalculated.",
+          }).catch(() => {});
+          recomputeTrustScore(profile.userId, "subscription_active").catch((e) =>
+            console.error("[trust-score] recalculate on subscription failed:", e)
+          );
         }
       }
     } catch (error) {

@@ -18,6 +18,7 @@ import { affiliateLinksTable, affiliateCommissionsTable } from "@/db/schema/affi
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { notificationsTable } from "@/db/schema/notifications-schema";
 import { Resend } from "resend";
+import { recomputeTrustScore, logReputationEvent } from "@/lib/trust-score-helpers";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -235,6 +236,18 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     downloadExpiresAt,
     emailSent: false,
   }).onConflictDoNothing();
+
+  // Recalculate Trust Score on new sale (fire-and-forget)
+  logReputationEvent({
+    userId: creatorUserId,
+    eventType: "sale_completed",
+    description: `New verified sale — product purchase completed.`,
+    scoreDelta: undefined,
+    metadata: { productId, amountCents, buyerEmail },
+  }).catch(() => {});
+  recomputeTrustScore(creatorUserId, "sale_completed").catch((e) =>
+    console.error("[trust-score] recalculate on sale failed:", e)
+  );
 
   // Fetch product title + marketingAssets for email and sequence enrollment
   const [product] = await db

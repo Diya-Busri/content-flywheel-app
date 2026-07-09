@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Search, ShoppingBag, Sparkles, X, TrendingUp, Star, MoreVertical, Eye, EyeOff, Archive, Trash2, Star as StarIcon, Pin, PinOff, Edit3, ExternalLink, RotateCcw, Shield, AlertTriangle, Loader2, Check } from "lucide-react";
+import { TrustScoreBadge } from "@/components/TrustScoreBadge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1590,9 +1591,12 @@ export default function MarketplaceClient({ isAdmin = false }: { isAdmin?: boole
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "#111827" }}>{quickView.creatorName}</p>
-                  {quickView.salesCount !== null && quickView.salesCount > 0 && (
-                    <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af" }}>{quickView.salesCount} sales</p>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px" }}>
+                    {quickView.salesCount !== null && quickView.salesCount > 0 && (
+                      <span style={{ fontSize: "11px", color: "#9ca3af" }}>{quickView.salesCount} sales</span>
+                    )}
+                    <TrustScoreBadge userId={quickView.creatorUserId} size="sm" />
+                  </div>
                 </div>
                 <Link href={`/marketplace/creator/${quickView.creatorUserId}`} style={{ marginLeft: "auto", fontSize: "12px", color: "#f97316", fontWeight: 700, textDecoration: "none", background: "rgba(249,115,22,0.08)", padding: "4px 12px", borderRadius: "999px", border: "1px solid rgba(249,115,22,0.2)" }}>
                   View profile →

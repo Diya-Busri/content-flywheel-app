@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight, Rocket } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight, Rocket, Shield } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -108,6 +108,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       items: [
         { href: "/dashboard/store", icon: <Store size={18} />, label: "My Store", activeWhenStartsWith: true },
         { href: "/dashboard/marketplace", icon: <ShoppingBag size={18} />, label: "Marketplace", activeWhenStartsWith: true },
+        { href: "/dashboard/trust-score", icon: <Shield size={18} />, label: "Trust Score", activeWhenStartsWith: true },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", activeWhenStartsWith: true, featureKey: "print_on_demand" },
         { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", activeWhenStartsWith: true, featureKey: "drop_campaign" },
       ],
@@ -147,6 +148,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       { href: "/dashboard/admin/finances", icon: <Wallet size={18} />, label: "Finance Tracker", activeWhenStartsWith: true },
       { href: "/dashboard/admin/video-agent", icon: <Clapperboard size={18} />, label: "Video Agent", activeWhenStartsWith: true },
       { href: "/dashboard/admin/notes", icon: <NotebookPen size={18} />, label: "Notes", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/trust-scores", icon: <Shield size={18} />, label: "Trust Scores", activeWhenStartsWith: true },
     ]});
   }
 

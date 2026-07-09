@@ -1,4 +1,5 @@
 import React from "react";
+import { TrustScoreBadge } from "@/components/TrustScoreBadge";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
@@ -587,9 +588,10 @@ export default async function ProductSalesPage({
                 {creatorInitials}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: "14px", color: "#111827" }}>{creatorName}</p>
+                <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: "14px", color: "#111827" }}>{creatorName}</p>
+                <TrustScoreBadge userId={product.userId} size="sm" />
                 {bv?.targetAudience && (
-                  <p style={{ margin: 0, fontSize: "12px", color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bv.targetAudience}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bv.targetAudience}</p>
                 )}
               </div>
               <a href={`/c/${product.userId}`} style={{ fontSize: "12px", color: "#f97316", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>
