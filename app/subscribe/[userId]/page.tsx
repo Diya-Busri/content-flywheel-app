@@ -24,13 +24,15 @@ export default function SubscribePage() {
   const [formState, setFormState] = useState<FormState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [creator, setCreator] = useState<CreatorInfo | null>(null);
+  const [creatorLoading, setCreatorLoading] = useState(true);
 
   useEffect(() => {
     if (!userId) return;
     fetch(`/api/public/creator/${userId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: CreatorInfo | null) => { if (data) setCreator(data); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setCreatorLoading(false));
   }, [userId]);
 
   const accent = creator?.accentColor ?? "#f97316";
@@ -86,7 +88,34 @@ export default function SubscribePage() {
     }}>
       <div style={{ width: "100%", maxWidth: "480px" }}>
 
-        {/* Card */}
+        {/* Loading skeleton — shown until creator data arrives */}
+        {creatorLoading && (
+          <div style={{
+            backgroundColor: "#ffffff", borderRadius: "24px", overflow: "hidden",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 20px 60px rgba(0,0,0,0.10)",
+            border: "1px solid #e5e7eb",
+          }}>
+            <div style={{ height: "6px", background: "#e5e7eb" }} />
+            <div style={{ padding: "40px 40px 36px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#f3f4f6", flexShrink: 0 }} />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ height: "16px", background: "#f3f4f6", borderRadius: "6px", width: "60%" }} />
+                  <div style={{ height: "12px", background: "#f3f4f6", borderRadius: "6px", width: "40%" }} />
+                </div>
+              </div>
+              <div style={{ height: "28px", background: "#f3f4f6", borderRadius: "8px", width: "80%" }} />
+              <div style={{ height: "16px", background: "#f3f4f6", borderRadius: "6px" }} />
+              <div style={{ height: "16px", background: "#f3f4f6", borderRadius: "6px", width: "70%" }} />
+              <div style={{ height: "48px", background: "#f3f4f6", borderRadius: "10px" }} />
+              <div style={{ height: "48px", background: "#f3f4f6", borderRadius: "10px" }} />
+              <div style={{ height: "48px", background: "#f3f4f6", borderRadius: "12px" }} />
+            </div>
+          </div>
+        )}
+
+        {/* Card — only render once creator data is resolved */}
+        {!creatorLoading && <>
         <div style={{
           backgroundColor: "#ffffff",
           borderRadius: "24px",
@@ -245,6 +274,7 @@ export default function SubscribePage() {
         <p style={{ textAlign: "center", marginTop: "20px", fontSize: "12px", color: "#9ca3af" }}>
           Powered by <span style={{ color: accent, fontWeight: "700" }}>Content Flywheel</span>
         </p>
+        </>}
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
