@@ -48,6 +48,10 @@ import {
   Palette,
   Layers,
   Megaphone,
+  Archive,
+  Link2,
+  Share2,
+  Rocket,
 } from "lucide-react";
 import { PromoteThisSheet } from "@/components/PromoteThisSheet";
 import { useToast } from "@/components/ui/use-toast";
@@ -74,7 +78,24 @@ import TemplatesClient from "@/app/dashboard/templates/TemplatesClient";
 import HistoryClient from "@/app/dashboard/history/HistoryClient";
 import { FeaturePreviewGate } from "@/components/feature-preview-gate";
 
-type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "designs";
+type LibraryTab = "products" | "scripts" | "all" | "bundles" | "timeline" | "template-packs" | "templates" | "history" | "youtube" | "images" | "trash" | "archived" | "designs" | "workspaces";
+
+type WorkspaceProject = {
+  id: string;
+  goal: string;
+  projectName: string;
+  status: string;
+  businessScore: number;
+  thumbnailUrl: string | null;
+  productId: string | null;
+  hasResearch: boolean;
+  hasProduct: boolean;
+  hasDesign: boolean;
+  hasMarketing: boolean;
+  hasStore: boolean;
+  updatedAt: string;
+  createdAt: string;
+};
 
 type TemplatePackItem = {
   id: string;
@@ -129,6 +150,8 @@ type LibraryItem = {
   pageViews?: number;
   /** Total completed orders (native store only). */
   orderCount?: number;
+  /** When set, the product is archived — ISO string. */
+  archivedAt?: string | null;
   /** Video: timeline project metadata (scenes, template, etc.). */
   metadata?: Record<string, unknown>;
   /** Video: platforms array, e.g. ['video-timeline']. */
@@ -371,10 +394,21 @@ function itemMatchesLibrarySearch(item: LibraryItem, q: string): boolean {
   return false;
 }
 
-export default function LibraryFlow() {
+export default function LibraryFlow({ disabledFeatures = [] }: { disabledFeatures?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get("tab") as LibraryTab | null) ?? "all";
+
+  // Compute which tabs should be hidden based on admin feature flags
+  const hiddenTabs = new Set<LibraryTab>();
+  for (const f of disabledFeatures) {
+    if (f === "template_studio") { hiddenTabs.add("template-packs"); hiddenTabs.add("templates"); }
+    if (f === "youtube_upload") hiddenTabs.add("youtube");
+    if (f === "video_timeline") hiddenTabs.add("timeline");
+    if (f === "design_studio") hiddenTabs.add("designs");
+  }
+
+  const rawInitialTab = (searchParams.get("tab") as LibraryTab | null) ?? "all";
+  const initialTab = hiddenTabs.has(rawInitialTab) ? "all" : rawInitialTab;
   const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -414,6 +448,12 @@ export default function LibraryFlow() {
   const [promoteProductTitle, setPromoteProductTitle] = useState<string | undefined>();
   const { toast } = useToast();
 
+  /** Map of productId → launchProjectId for "Open Launch Workspace" links */
+  const [productLaunchMap, setProductLaunchMap] = useState<Record<string, string>>({});
+  /** Full project list for the Workspaces tab */
+  const [workspaceProjects, setWorkspaceProjects] = useState<WorkspaceProject[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
+
   const showThumbnail = (item: LibraryItem) =>
     Boolean(item.thumbnail && !thumbnailErrors.has(item.id));
 
@@ -438,10 +478,13 @@ export default function LibraryFlow() {
     setLoading(true);
     try {
       const isTrash = tab === "trash";
-      const typeParam = isTrash ? "all" : tab === "bundles" ? "bundles" : tab === "timeline" ? "timeline" : tab === "all" ? "all" : tab;
+      const isArchived = tab === "archived";
+      const typeParam = (isTrash || isArchived) ? "all" : tab === "bundles" ? "bundles" : tab === "timeline" ? "timeline" : tab === "all" ? "all" : tab;
       const url = isTrash
         ? `/api/library?type=all&deleted=true`
-        : `/api/library?type=${typeParam}`;
+        : isArchived
+          ? `/api/library?type=all&archived=true`
+          : `/api/library?type=${typeParam}`;
       const controller = new AbortController();
       // 20s timeout; auto-retry up to 2 times on slow DB cold-start
       const timeoutId = setTimeout(() => controller.abort(), 20000);
@@ -553,9 +596,42 @@ export default function LibraryFlow() {
     if (tab === "youtube") { fetchYouTubePosts(); return; }
     if (tab === "images") { fetchImages(); return; }
     if (tab === "designs") { fetchDesignBundles(); return; }
+    if (tab === "workspaces") { fetchWorkspaces(); return; }
     if (tab === "template-packs") fetchTemplatePacks();
     else fetchItems();
   }, [tab]);
+
+  const fetchWorkspaces = async () => {
+    setWorkspacesLoading(true);
+    try {
+      const res = await fetch("/api/projects");
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json() as { projects: WorkspaceProject[] };
+      const projects = data.projects ?? [];
+      setWorkspaceProjects(projects);
+      // Also keep productLaunchMap in sync
+      const map: Record<string, string> = {};
+      for (const p of projects) {
+        if (p.productId) map[p.productId] = p.id;
+      }
+      setProductLaunchMap(prev => ({ ...prev, ...map }));
+    } catch { /* non-fatal */ }
+    finally { setWorkspacesLoading(false); }
+  };
+
+  // Build productId → launchId map once on mount (for "Open Launch Workspace" links)
+  useEffect(() => {
+    fetch("/api/projects")
+      .then(r => r.ok ? r.json() as Promise<{ projects: Array<{ id: string; productId: string | null }> }> : Promise.resolve({ projects: [] }))
+      .then(data => {
+        const map: Record<string, string> = {};
+        for (const p of data.projects ?? []) {
+          if (p.productId) map[p.productId] = p.id;
+        }
+        setProductLaunchMap(map);
+      })
+      .catch(() => { /* non-fatal */ });
+  }, []);
 
   // Poll generating products every 2s and update progress in real time
   useEffect(() => {
@@ -627,6 +703,7 @@ export default function LibraryFlow() {
   };
 
   const isTrashView = tab === "trash";
+  const isArchivedView = tab === "archived";
   const isTimelineView = tab === "timeline";
 
   const handleRetryGeneration = async (item: LibraryItem) => {
@@ -725,14 +802,114 @@ export default function LibraryFlow() {
     }
   };
 
+  const handleArchive = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    try {
+      const res = await fetch(`/api/products/${item.id}/archive`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to archive");
+      toast({ title: "Product archived", description: "Removed from your library and marketplace." });
+      fetchItems();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not archive", variant: "destructive" });
+    }
+  };
+
+  const handleUnarchive = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    try {
+      const res = await fetch(`/api/products/${item.id}/archive`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to unarchive");
+      toast({ title: "Product restored", description: "Back in your library." });
+      fetchItems();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not restore", variant: "destructive" });
+    }
+  };
+
+  const handleTogglePublish = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    if (item.isNativePublished) {
+      // Unpublish
+      try {
+        const res = await fetch(`/api/products/${item.id}/native-publish`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to unpublish");
+        toast({ title: "Unpublished", description: "Product removed from the marketplace." });
+        fetchItems();
+      } catch (err) {
+        toast({ title: "Error", description: err instanceof Error ? err.message : "Could not unpublish", variant: "destructive" });
+      }
+    } else {
+      // Go to edit page to publish (price required)
+      router.push(`/dashboard/digital-products/${item.id}/edit?tab=publish`);
+    }
+  };
+
+  const handleCopyLink = (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    const url = `${window.location.origin}/product/${item.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast({ title: "Link copied!", description: url });
+    }).catch(() => {
+      toast({ title: "Copy failed", description: "Could not access clipboard.", variant: "destructive" });
+    });
+  };
+
+  const handleShare = async (item: LibraryItem) => {
+    if (item.type !== "product") return;
+    const url = `${window.location.origin}/product/${item.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: item.title, url });
+      } catch { /* user cancelled */ }
+    } else {
+      // Fallback — copy to clipboard
+      handleCopyLink(item);
+    }
+  };
+
+  // Per-tab delete-all configuration
+  const deleteAllConfig: { show: boolean; itemLabel: string } = (() => {
+    if (isTrashView || tab === "templates" || tab === "history" || tab === "archived") {
+      return { show: false, itemLabel: "" };
+    }
+    if (tab === "images") return { show: myImages.length > 0, itemLabel: "all images" };
+    if (tab === "youtube") return { show: youtubePosts.length > 0, itemLabel: "all YouTube posts" };
+    if (tab === "template-packs") return { show: templatePacks.length > 0, itemLabel: "all template packs" };
+    if (tab === "designs") return { show: designBundles.length > 0, itemLabel: "all design bundles" };
+    if (tab === "workspaces") return { show: workspaceProjects.length > 0, itemLabel: "all workspaces" };
+    return { show: items.length > 0, itemLabel: "all items" };
+  })();
+
   const handleDeleteAll = async () => {
     setDeletingAll(true);
     try {
-      const res = await fetch("/api/library/delete-all", { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete all");
+      if (tab === "images") {
+        const res = await fetch("/api/library/items?type=generated_image", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete images");
+        setMyImages([]);
+      } else if (tab === "youtube") {
+        const res = await fetch("/api/scheduled-posts", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete YouTube posts");
+        setYoutubePosts([]);
+      } else if (tab === "template-packs") {
+        const res = await fetch("/api/template-packs", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete template packs");
+        setTemplatePacks([]);
+      } else if (tab === "designs") {
+        const res = await fetch("/api/design-bundles", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete design bundles");
+        setDesignBundles([]);
+      } else if (tab === "workspaces") {
+        const res = await fetch("/api/projects", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete workspaces");
+        setWorkspaceProjects([]);
+      } else {
+        const res = await fetch("/api/library/delete-all", { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete all");
+        fetchItems();
+      }
       setDeleteAllOpen(false);
-      toast({ title: "All items deleted", description: "Your library has been cleared." });
-      fetchItems();
+      toast({ title: `Deleted ${deleteAllConfig.itemLabel}` });
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Could not delete all items", variant: "destructive" });
     } finally {
@@ -772,7 +949,7 @@ export default function LibraryFlow() {
     a.click();
   };
 
-  const showDeleteAll = !isTrashView && tab !== "template-packs" && tab !== "templates" && tab !== "history" && tab !== "youtube" && items.length > 0;
+  const showDeleteAll = deleteAllConfig.show;
 
   return (
     <main className="p-3 md:p-10 max-w-5xl mx-auto w-full overflow-x-hidden" style={{ maxWidth: "100vw" }}>
@@ -793,27 +970,54 @@ export default function LibraryFlow() {
           </span>
         )}
       </div>
-      <p className="text-gray-600 dark:text-gray-400 mb-8">
+      <p className="text-gray-600 dark:text-gray-400 mb-4">
         Your digital products, video guides, and scripts in one place
       </p>
+
+      {items.some(i => i.type === "product" && i.status === "generating") && (
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          <span className="mt-0.5 shrink-0 text-base leading-none">⏳</span>
+          <span>
+            Products usually take <strong>2–4 minutes</strong> to generate. If a product appears stuck after that, press the <strong>retry button</strong> on its card to restart.
+          </span>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 mb-6">
           <div className="overflow-x-auto pb-1 sm:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
           <TabsList data-tour="library-tabs" className="bg-gray-200 dark:bg-[#1A1A1A] border border-[#E5E7EB] dark:border-[#2A2A2A] flex-nowrap whitespace-nowrap w-max">
+            <TabsTrigger value="workspaces" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+              <Rocket className="w-3.5 h-3.5 shrink-0" aria-hidden />
+              Launch Workspaces
+            </TabsTrigger>
             <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">All items</TabsTrigger>
             <TabsTrigger value="products" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Digital Products</TabsTrigger>
             <TabsTrigger value="bundles" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Bundles</TabsTrigger>
             <TabsTrigger value="scripts" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Scripts</TabsTrigger>
-            <TabsTrigger value="timeline" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">My Videos</TabsTrigger>
-            <TabsTrigger value="youtube" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-              <span>YouTube</span>
-              <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
-            </TabsTrigger>
-            <TabsTrigger value="designs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Design Studio</TabsTrigger>
+            {!hiddenTabs.has("timeline") && (
+              <TabsTrigger value="timeline" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">My Videos</TabsTrigger>
+            )}
+            {!hiddenTabs.has("youtube") && (
+              <TabsTrigger value="youtube" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                <span>YouTube</span>
+                <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
+              </TabsTrigger>
+            )}
+            {!hiddenTabs.has("designs") && (
+              <TabsTrigger value="designs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Design Studio</TabsTrigger>
+            )}
             <TabsTrigger value="images" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Images</TabsTrigger>
-            <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
-            <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
+            {!hiddenTabs.has("template-packs") && (
+              <TabsTrigger value="template-packs" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Template Packs</TabsTrigger>
+            )}
+            {!hiddenTabs.has("templates") && (
+              <TabsTrigger value="templates" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Templates</TabsTrigger>
+            )}
+            <TabsTrigger value="archived" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+              <Archive className="w-3.5 h-3.5" />
+              Archived
+            </TabsTrigger>
             <TabsTrigger value="trash" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-gray-600 dark:text-gray-400">Trash</TabsTrigger>
           </TabsList>
           </div>
@@ -865,9 +1069,9 @@ export default function LibraryFlow() {
         <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete all items?</AlertDialogTitle>
+              <AlertDialogTitle>Delete {deleteAllConfig.itemLabel}?</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete all items? This cannot be undone.
+                This will permanently delete {deleteAllConfig.itemLabel}. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -896,24 +1100,6 @@ export default function LibraryFlow() {
         <TabsContent value={tab} className="mt-0">
           {tab === "images" ? (
             <div className="space-y-4">
-              {!imagesLoading && myImages.length > 0 && (
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
-                    onClick={async () => {
-                      if (!confirm("Delete all saved images? This cannot be undone.")) return;
-                      await fetch("/api/library/items?type=generated_image", { method: "DELETE" });
-                      setMyImages([]);
-                      toast({ title: "All images deleted" });
-                    }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete All
-                  </Button>
-                </div>
-              )}
               {imagesLoading ? (
                 <div className="py-16 flex flex-col items-center justify-center">
                   <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
@@ -997,6 +1183,130 @@ export default function LibraryFlow() {
                     </Card>
                   ))}
                 </div>
+              )}
+            </div>
+          ) : tab === "workspaces" ? (
+            <div className="space-y-4">
+              {workspacesLoading ? (
+                <div className="py-16 flex flex-col items-center justify-center">
+                  <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">Loading workspaces…</p>
+                </div>
+              ) : workspaceProjects.length === 0 ? (
+                <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+                  <CardContent className="py-16 text-center">
+                    <Rocket className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No launch workspaces yet</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                      Launch with AI builds a complete business workspace — research, product, design, marketing, and store — all in one place.
+                    </p>
+                    <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
+                      <Link href="/dashboard/launch">
+                        <Rocket className="w-4 h-4" />
+                        Start a Launch
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {workspaceProjects.length} workspace{workspaceProjects.length !== 1 ? "s" : ""}
+                    </p>
+                    <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
+                      <Link href="/dashboard/launch">
+                        <Rocket className="w-3.5 h-3.5" />
+                        New Launch
+                      </Link>
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {workspaceProjects.map((ws) => {
+                      const stages = [
+                        { key: "research", label: "Research", done: ws.hasResearch },
+                        { key: "product", label: "Product", done: ws.hasProduct },
+                        { key: "design", label: "Design", done: ws.hasDesign },
+                        { key: "marketing", label: "Marketing", done: ws.hasMarketing },
+                        { key: "store", label: "Store", done: ws.hasStore },
+                      ] as const;
+                      const doneCount = stages.filter(s => s.done).length;
+                      const isComplete = doneCount === 5;
+                      return (
+                        <Card key={ws.id} className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] overflow-hidden group hover:shadow-md transition-shadow">
+                          {/* Thumbnail */}
+                          <div className="relative w-full h-40 bg-gradient-to-br from-orange-500/15 to-amber-500/10 dark:from-orange-900/30 dark:to-amber-900/20 overflow-hidden">
+                            {ws.thumbnailUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={ws.thumbnailUrl}
+                                alt={ws.projectName}
+                                className="w-full h-full object-contain"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-orange-400">
+                                <Rocket className="w-10 h-10" />
+                              </div>
+                            )}
+                            {/* Status badge */}
+                            <div className="absolute top-2 right-2">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                                isComplete
+                                  ? "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30"
+                                  : ws.status === "running"
+                                    ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                                    : "bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-500/30"
+                              }`}>
+                                {isComplete ? "Complete" : ws.status === "running" ? "In progress" : "Draft"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <CardContent className="p-4 space-y-3">
+                            {/* Name */}
+                            <div>
+                              <p className="font-semibold text-gray-900 dark:text-white text-sm leading-tight line-clamp-2 group-hover:text-orange-500 transition-colors">
+                                {ws.projectName}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{ws.goal}</p>
+                            </div>
+
+                            {/* Stage dots */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {stages.map(s => (
+                                <span
+                                  key={s.key}
+                                  title={s.label}
+                                  className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                    s.done
+                                      ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                                      : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600"
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${s.done ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`} />
+                                  {s.label}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Last updated + CTA */}
+                            <div className="flex items-center justify-between pt-1">
+                              <p className="text-xs text-gray-400 dark:text-gray-500">
+                                {new Date(ws.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                              </p>
+                              <Button asChild size="sm" className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 h-7">
+                                <Link href={`/dashboard/launch/${ws.id}/workspace`}>
+                                  Open Workspace
+                                </Link>
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           ) : tab === "designs" ? (
@@ -1201,6 +1511,14 @@ export default function LibraryFlow() {
                       Deleted items appear here. Restore them or delete permanently.
                     </p>
                   </>
+                ) : isArchivedView ? (
+                  <>
+                    <Archive className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">No archived products</p>
+                    <p className="text-sm text-gray-500">
+                      Archived products are hidden from your library and the marketplace. Unarchive to restore them.
+                    </p>
+                  </>
                 ) : tab === "timeline" ? (
                   <>
                     <Video className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
@@ -1233,14 +1551,20 @@ export default function LibraryFlow() {
                     <Package className="w-12 h-12 text-gray-500 dark:text-gray-600 mx-auto mb-4" />
                     <p className="text-gray-600 dark:text-gray-400 font-medium mb-1">Your library is empty</p>
                     <p className="text-sm text-gray-500 mb-4">
-                      Everything you create — products, video guides, scripts, designs — is saved here automatically. Start by creating your first digital product.
+                      Everything you create — products, video guides, scripts, designs — is saved here automatically. Launch your first idea with AI in 3–5 minutes.
                     </p>
                     <div className="flex flex-wrap gap-3 justify-center">
-                      <Button asChild className="bg-orange-500 hover:bg-orange-600">
-                        <Link href="/dashboard/digital-products">Digital Products</Link>
+                      <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white">
+                        <Link href="/dashboard/launch">
+                          <Rocket className="w-4 h-4 mr-2" />
+                          Launch with AI
+                        </Link>
                       </Button>
                       <Button asChild variant="outline" className="border-[#E5E7EB] dark:border-[#2A2A2A]">
-                        <Link href="/dashboard/digital-products">Create Video Guide</Link>
+                        <Link href="/dashboard/video-guide/new">Create Video Guide</Link>
+                      </Button>
+                      <Button asChild variant="ghost" className="text-sm text-gray-500">
+                        <Link href="/dashboard/digital-products">Upload a file</Link>
                       </Button>
                     </div>
                   </>
@@ -1512,6 +1836,14 @@ export default function LibraryFlow() {
                                     </Link>
                                   </DropdownMenuItem>
                                 )}
+                                {item.type === "product" && productLaunchMap[item.id] && (
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/dashboard/launch/${productLaunchMap[item.id]}/workspace`}>
+                                      <Rocket className="w-4 h-4 mr-2" />
+                                      Launch Workspace
+                                    </Link>
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => handleDownloadItem(item)}>
                                   <Download className="w-4 h-4 mr-2" />
                                   Download
@@ -1520,6 +1852,24 @@ export default function LibraryFlow() {
                                   <DropdownMenuItem onClick={() => handleDuplicate(item)}>
                                     <Copy className="w-4 h-4 mr-2" />
                                     Duplicate
+                                  </DropdownMenuItem>
+                                )}
+                                {item.type === "product" && (
+                                  <DropdownMenuItem onClick={() => handleTogglePublish(item)}>
+                                    <span className="w-4 h-4 mr-2 text-center text-xs">{item.isNativePublished ? "⊘" : "▶"}</span>
+                                    {item.isNativePublished ? "Unpublish" : "Publish"}
+                                  </DropdownMenuItem>
+                                )}
+                                {item.type === "product" && (
+                                  <DropdownMenuItem onClick={() => handleCopyLink(item)}>
+                                    <Link2 className="w-4 h-4 mr-2" />
+                                    Copy Link
+                                  </DropdownMenuItem>
+                                )}
+                                {item.type === "product" && (
+                                  <DropdownMenuItem onClick={() => handleShare(item)}>
+                                    <Share2 className="w-4 h-4 mr-2" />
+                                    Share
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem
@@ -1534,6 +1884,19 @@ export default function LibraryFlow() {
                                   Promote This
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
+                                {item.type === "product" && (
+                                  isArchivedView ? (
+                                    <DropdownMenuItem onClick={() => handleUnarchive(item)}>
+                                      <RotateCcw className="w-4 h-4 mr-2 text-green-500" />
+                                      Unarchive
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem onClick={() => handleArchive(item)}>
+                                      <Archive className="w-4 h-4 mr-2 text-amber-500" />
+                                      Archive
+                                    </DropdownMenuItem>
+                                  )
+                                )}
                                 <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => handleDelete(item, false)}>
                                   <Trash2 className="w-4 h-4 mr-2" />
                                   Move to Trash
@@ -1699,6 +2062,24 @@ export default function LibraryFlow() {
                                   Duplicate
                                 </DropdownMenuItem>
                               )}
+                              {item.type === "product" && (
+                                <DropdownMenuItem onClick={() => handleTogglePublish(item)}>
+                                  <span className="w-4 h-4 mr-2 text-center text-xs">{item.isNativePublished ? "⊘" : "▶"}</span>
+                                  {item.isNativePublished ? "Unpublish" : "Publish"}
+                                </DropdownMenuItem>
+                              )}
+                              {item.type === "product" && (
+                                <DropdownMenuItem onClick={() => handleCopyLink(item)}>
+                                  <Link2 className="w-4 h-4 mr-2" />
+                                  Copy Link
+                                </DropdownMenuItem>
+                              )}
+                              {item.type === "product" && (
+                                <DropdownMenuItem onClick={() => handleShare(item)}>
+                                  <Share2 className="w-4 h-4 mr-2" />
+                                  Share
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={() => {
                                   setPromoteUrl(`/dashboard/digital-products/${item.id}`);
@@ -1709,6 +2090,19 @@ export default function LibraryFlow() {
                                 Promote This
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
+                              {item.type === "product" && (
+                                isArchivedView ? (
+                                  <DropdownMenuItem onClick={() => handleUnarchive(item)}>
+                                    <RotateCcw className="w-4 h-4 mr-2 text-green-500" />
+                                    Unarchive
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => handleArchive(item)}>
+                                    <Archive className="w-4 h-4 mr-2 text-amber-500" />
+                                    Archive
+                                  </DropdownMenuItem>
+                                )
+                              )}
                               <DropdownMenuItem
                                 className="text-red-600 dark:text-red-400"
                                 onClick={() => handleDelete(item, false)}

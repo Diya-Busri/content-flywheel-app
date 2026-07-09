@@ -7,7 +7,7 @@ import { INSTAGRAM_FACEBOOK_CONNECT_SCOPES } from "@/lib/instagram-facebook-conn
 
 export const dynamic = "force-dynamic";
 
-const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
+const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook", "linkedin", "x"];
 
 /** Facebook Login — basic page / profile (no Instagram publishing). */
 const FACEBOOK_LOGIN_SCOPES = "pages_show_list,pages_read_engagement,public_profile";
@@ -128,6 +128,42 @@ function buildAuthUrl(platform: ConnectedPlatform, state: string, _request: Next
     }
     case "facebook": {
       return buildFacebookLoginAuthUrl(callbackUrl, state);
+    }
+    case "linkedin": {
+      const clientId = process.env.LINKEDIN_CLIENT_ID?.trim() ?? "";
+      if (!clientId) return null;
+      const params = new URLSearchParams({
+        response_type: "code",
+        client_id:     clientId,
+        redirect_uri:  callbackUrl,
+        scope:         "r_liteprofile r_emailaddress w_member_social r_organization_social",
+        state,
+      });
+      return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
+    }
+    case "x": {
+      // X uses OAuth 2.0 PKCE — we generate code_verifier client-side then send
+      // the code_challenge to X. Since this is server-side we generate a random
+      // verifier, store it in state (hashed), and verify in callback.
+      const clientId = process.env.X_CLIENT_ID?.trim() ?? "";
+      if (!clientId) return null;
+      // Generate PKCE pair
+      const codeVerifier  = randomBytes(32).toString("base64url");
+      const codeChallenge = Buffer.from(
+        require("crypto").createHash("sha256").update(codeVerifier).digest()
+      ).toString("base64url");
+      // Encode verifier into state so callback can retrieve it
+      const xState = `${state}:${codeVerifier}`;
+      const params = new URLSearchParams({
+        response_type:         "code",
+        client_id:             clientId,
+        redirect_uri:          callbackUrl,
+        scope:                 "tweet.read tweet.write users.read offline.access",
+        state:                 xState,
+        code_challenge:        codeChallenge,
+        code_challenge_method: "S256",
+      });
+      return `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
     }
     default:
       return null;

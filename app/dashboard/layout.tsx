@@ -11,8 +11,7 @@ import { redirect } from "next/navigation";
 import { DashboardLayoutClient } from "@/components/dashboard-layout-client";
 import { DashboardSetupError } from "@/components/dashboard-setup-error";
 import { DashboardUpgradeWall } from "@/components/dashboard-upgrade-wall";
-import { getDisabledFeatures, getExplicitlyEnabledFeatures } from "@/lib/feature-flags";
-import { getHiddenFeaturesByUseCases, USE_CASES } from "@/lib/use-cases";
+import { getDisabledFeatures } from "@/lib/feature-flags";
 
 /** Paywall: user must have an active subscription to access the dashboard. */
 function hasActiveSubscription(profile: any | null): boolean {
@@ -26,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const { userId } = await auth();
 
   if (!userId) {
-    return redirect("/sign-in");
+    return redirect("/login");
   }
 
   let profile: Awaited<ReturnType<typeof getProfileByUserId>> = null;
@@ -89,30 +88,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     return <DashboardUpgradeWall userEmail={userEmail} />;
   }
 
-  // Admins always see every feature — skip DB + use-case flag resolution entirely.
+  // Admins always see every feature — skip flag resolution entirely.
   let allDisabled: string[] = [];
 
   if (!isAdmin) {
-    const [disabledFeatures, explicitlyEnabled] = await Promise.all([
-      getDisabledFeatures(userId),
-      getExplicitlyEnabledFeatures(userId),
-    ]);
-
-    // Apply user's use-case preferences on top of global feature flags.
-    // Crucially: if an admin has explicitly enabled a feature flag, it must
-    // override use-case hiding — so we filter those out of effectiveUserHidden.
-    const selectedUseCases: string[] | null = profile.enabledFeatures
-      ? JSON.parse(profile.enabledFeatures)
-      : null;
-    const userHidden = getHiddenFeaturesByUseCases(selectedUseCases);
-    const userExplicitKeys = selectedUseCases && selectedUseCases.length > 0
-      ? new Set(USE_CASES.filter(uc => selectedUseCases.includes(uc.id)).flatMap(uc => uc.featureKeys))
-      : new Set<string>();
-    const effectiveUserHidden = new Set(
-      Array.from(userHidden).filter(k => !userExplicitKeys.has(k) && !explicitlyEnabled.has(k))
-    );
-
-    allDisabled = Array.from(new Set([...Array.from(effectiveUserHidden), ...Array.from(disabledFeatures)]));
+    const disabledFeatures = await getDisabledFeatures(userId);
+    allDisabled = Array.from(disabledFeatures);
   }
 
   return (

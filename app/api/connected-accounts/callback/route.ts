@@ -12,7 +12,7 @@ import { INSTAGRAM_FACEBOOK_CONNECT_SCOPES } from "@/lib/instagram-facebook-conn
 
 export const dynamic = "force-dynamic";
 
-const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
+const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook", "linkedin", "x"];
 
 function getRedirectUrl(): string {
   const base =
@@ -503,6 +503,101 @@ export async function GET(request: NextRequest) {
           d.setSeconds(d.getSeconds() + data.expires_in);
           expiresAt = d;
         }
+        break;
+      }
+      case "linkedin": {
+        const clientId     = process.env.LINKEDIN_CLIENT_ID?.trim()     ?? "";
+        const clientSecret = process.env.LINKEDIN_CLIENT_SECRET?.trim() ?? "";
+        if (!clientId || !clientSecret) return errorRedirect("LinkedIn OAuth not configured.");
+
+        const res = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+          method:  "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body:    new URLSearchParams({
+            grant_type:    "authorization_code",
+            code,
+            redirect_uri:  callbackUrl,
+            client_id:     clientId,
+            client_secret: clientSecret,
+          }),
+        });
+        const data = await res.json().catch(() => ({})) as {
+          access_token?: string;
+          refresh_token?: string;
+          expires_in?: number;
+          error_description?: string;
+        };
+        if (!res.ok || !data.access_token) {
+          return errorRedirect(data.error_description ?? "LinkedIn token exchange failed.");
+        }
+        accessToken  = data.access_token;
+        refreshToken = data.refresh_token ?? null;
+        if (data.expires_in) {
+          const d = new Date();
+          d.setSeconds(d.getSeconds() + data.expires_in);
+          expiresAt = d;
+        }
+        // Fetch profile
+        try {
+          const meRes  = await fetch("https://api.linkedin.com/v2/me", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const me = await meRes.json().catch(() => ({})) as { id?: string; localizedFirstName?: string; localizedLastName?: string };
+          platformUserId   = me.id ?? null;
+          platformUsername = (me.localizedFirstName && me.localizedLastName)
+            ? `${me.localizedFirstName} ${me.localizedLastName}`
+            : null;
+        } catch { /* no profile — fine */ }
+        break;
+      }
+      case "x": {
+        const clientId     = process.env.X_CLIENT_ID?.trim()     ?? "";
+        const clientSecret = process.env.X_CLIENT_SECRET?.trim() ?? "";
+        if (!clientId || !clientSecret) return errorRedirect("X OAuth not configured.");
+
+        // PKCE — code_verifier was packed into state as last segment
+        const stateParts    = state?.split(":") ?? [];
+        const codeVerifier  = stateParts[stateParts.length - 1] ?? "";
+
+        const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+        const res = await fetch("https://api.twitter.com/2/oauth2/token", {
+          method:  "POST",
+          headers: {
+            Authorization:  `Basic ${credentials}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            code,
+            grant_type:    "authorization_code",
+            redirect_uri:  callbackUrl,
+            code_verifier: codeVerifier,
+          }),
+        });
+        const data = await res.json().catch(() => ({})) as {
+          access_token?: string;
+          refresh_token?: string;
+          expires_in?: number;
+          error_description?: string;
+        };
+        if (!res.ok || !data.access_token) {
+          return errorRedirect(data.error_description ?? "X token exchange failed.");
+        }
+        accessToken  = data.access_token;
+        refreshToken = data.refresh_token ?? null;
+        if (data.expires_in) {
+          const d = new Date();
+          d.setSeconds(d.getSeconds() + data.expires_in);
+          expiresAt = d;
+        }
+        // Fetch user identity
+        try {
+          const meRes = await fetch("https://api.twitter.com/2/users/me?user.fields=username,name", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const me = await meRes.json().catch(() => ({})) as { data?: { id?: string; username?: string; name?: string } };
+          platformUserId   = me.data?.id       ?? null;
+          platformUsername = me.data?.username  ? `@${me.data.username}` : null;
+        } catch { /* no profile — fine */ }
         break;
       }
       default:

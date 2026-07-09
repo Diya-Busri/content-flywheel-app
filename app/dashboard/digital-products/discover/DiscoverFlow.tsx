@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -245,6 +246,10 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
   const router = useRouter();
   const { toast } = useToast();
   const NICHES_PER_PAGE = 6;
+
+  // Confirm dialog state
+  const [confirmOpen, setConfirmOpen]   = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"discard" | "startover" | null>(null);
 
   // Initialize state FROM localStorage so first render already has correct step/data (fixes "Continue" always showing Step 1)
   const [step, setStep] = useState(1);
@@ -1391,6 +1396,26 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
 
   return (
     <main className={wrapperClass}>
+      {/* Confirm dialog — replaces window.confirm() for destructive actions */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={confirmAction === "discard" ? "Discard progress?" : "Start over?"}
+        description={
+          confirmAction === "discard"
+            ? "This will discard your previous discovery session. Your new answers will start fresh."
+            : "This will delete all your discovery progress and take you back to step 1."
+        }
+        confirmLabel={confirmAction === "discard" ? "Discard" : "Start over"}
+        cancelLabel="Keep going"
+        variant="destructive"
+        onConfirm={() => {
+          setConfirmOpen(false);
+          setConfirmAction(null);
+          handleStartFresh();
+        }}
+      />
+
       {/* Generating overlay — only visible briefly while the create API call is in flight (<3s); redirects immediately once productId is returned. Also shows on error. */}
       {(generating || createError || timeoutStillGenerating) && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/98 backdrop-blur-md p-6" role="alert" aria-live="polite">
@@ -1517,83 +1542,40 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
         </div>
       )}
 
-      {/* Resume or Start Fresh modal */}
-      <Dialog open={showResumeModal} onOpenChange={(open) => !open && setShowResumeModal(false)}>
-        <DialogContent className="max-w-[600px] border-border bg-card text-foreground" onPointerDownOutside={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle className="text-xl text-foreground">Welcome back!</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              {savedProductId
-                ? "You have a product in progress. Open it in the editor or start a new discovery."
-                : "You have an in-progress discovery session. Continue where you left off or start fresh."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <button
-              type="button"
-              onClick={handleResume}
-              className="flex w-full items-start gap-4 rounded-lg border-2 border-orange-500 bg-muted p-5 text-left transition-all hover:border-orange-500 hover:bg-orange-500/10 hover:-translate-y-0.5"
-            >
-              <Play className="h-8 w-8 shrink-0 text-orange-500" />
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-foreground">{savedProductId ? "Open in editor" : "Continue where you left off"}</div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {savedProductId ? "Go directly to the product editor to finish designing your product." : "Resume with all your generated content and progress saved."}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  • Step {step} of 6
-                  <br />
-                  • {allNiches.length} niches explored
-                  {selectedNiche ? (
-                    <>
-                      <br />• Selected: {selectedNiche.name}
-                    </>
-                  ) : null}
-                  {selectedProduct ? (
-                    <>
-                      <br />• Product: {selectedProduct.name}
-                    </>
-                  ) : null}
-                  {productFormat ? (
-                    <>
-                      <br />• Format: {productFormat}
-                    </>
-                  ) : null}
-                  <br />• All selections preserved
-                  {interests.trim().slice(0, 30) ? (
-                    <>
-                      <br />• &ldquo;{interests.trim().slice(0, 30)}…&rdquo;
-                    </>
-                  ) : null}
-                </p>
-              </div>
-            </button>
-            <div className="text-center text-xs text-muted-foreground">or</div>
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== "undefined" && window.confirm("Start fresh? Your previous discovery progress will be deleted.")) {
-                  handleStartFresh();
-                }
-              }}
-              className="flex w-full items-start gap-4 rounded-lg border-2 border-border bg-muted p-5 text-left transition-all hover:border-muted-foreground/50 hover:bg-muted"
-            >
-              <Sparkles className="h-8 w-8 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-foreground">Start fresh</div>
-                <p className="mt-1 text-sm text-muted-foreground">Begin a new discovery session (previous work will be deleted).</p>
-              </div>
-            </button>
-          </div>
-          <DialogFooter className="sm:justify-start">
-            <Button variant="ghost" className="text-muted-foreground" onClick={() => router.push("/dashboard/digital-products")}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <div className="max-w-3xl mx-auto p-6 md:p-10 pb-24">
+        {/* Resume banner — non-blocking, replaces the old blocking modal */}
+        {showResumeModal && (
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-orange-500/40 bg-orange-500/10 px-4 py-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Play className="h-4 w-4 shrink-0 text-orange-500" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {savedProductId ? "Product in progress" : `Discovery in progress — Step ${step} of 7`}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {savedProductId && selectedProduct
+                    ? selectedProduct.name
+                    : selectedNiche
+                    ? `${selectedNiche.name}${selectedProduct ? ` · ${selectedProduct.name}` : ""}`
+                    : interests.trim().slice(0, 50) || "Previous session"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={handleResume}>
+                {savedProductId ? "Open in editor" : "Continue"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:text-red-400"
+                onClick={() => { setConfirmAction("discard"); setConfirmOpen(true); }}
+              >
+                Discard
+              </Button>
+            </div>
+          </div>
+        )}
         {/* Top nav: Dashboard + Digital Products so main app nav is discoverable */}
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-sm">
           <Link href="/dashboard" className="text-muted-foreground hover:text-orange-500 transition-colors">
@@ -1619,11 +1601,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
               variant="ghost"
               size="sm"
               className="text-red-500/90 hover:text-red-400 hover:bg-red-500/10"
-              onClick={() => {
-                if (typeof window !== "undefined" && window.confirm("Start over? This will delete all your discovery progress.")) {
-                  handleStartFresh();
-                }
-              }}
+              onClick={() => { setConfirmAction("startover"); setConfirmOpen(true); }}
             >
               <Trash2 className="w-4 h-4 mr-1" />
               Start over

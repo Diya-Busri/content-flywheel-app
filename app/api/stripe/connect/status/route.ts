@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/stripe/connect/status
- * Returns the creator's Stripe Connect status.
+ * Returns the creator's Stripe Connect status, live-checked against Stripe.
  */
 export async function GET() {
   const { userId } = await auth();
@@ -22,42 +22,50 @@ export async function GET() {
   try {
     const [profile] = await db
       .select({
+        email: profilesTable.email,
         stripeConnectAccountId: profilesTable.stripeConnectAccountId,
         stripeConnectOnboardingComplete: profilesTable.stripeConnectOnboardingComplete,
         stripeConnectChargesEnabled: profilesTable.stripeConnectChargesEnabled,
+        stripeConnectPayoutsEnabled: profilesTable.stripeConnectPayoutsEnabled,
       })
       .from(profilesTable)
       .where(eq(profilesTable.userId, userId))
       .limit(1);
 
     if (!profile?.stripeConnectAccountId) {
-      return NextResponse.json({ connected: false, chargesEnabled: false });
+      return NextResponse.json({ connected: false, chargesEnabled: false, payoutsEnabled: false });
     }
 
     // Live-check with Stripe in case the account was updated outside of webhooks
     const account = await stripe.accounts.retrieve(profile.stripeConnectAccountId);
-    const chargesEnabled = account.charges_enabled;
+    const chargesEnabled   = account.charges_enabled;
+    const payoutsEnabled   = account.payouts_enabled ?? false;
     const detailsSubmitted = account.details_submitted;
+    const accountEmail     = (account.email ?? profile.email) ?? null;
 
     // Sync to DB if state has changed
     if (
-      chargesEnabled !== profile.stripeConnectChargesEnabled ||
+      chargesEnabled  !== profile.stripeConnectChargesEnabled  ||
+      payoutsEnabled  !== profile.stripeConnectPayoutsEnabled  ||
       detailsSubmitted !== profile.stripeConnectOnboardingComplete
     ) {
       await db
         .update(profilesTable)
         .set({
           stripeConnectChargesEnabled: chargesEnabled,
+          stripeConnectPayoutsEnabled: payoutsEnabled,
           stripeConnectOnboardingComplete: detailsSubmitted,
         })
         .where(eq(profilesTable.userId, userId));
     }
 
     return NextResponse.json({
-      connected: true,
-      accountId: profile.stripeConnectAccountId,
+      connected:         true,
+      accountId:         profile.stripeConnectAccountId,
+      email:             accountEmail,
       onboardingComplete: detailsSubmitted,
       chargesEnabled,
+      payoutsEnabled,
     });
   } catch (err) {
     console.error("[stripe/connect/status] error:", err);

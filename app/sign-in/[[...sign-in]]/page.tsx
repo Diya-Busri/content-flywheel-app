@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function SignInPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]">
       <SignInWithRedirect />
     </div>
   );

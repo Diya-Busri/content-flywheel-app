@@ -127,7 +127,7 @@ export function ProductCoverSection({
           <img
             src={displayImage}
             alt={productTitle}
-            style={{ width: "100%", maxWidth: "600px", maxHeight: "420px", display: "block", objectFit: "cover", objectPosition: "top" }}
+            style={{ width: "100%", maxWidth: "600px", display: "block", objectFit: "contain" }}
           />
         </div>
       ) : (

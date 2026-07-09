@@ -73,33 +73,44 @@ export async function POST(request: NextRequest) {
     }
 
     const subNichesStr = nicheSubNiches.length
-      ? `Some sub-niche angles to consider: ${nicheSubNiches.slice(0, 5).join(", ")}.`
+      ? `Sub-niche angles to work from: ${nicheSubNiches.slice(0, 5).join(", ")}.`
       : "";
-    const excludeStr = exclude.length ? `Do NOT suggest any of these (already shown): ${exclude.join(", ")}.` : "";
+    const excludeStr = exclude.length ? `Already suggested (do NOT repeat these): ${exclude.join(", ")}.` : "";
 
-    const prompt = `Generate exactly 6 digital product ideas for this niche: "${nicheName}"
+    const prompt = `Generate exactly 6 specific, sellable digital product ideas for the niche: "${nicheName}"
+
 ${subNichesStr}
 ${excludeStr}
 
-VARIETY: Mix different formats (Notion Template, PDF/Guide, Spreadsheet, Workbook, Mini-Course, Checklist). Mix price points (e.g. $12, $27, $47, $67). Mix durations (7-day, 30-day, 90-day, evergreen).
+Think about this buyer's actual life situation:
+- What format do they prefer to consume? (busy nurse = quick-reference PDF; student = structured workbook; freelancer = Notion dashboard)
+- What is the specific trigger moment that makes them pull out their card for a $17-67 digital product?
+- What title would they actually type into Etsy or Gumroad search?
+
+Rules for every product:
+1. TITLE must be specific and searchable — not "Budget Tracker" but "Freelance Tax Expense Tracker for UK Self-Employed"
+2. INCLUDED must list concrete deliverables (e.g. "12-week meal grid, 3 shopping list templates, macro reference sheet, 'what to prep first' quick-start guide") — not vague descriptions
+3. WHY must explain: the specific trigger moment that makes someone buy, and how content about this product drives traffic (e.g. "Nurses Google 'meal prep for shift work' constantly. A 60-second 'pack my bag with me' video leads directly to the sale.")
+4. PRICE NOTE must explain the psychology, not just the format (e.g. "Impulse-buy range for healthcare workers who've wasted money on apps that didn't fit shift work")
+5. Include at least one product under $20 (accessible entry point) and one $47+ (premium/comprehensive)
+
+VARIETY: Use different formats (PDF, Notion Template, Workbook, Checklist Pack, Spreadsheet, Mini-Course, Planner). Different price points. Different durations/structures.
+
+Do NOT invent statistics. Reason from buyer psychology and real product patterns.
 
 ${PRICING_RULES}
 
-For EACH product:
-1. "price" using the rules above (e.g. "$37-47" or "$17-27").
-2. "priceNote" e.g. "Based on 90-day duration" or "Based on template/tracker format".
-3. "complexity": one of "Beginner-friendly" | "Intermediate" | "Advanced".
-4. "estimatedTime": e.g. "~2 hours to customize" or "~1 hour to customize" or "~4 hours to customize".
-
-Return ONLY a valid JSON array of exactly 6 objects (no markdown). Each object:
-- "name": string (product title)
-- "type": string (e.g. "Notion Template", "PDF + Guide", "Spreadsheet", "Mini-Course", "Workbook", "Checklist Pack")
-- "price": string (e.g. "$37-47" or "$17-27")
-- "priceNote": string
-- "included": string (short description of what's included)
-- "why": string (1 sentence why it sells)
-- "complexity": "Beginner-friendly" | "Intermediate" | "Advanced"
-- "estimatedTime": string (e.g. "~2 hours to customize")`;
+Return ONLY a valid JSON array of exactly 6 objects (no markdown, no code fences):
+[{
+  "name": "Specific, searchable product title",
+  "type": "Notion Template | PDF + Guide | Spreadsheet Template | Workbook | Mini-Course | Checklist Pack | Planner",
+  "price": "$X-Y",
+  "priceNote": "Psychology behind this price for this specific buyer",
+  "included": "Concrete bullet-style list of what is inside (e.g. '10-week habit grid, 3 reflection worksheets, weekly reset prompt page, printable habit stickers')",
+  "why": "2 sentences: the specific trigger moment that makes someone buy, and the content angle that drives discovery for this product",
+  "complexity": "Beginner-friendly" | "Intermediate" | "Advanced",
+  "estimatedTime": "~X hours to customize"
+}]`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -108,18 +119,17 @@ Return ONLY a valid JSON array of exactly 6 objects (no markdown). Each object:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        // gpt-4o-mini: product suggestions (titles/descriptions), low complexity
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
             content:
-              "You are a digital product expert. Always return a valid JSON array only. No markdown, no code fences.",
+              "You are a digital product strategist who has studied what actually converts on Gumroad, Etsy, TikTok Shop, and Payhip. You understand buyer psychology at the scroll-to-checkout level. You write product titles buyers would search for, concrete 'what's included' descriptions, and 'why it sells' explanations grounded in real purchase triggers — not generic statements. You never invent statistics or percentages. Return only a valid JSON array, no markdown, no code fences.",
           },
           { role: "user", content: prompt },
         ],
-        temperature: 0.7,
-        max_tokens: 2000,
+        temperature: 0.75,
+        max_tokens: 3000,
       }),
     });
 

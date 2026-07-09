@@ -29,6 +29,10 @@ export type DesignElement = {
   textDecoration?: string;
   textBackground?: string;
   textAlign?: string;
+  paragraphSpacing?: number;
+  lineClamp?: number;
+  balanceLines?: boolean;
+  autoFit?: string;
   // image
   imageUrl?: string;
   objectFit?: string;

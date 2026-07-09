@@ -42,6 +42,16 @@ export async function PATCH(
     "payWhatYouWant",
     "minPrice",
     "sequenceId",
+    // Design asset role assignments
+    "coverThumbnailUrl",
+    "thumbnailUrl",
+    "socialPreviewUrl",
+    "bookMockupUrl",
+    "coverConcepts",
+    // Cover design reference (element-based cover concept)
+    "coverDesignId",
+    // Dedicated store thumbnail design reference
+    "thumbnailDesignId",
   ] as const;
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {

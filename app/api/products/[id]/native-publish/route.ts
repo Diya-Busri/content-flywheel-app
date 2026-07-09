@@ -5,6 +5,8 @@ import Stripe from "stripe";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { productWaitlistsTable } from "@/db/schema/product-waitlists-schema";
+import { creatorFollowsTable } from "@/db/schema/creator-follows-schema";
+import { notificationsTable } from "@/db/schema/notifications-schema";
 import { eq, and, isNull } from "drizzle-orm";
 import type { MarketingAssets } from "@/db/schema/products-schema";
 import { Resend } from "resend";
@@ -131,10 +133,14 @@ export async function POST(
       .set({ marketingAssets: updatedAssets, updatedAt: new Date() })
       .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
 
-    // If this is the first publish (was not already published), notify waitlist subscribers
+    // If this is the first publish (was not already published), notify waitlist + followers
     if (!existing.isNativePublished) {
       notifyWaitlist(productId, product.title, priceLabel).catch((e) =>
         console.error("[native-publish] waitlist notify error:", e)
+      );
+      // Notify all followers of this creator
+      notifyFollowers(userId, productId, product.title, priceLabel).catch((e) =>
+        console.error("[native-publish] follower notify error:", e)
       );
     }
 
@@ -207,6 +213,28 @@ async function notifyWaitlist(productId: string, productTitle: string, priceLabe
 </html>`,
       })
     )
+  );
+}
+
+// ── Fire-and-forget: notify all followers that creator published a new product ──
+async function notifyFollowers(creatorUserId: string, productId: string, productTitle: string, priceLabel: string) {
+  const APP_URL_LOCAL = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+  const followers = await db
+    .select({ followerId: creatorFollowsTable.followerId })
+    .from(creatorFollowsTable)
+    .where(eq(creatorFollowsTable.followedId, creatorUserId));
+
+  if (followers.length === 0) return;
+
+  await db.insert(notificationsTable).values(
+    followers.map(({ followerId }) => ({
+      userId: followerId,
+      title: "New product from a creator you follow",
+      message: `${productTitle} is now available — ${priceLabel}`,
+      type: "info" as const,
+      linkUrl: `${APP_URL_LOCAL}/product/${productId}`,
+      metadata: { creatorUserId, productId },
+    }))
   );
 }
 
