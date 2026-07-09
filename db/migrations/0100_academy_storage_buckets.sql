@@ -1,0 +1,16 @@
+-- Academy storage buckets
+--
+-- Supabase Storage buckets are NOT created with raw SQL through Drizzle migrations.
+-- They are created via the Supabase Dashboard (Storage → New bucket) or the
+-- Supabase JS / management API. This file exists only to document that step.
+--
+-- Create the following PUBLIC buckets in your Supabase project:
+--   * academy-videos     — lesson video uploads
+--   * academy-images     — lesson image uploads
+--   * academy-downloads  — lesson downloadable files
+--   * academy-community  — community post attachments
+--
+-- See docs/academy-storage-setup.md for full instructions.
+--
+-- No-op SQL below so this migration runs cleanly if applied.
+SELECT 1;

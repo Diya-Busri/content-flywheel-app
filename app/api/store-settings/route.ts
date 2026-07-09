@@ -1,0 +1,161 @@
+export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { db } from "@/db/db";
+import { storeSettingsTable } from "@/db/schema/store-settings-schema";
+import { eq, and, ne } from "drizzle-orm";
+
+function getDefaults(userId: string) {
+  return {
+    id: null,
+    userId,
+    theme: "warm",
+    accentColor: "#f97316",
+    layout: "grid",
+    bannerImageUrl: null,
+    bannerGradient: null,
+    profileImageUrl: null,
+    bio: null,
+    storeName: null,
+    tagline: null,
+    showSocialLinks: false,
+    socialLinks: null,
+    announcementText: null,
+    announcementColor: "#f97316",
+    buttonText: "Subscribe for updates",
+    fontFamily: "inter",
+    productSort: "newest",
+    showTrustBadges: true,
+    showSalesCount: false,
+    vatEnabled: false,
+    vatRate: 20,
+    vatNumber: null,
+    businessName: null,
+    businessAddress: null,
+    createdAt: null,
+    updatedAt: null,
+  };
+}
+
+export async function GET() {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const [settings] = await db
+      .select()
+      .from(storeSettingsTable)
+      .where(eq(storeSettingsTable.userId, userId))
+      .limit(1);
+
+    const data = settings ?? getDefaults(userId);
+
+    // Admin always has custom domain unlocked
+    const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+    if (adminEmail) {
+      const user = await currentUser();
+      const email = user?.emailAddresses?.[0]?.emailAddress?.trim().toLowerCase() ?? "";
+      if (email === adminEmail) {
+        return NextResponse.json({ ...data, customDomainActive: true });
+      }
+    }
+
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error("[store-settings GET]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+
+    // Allowlist fields that can be updated
+    const allowed = [
+      "theme",
+      "accentColor",
+      "layout",
+      "bannerImageUrl",
+      "bannerGradient",
+      "profileImageUrl",
+      "bio",
+      "storeName",
+      "tagline",
+      "showSocialLinks",
+      "socialLinks",
+      "announcementText",
+      "announcementColor",
+      "buttonText",
+      "fontFamily",
+      "productSort",
+      "showTrustBadges",
+      "showSalesCount",
+      "vatEnabled",
+      "vatRate",
+      "vatNumber",
+      "businessName",
+      "businessAddress",
+      "customDomain",
+    ] as const;
+
+    const updates: Record<string, unknown> = {};
+    for (const key of allowed) {
+      if (key in body) {
+        updates[key] = body[key];
+      }
+    }
+
+    // If a customDomain is being set, normalise to full subdomain and ensure uniqueness
+    if (updates.customDomain && typeof updates.customDomain === "string") {
+      const SUFFIX = ".contentflywheel.co.uk";
+      const raw = updates.customDomain.trim().toLowerCase();
+      // Accept bare handle ("digitaldrift") or full subdomain ("digitaldrift.contentflywheel.co.uk")
+      const handle = raw.endsWith(SUFFIX) ? raw.slice(0, -SUFFIX.length) : raw;
+      const normalised = `${handle}${SUFFIX}`;
+      updates.customDomain = normalised;
+      const [existing] = await db
+        .select({ userId: storeSettingsTable.userId })
+        .from(storeSettingsTable)
+        .where(
+          and(
+            eq(storeSettingsTable.customDomain, normalised),
+            ne(storeSettingsTable.userId, userId)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        return NextResponse.json(
+          { error: "This domain is already connected to another store." },
+          { status: 409 }
+        );
+      }
+    }
+
+    await db
+      .insert(storeSettingsTable)
+      .values({ userId, ...updates, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: storeSettingsTable.userId,
+        set: { ...updates, updatedAt: new Date() },
+      });
+
+    const [updated] = await db
+      .select()
+      .from(storeSettingsTable)
+      .where(eq(storeSettingsTable.userId, userId))
+      .limit(1);
+
+    return NextResponse.json(updated);
+  } catch (err) {
+    console.error("[store-settings PATCH]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

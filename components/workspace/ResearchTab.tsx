@@ -1,0 +1,3243 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Search, Sparkles, Loader2, ChevronDown, ChevronUp,
+  TrendingUp, Globe, Users, ShoppingBag, BarChart3,
+  Lightbulb, Target, FileText, Wand2, Package,
+  Mic, Layers, StickyNote, BookmarkPlus,
+  Send, AlertCircle, RefreshCw, Copy, Check,
+  ArrowRight, Zap, Hash, Star, MessageSquare,
+  Library, Trash2, Heart, Brain, Building2, FlaskConical,
+  DatabaseZap, BookOpen, Plus, GitMerge, Megaphone, ExternalLink,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { markdownToTipTap } from "@/lib/markdown-to-tiptap";
+import type { SourceCitation } from "@/lib/research-sources/types";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface EvidenceItem {
+  source: string;
+  finding: string;
+  context: string;
+}
+
+interface BusinessOpp {
+  title: string;
+  description: string;
+  type: string;
+}
+
+interface ContentOpp {
+  title: string;
+  description: string;
+  format: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+}
+
+interface ProductOpp {
+  title: string;
+  description: string;
+  type: string;
+  priceRange: string;
+}
+
+interface Competitor {
+  name: string;
+  strength: string;
+  gap: string;
+  popularProducts?: string;
+  contentStrategy?: string;
+  whatToLearn?: string;
+}
+
+interface Keyword {
+  term: string;
+  intent: "informational" | "commercial" | "transactional";
+  opportunity: "High" | "Medium" | "Low";
+  type?: string;
+  note: string;
+}
+
+interface ActionStep {
+  step: number;
+  action: string;
+  detail: string;
+  cta: string;
+}
+
+interface RecommendedOpp {
+  name: string;
+  why: string;
+  demand: "Very High" | "High" | "Medium" | "Low";
+  competition: "Very High" | "High" | "Medium" | "Low";
+  monetisationPotential: "Very High" | "High" | "Medium" | "Low";
+  contentPotential: "Very High" | "High" | "Medium" | "Low";
+  estimatedRevenue: string;
+  timeToFirstSale: string;
+}
+
+interface BuildPath {
+  withFlywheel: { estimatedTime: string; difficulty: "Easy" | "Medium" | "Hard"; steps: string[] };
+  manually: { estimatedTime: string; tools: string[]; note: string };
+}
+
+interface AiRecommendation {
+  nextStep: string;
+  category: "Build Now" | "Validate First" | "Create Content First" | "Research More";
+  reasoning: string;
+}
+
+interface Scorecard {
+  opportunityScore: number;    // 0–100
+  confidenceLevel: number;     // 0–100
+  timeToLaunch: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+  competitionLevel: "Low" | "Medium" | "High" | "Very High";
+  revenuePotential: string;
+  audienceDemand: "Low" | "Medium" | "High" | "Very High";
+  recommendedPriority: "Build Now" | "Validate First" | "Create Content First" | "Research More";
+}
+
+interface BestNextActionData {
+  action: string;
+  reasoning: string;
+  estimatedPrice: string;
+  timeToFirstSale: string;
+}
+
+interface ResearchReport {
+  summary: string;
+  insights: string[];
+  evidence?: EvidenceItem[];
+  rootCauses?: string[];
+  contentOpportunities: ContentOpp[];
+  productOpportunities: ProductOpp[];
+  businessOpportunities?: BusinessOpp[];
+  competitorInsights: Competitor[];
+  keywords: Keyword[];
+  actionPlan: ActionStep[];
+  recommendedOpportunity?: RecommendedOpp;
+  buildPath?: BuildPath;
+  aiRecommendation?: AiRecommendation;
+  scorecard?: Scorecard;
+  bestNextAction?: BestNextActionData;
+  // legacy — may exist in old saved reports
+  trendingProblems?: string[];
+}
+
+interface SavedReport {
+  id: string;
+  query: string;
+  researchType: string;
+  report: ResearchReport;
+  savedAt: string;
+  favourite: boolean;
+  /** Live citations from real API connectors */
+  citations?: SourceCitation[];
+  /** Number of real-data sources that contributed */
+  liveSourceCount?: number;
+  /** Which analyst categories returned live data */
+  liveCategories?: string[];
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+type ResearchState = "idle" | "loading" | "done";
+
+// ── Analyst / streaming types ─────────────────────────────────────────────────
+type AnalystStatus = "waiting" | "working" | "done" | "error";
+type SynthesisStatus = "waiting" | "working" | "done" | "error";
+
+interface AnalystState {
+  id: string;
+  displayName: string;
+  emoji: string;
+  description: string;
+  status: AnalystStatus;
+  summary?: string;
+  usedFallback?: boolean;
+  duration?: number;
+}
+
+type ProviderDataMap = Record<string, Record<string, unknown>>;
+
+interface SourceMeta {
+  id: string;
+  displayName: string;
+  usedFallback: boolean;
+  dataPoints: number;
+}
+
+interface RedditPost {
+  title: string;
+  subreddit: string;
+  score: number;
+  numComments: number;
+  permalink: string;
+  snippet: string;
+}
+
+interface ResearchTabProps {
+  onTabChange?: (tab: string) => void;
+}
+
+// ─── Research Types ───────────────────────────────────────────────────────────
+
+const RESEARCH_TYPES = [
+  {
+    id: "find-niche",
+    label: "Find a Niche",
+    emoji: "🎯",
+    description: "Validate a niche before entering",
+    placeholder: "e.g. 'Productivity tools for NHS nurses' or 'Notion templates for freelancers UK'",
+  },
+  {
+    id: "product-ideas",
+    label: "Product Ideas",
+    emoji: "📦",
+    description: "Discover digital products to create",
+    placeholder: "e.g. 'Digital products for content creators' or 'Templates for remote founders'",
+  },
+  {
+    id: "content-ideas",
+    label: "Content Ideas",
+    emoji: "✏️",
+    description: "Find high-performing content angles",
+    placeholder: "e.g. 'Content ideas for personal finance UK creators' or 'Viral hooks for productivity niche'",
+  },
+  {
+    id: "competitor",
+    label: "Competitor Analysis",
+    emoji: "🔍",
+    description: "Understand what competitors are doing",
+    placeholder: "e.g. 'Notion template creators on Gumroad' or 'AI writing tool market leaders'",
+  },
+  {
+    id: "marketing",
+    label: "Marketing Strategy",
+    emoji: "📣",
+    description: "Build a go-to-market plan",
+    placeholder: "e.g. 'How to market a productivity course to solopreneurs' or 'Launch strategy for Notion templates'",
+  },
+  {
+    id: "customer",
+    label: "Customer Research",
+    emoji: "👥",
+    description: "Understand your ideal customer deeply",
+    placeholder: "e.g. 'Pain points of burnt-out NHS nurses' or 'Struggles of freelance designers managing clients'",
+  },
+  {
+    id: "seo-keywords",
+    label: "SEO & Keywords",
+    emoji: "🔎",
+    description: "Find keyword opportunities and gaps",
+    placeholder: "e.g. 'SEO opportunities in Notion template niche' or 'Content gap analysis for AI tools creators'",
+  },
+  {
+    id: "market-trends",
+    label: "Market Trends",
+    emoji: "📈",
+    description: "Spot emerging trends before they peak",
+    placeholder: "e.g. 'Emerging trends in creator economy 2025' or 'What is growing fast in digital product space UK'",
+  },
+  {
+    id: "custom",
+    label: "Custom Research",
+    emoji: "✨",
+    description: "Open-ended research on any topic",
+    placeholder: "Research anything… e.g. 'Notion templates for solopreneurs' or 'AI tools for freelancers UK'",
+  },
+];
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const LS_KEY = "cf-research-library";
+const MAX_SAVED = 20;
+
+const LOADING_STEPS = [
+  { label: "Scanning the web", icon: <Globe className="w-3.5 h-3.5" /> },
+  { label: "Analysing market trends", icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  { label: "Finding opportunities", icon: <Lightbulb className="w-3.5 h-3.5" /> },
+  { label: "Building your report", icon: <Sparkles className="w-3.5 h-3.5" /> },
+];
+
+// ─── Research Sources Config ──────────────────────────────────────────────────
+
+type SourceStatus = "connected" | "not-connected" | "coming-soon" | "error";
+
+interface ResearchSource {
+  id: string;
+  name: string;
+  description: string;
+  status: SourceStatus;
+  provider?: string;
+}
+
+interface ResearchSourceCategory {
+  id: string;
+  label: string;
+  emoji: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  sources: ResearchSource[];
+}
+
+const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
+  {
+    id: "web",
+    label: "Web",
+    emoji: "🌐",
+    icon: Globe,
+    description: "Live web context, news articles, Wikipedia, and academic papers",
+    sources: [
+      { id: "web-search", name: "Web Search",     description: "Live web context via DuckDuckGo instant answers",   status: "connected", provider: "duckduckgo" },
+      { id: "news",       name: "News",           description: "Current news articles from Google News RSS",        status: "connected", provider: "google-news-rss" },
+      { id: "wikipedia",  name: "Wikipedia",      description: "Encyclopedic background on any topic",              status: "connected", provider: "wikipedia-api" },
+      { id: "academic",   name: "Academic Papers", description: "Peer-reviewed research via Semantic Scholar",      status: "connected", provider: "semantic-scholar" },
+    ],
+  },
+  {
+    id: "communities",
+    label: "Communities",
+    emoji: "💬",
+    icon: MessageSquare,
+    description: "Real discussions from Reddit and Hacker News",
+    sources: [
+      { id: "reddit",      name: "Reddit",      description: "Subreddits, threads, and upvote signals",               status: "connected", provider: "reddit-api" },
+      { id: "hacker-news", name: "Hacker News", description: "Tech and startup conversations via Algolia HN API",     status: "connected", provider: "hn-algolia-api" },
+    ],
+  },
+  {
+    id: "seo",
+    label: "SEO",
+    emoji: "📈",
+    icon: BarChart3,
+    description: "Real keyword data from Google autocomplete",
+    sources: [
+      { id: "keyword-research", name: "Keyword Research", description: "Real keyword suggestions via Google Suggest",          status: "connected", provider: "google-suggest" },
+      { id: "related-searches", name: "Related Searches", description: "How-to and best-of query clusters from Google",        status: "connected", provider: "google-suggest" },
+      { id: "search-intent",    name: "Search Intent",    description: "Commercial vs informational intent classification",     status: "connected", provider: "openai" },
+    ],
+  },
+  {
+    id: "ai-intelligence",
+    label: "AI Analysis",
+    emoji: "🤖",
+    icon: Brain,
+    description: "AI synthesis of social signals, marketplace data, and intelligence patterns",
+    sources: [
+      { id: "social-analysis",       name: "Social Intelligence",  description: "AI analysis of social media trends and viral formats",  status: "connected", provider: "openai" },
+      { id: "marketplace-analysis",  name: "Marketplace Analysis", description: "AI analysis of digital marketplace landscape",           status: "connected", provider: "openai" },
+      { id: "opportunity-detection", name: "Opportunity Detection",description: "AI identifies market gaps before you do",                status: "connected", provider: "openai" },
+      { id: "pattern-recognition",   name: "Pattern Recognition",  description: "Recurring signals synthesised across all sources",       status: "connected", provider: "openai" },
+    ],
+  },
+];
+
+const DIFFICULTY_COLORS: Record<string, string> = {
+  Easy:   "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+  Medium: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+  Hard:   "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+};
+
+const INTENT_COLORS: Record<string, string> = {
+  informational: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  commercial:    "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  transactional: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+};
+
+const OPP_COLORS: Record<string, string> = {
+  High:   "text-green-500",
+  Medium: "text-yellow-500",
+  Low:    "text-muted-foreground",
+};
+
+const METRIC_COLORS: Record<string, string> = {
+  "Very High": "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/25",
+  "High":      "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+  "Medium":    "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+  "Low":       "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+};
+
+const COMPETITION_COLORS: Record<string, string> = {
+  "Very High": "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/25",
+  "High":      "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  "Medium":    "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+  "Low":       "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  "Build Now":            "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/25",
+  "Validate First":       "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/25",
+  "Create Content First": "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25",
+  "Research More":        "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25",
+};
+
+const BIZ_OPP_COLORS: Record<string, string> = {
+  "Market Gap":          "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  "Underserved Audience":"bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  "Emerging Trend":      "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+  "Monetisation Angle":  "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+  "First-Mover Advantage":"bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+};
+
+const FLYWHEEL_STEP_ROUTES: Record<string, string> = {
+  "Generate Product":        "/dashboard/digital-products/create-from-research",
+  "Edit in Design Studio":   "/dashboard/design-studio",
+  "Generate Carousel":       "/dashboard/design-studio",
+  "Generate Video Guide":    "/dashboard/video-guide/new",
+  "Generate Publishing Kit": "/dashboard/video-guide/new",
+};
+
+const LAUNCH_ROADMAP = [
+  { label: "Research Done",           emoji: "🔍", route: null },
+  { label: "Generate Product",        emoji: "📦", route: "/dashboard/digital-products/create-from-research" },
+  { label: "Edit in Design Studio",   emoji: "🎨", route: "/dashboard/design-studio" },
+  { label: "Generate Carousel",       emoji: "📱", route: "/dashboard/design-studio" },
+  { label: "Generate Video Guide",    emoji: "🎬", route: "/dashboard/video-guide/new" },
+  { label: "Generate Publishing Kit", emoji: "🚀", route: "/dashboard/video-guide/new" },
+  { label: "Launch",                  emoji: "⚡", route: "/dashboard/library" },
+];
+
+// ─── Markdown stripper ────────────────────────────────────────────────────────
+
+/** Strip raw markdown syntax from AI-generated text fields. */
+function stripMd(text: string): string {
+  if (!text || typeof text !== "string") return text ?? "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/#{1,6}\s*/g, "")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Render AI chat assistant content with basic markdown to JSX. */
+function renderChatContent(text: string) {
+  const cleaned = text
+    .replace(/\*\*(.*?)\*\*/g, "BOLD:$1:BOLD")
+    .replace(/#{1,3}\s+(.*)/g, "HEADING:$1:HEADING");
+  const lines = cleaned.split("\n");
+  return lines.map((line, i) => {
+    const isHeading = /^HEADING:(.*):HEADING$/.test(line);
+    const isBullet = /^[-•*]\s/.test(line);
+    const isNum = /^\d+\.\s/.test(line);
+    const renderLine = (l: string) => {
+      const parts = l.split(/(BOLD:.*?:BOLD)/g);
+      return parts.map((p, j) =>
+        p.startsWith("BOLD:") && p.endsWith(":BOLD")
+          ? <strong key={j}>{p.slice(5, -5)}</strong>
+          : p
+      );
+    };
+    if (isHeading) {
+      const content = line.replace(/^HEADING:(.*):HEADING$/, "$1");
+      return <p key={i} className="font-semibold text-foreground mt-3 mb-1">{content}</p>;
+    }
+    if (isBullet) {
+      const content = line.replace(/^[-•*]\s/, "");
+      return (
+        <div key={i} className="flex items-start gap-2 my-0.5">
+          <span className="text-orange-500 shrink-0 mt-1 text-[10px]">●</span>
+          <span>{renderLine(content)}</span>
+        </div>
+      );
+    }
+    if (isNum) {
+      const match = line.match(/^(\d+)\.\s(.*)/);
+      if (match) return (
+        <div key={i} className="flex items-start gap-2 my-0.5">
+          <span className="text-orange-500 shrink-0 font-semibold text-[12px] mt-px">{match[1]}.</span>
+          <span>{renderLine(match[2])}</span>
+        </div>
+      );
+    }
+    if (!line.trim()) return <div key={i} className="h-2" />;
+    return <p key={i} className="my-0.5">{renderLine(line)}</p>;
+  });
+}
+
+// ─── Research Library hook ────────────────────────────────────────────────────
+
+function useResearchLibrary() {
+  const [library, setLibrary] = useState<SavedReport[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) setLibrary(JSON.parse(raw) as SavedReport[]);
+    } catch {}
+  }, []);
+
+  const persist = useCallback((next: SavedReport[]) => {
+    setLibrary(next);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+  }, []);
+
+  const saveReport = useCallback((
+    query: string,
+    researchType: string,
+    report: ResearchReport,
+    meta?: { citations?: SourceCitation[]; liveSourceCount?: number; liveCategories?: string[] },
+  ) => {
+    const entry: SavedReport = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      query,
+      researchType,
+      report,
+      savedAt: new Date().toISOString(),
+      favourite: false,
+      citations: meta?.citations,
+      liveSourceCount: meta?.liveSourceCount,
+      liveCategories: meta?.liveCategories,
+    };
+    setLibrary(prev => {
+      let next = [entry, ...prev];
+      if (next.length > MAX_SAVED) {
+        // purge oldest non-favourite
+        const nfIdx = [...next].reverse().findIndex(r => !r.favourite);
+        if (nfIdx !== -1) next.splice(next.length - 1 - nfIdx, 1);
+      }
+      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    return entry.id;
+  }, []);
+
+  const toggleFavourite = useCallback((id: string) => {
+    setLibrary(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, favourite: !r.favourite } : r);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const deleteReport = useCallback((id: string) => {
+    setLibrary(prev => {
+      const next = prev.filter(r => r.id !== id);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  return { library, saveReport, toggleFavourite, deleteReport, persist };
+}
+
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+
+function Section({
+  id, title, icon, badge, open, onToggle, children, accent, advancedOnly,
+}: {
+  id: string; title: string; icon: React.ReactNode; badge?: string | number;
+  open: boolean; onToggle: (id: string) => void; children: React.ReactNode;
+  accent?: string; advancedOnly?: boolean;
+}) {
+  return (
+    <div className={cn("rounded-2xl border border-border bg-card overflow-hidden transition-all", accent)}>
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-accent/30 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-orange-500">{icon}</span>
+          <span className="font-semibold text-[15px] text-foreground">{title}</span>
+          {badge !== undefined && (
+            <span className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[11px] font-bold">
+              {badge}
+            </span>
+          )}
+          {advancedOnly && (
+            <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-bold border border-purple-500/20">
+              Advanced
+            </span>
+          )}
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
+
+// ─── Quick actions ────────────────────────────────────────────────────────────
+
+function QuickActions({ actions }: {
+  actions: { label: string; icon: React.ReactNode; onClick: () => void; primary?: boolean }[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border/40">
+      {actions.map((a, i) => (
+        <button
+          key={i}
+          onClick={a.onClick}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border",
+            a.primary
+              ? "bg-orange-500 hover:bg-orange-600 text-white border-orange-500"
+              : "bg-background hover:bg-accent text-muted-foreground hover:text-foreground border-border"
+          )}
+        >
+          {a.icon}
+          {a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Save confirmation hook ───────────────────────────────────────────────────
+
+function useSaveToResearch() {
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Set<string>>(new Set());
+
+  const save = useCallback(async (key: string, title: string, content: string) => {
+    setSaving(key);
+    try {
+      await fetch("/api/founder-workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: "research", type: "insight", title, content }),
+      });
+      setSaved(prev => new Set([...Array.from(prev), key]));
+      setTimeout(() => setSaved(prev => { const n = new Set(Array.from(prev)); n.delete(key); return n; }), 2500);
+    } catch {}
+    finally { setSaving(null); }
+  }, []);
+
+  return { save, saving, saved };
+}
+
+// ─── CTA button ───────────────────────────────────────────────────────────────
+
+function CtaButton({ cta, router, onTabChange, onCarousel, onScript }: {
+  cta: string;
+  router: ReturnType<typeof useRouter>;
+  onTabChange?: (tab: string) => void;
+  onCarousel?: () => void;
+  onScript?: () => void;
+}) {
+  const configs: Record<string, { label: string; icon: React.ReactNode; action: () => void }> = {
+    "Create Note":        { label: "Turn into Note",    icon: <StickyNote className="w-3 h-3" />,  action: () => onTabChange?.("notes") },
+    "Generate Carousel":  { label: "Generate Carousel", icon: <Layers className="w-3 h-3" />,       action: () => onCarousel?.() },
+    "Generate Video":     { label: "Generate Video",    icon: <Zap className="w-3 h-3" />,          action: () => onScript?.() },
+    "Generate Script":    { label: "Generate Script",   icon: <Mic className="w-3 h-3" />,          action: () => onScript?.() },
+    "Create Product":     { label: "Create This Product", icon: <Package className="w-3 h-3" />,     action: () => router.push("/dashboard/digital-products/create-from-research") },
+    "Open Design Studio": { label: "Design Studio",     icon: <Wand2 className="w-3 h-3" />,        action: () => onCarousel?.() },
+  };
+  const cfg = configs[cta];
+  if (!cfg) return null;
+  return (
+    <button
+      onClick={cfg.action}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all"
+    >
+      {cfg.icon}
+      {cfg.label}
+    </button>
+  );
+}
+
+// ─── Recommended Opportunity Card ─────────────────────────────────────────────
+
+function RecommendedOpportunityCard({ opp }: { opp: RecommendedOpp }) {
+  const metrics = [
+    { label: "Demand",            value: opp.demand,                colors: METRIC_COLORS },
+    { label: "Competition",       value: opp.competition,           colors: COMPETITION_COLORS },
+    { label: "Monetisation",      value: opp.monetisationPotential, colors: METRIC_COLORS },
+    { label: "Content Potential", value: opp.contentPotential,      colors: METRIC_COLORS },
+  ];
+  return (
+    <div className="rounded-2xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/5 via-background to-amber-500/5 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-orange-500/20 bg-orange-500/5">
+        <Star className="w-4 h-4 text-orange-500 fill-orange-500" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-orange-500">Top Opportunity</span>
+        <span className="ml-auto text-[10px] font-medium text-orange-500/60 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">AI Recommended</span>
+      </div>
+      <div className="p-5 space-y-4">
+        <h3 className="text-[18px] font-bold text-foreground leading-snug">{stripMd(opp.name)}</h3>
+        <p className="text-[13px] text-foreground/80 leading-relaxed">{stripMd(opp.why)}</p>
+        <div className="grid grid-cols-2 gap-2">
+          {metrics.map(m => (
+            <div key={m.label} className="flex items-center justify-between px-3 py-2 rounded-xl bg-background border border-border">
+              <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
+              <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-lg border", m.colors[m.value] ?? m.colors["Medium"])}>
+                {m.value}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-4 pt-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground font-medium">💰 Est. revenue</span>
+            <span className="text-[12px] font-bold text-green-600 dark:text-green-400">{opp.estimatedRevenue}</span>
+          </div>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground font-medium">⏱ First sale</span>
+            <span className="text-[12px] font-bold text-foreground">{opp.timeToFirstSale}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Build Path ───────────────────────────────────────────────────────────────
+
+function BuildPathSection({ buildPath, router, onCreateProduct }: { buildPath: BuildPath; router: ReturnType<typeof useRouter>; onCreateProduct: () => void }) {
+  const { withFlywheel, manually } = buildPath;
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border/40">
+        <Zap className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Build Path</span>
+        <span className="text-[11px] text-muted-foreground/50 ml-1">— two ways to launch</span>
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-border">
+        <div className="p-5 space-y-4">
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-orange-500">🚀 With Content Flywheel</div>
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-[28px] font-black text-orange-500 leading-none">{withFlywheel.estimatedTime.split("–")[0]}</span>
+              {withFlywheel.estimatedTime.includes("–") && (
+                <span className="text-[14px] font-bold text-orange-400/70">–{withFlywheel.estimatedTime.split("–")[1]}</span>
+              )}
+            </div>
+            <span className={cn("inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg border", DIFFICULTY_COLORS[withFlywheel.difficulty] ?? DIFFICULTY_COLORS.Easy)}>
+              {withFlywheel.difficulty}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {withFlywheel.steps.map((step, i) => {
+              const route = FLYWHEEL_STEP_ROUTES[step];
+              return (
+                <button
+                  key={i}
+                  onClick={() => route && router.push(route)}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium text-left transition-all border",
+                    route
+                      ? "bg-orange-500/8 border-orange-500/20 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15"
+                      : "bg-muted/30 border-border text-muted-foreground cursor-default"
+                  )}
+                >
+                  <span className="w-5 h-5 rounded-md bg-orange-500/15 text-orange-500 flex items-center justify-center text-[10px] font-black shrink-0">{i + 1}</span>
+                  {step}
+                  {route && <ArrowRight className="w-3 h-3 ml-auto opacity-60" />}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={onCreateProduct}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-semibold transition-all"
+          >
+            <Zap className="w-3.5 h-3.5" />Create This Product
+          </button>
+        </div>
+        <div className="p-5 space-y-4 bg-muted/10">
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">🔧 Build Manually</div>
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-[28px] font-black text-muted-foreground/60 leading-none">{manually.estimatedTime.split("–")[0]}</span>
+              {manually.estimatedTime.includes("–") && (
+                <span className="text-[14px] font-bold text-muted-foreground/40">–{manually.estimatedTime.split("–")[1]}</span>
+              )}
+            </div>
+            <span className="inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg border bg-muted/40 border-border text-muted-foreground">
+              More steps involved
+            </span>
+          </div>
+          <div className="space-y-2">
+            {manually.tools.map((tool, i) => (
+              <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-background border border-border text-[12px] text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                {tool}
+              </div>
+            ))}
+          </div>
+          {manually.note && <p className="text-[11px] text-muted-foreground/60 leading-relaxed italic">{manually.note}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Launch Roadmap ───────────────────────────────────────────────────────────
+
+function LaunchRoadmap({ router }: { router: ReturnType<typeof useRouter> }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border/40">
+        <Target className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Fastest Path to Launch</span>
+      </div>
+      <div className="px-5 py-5">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {LAUNCH_ROADMAP.map((step, i) => (
+            <div key={i} className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => step.route && router.push(step.route)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border text-center transition-all min-w-[90px]",
+                  i === 0
+                    ? "bg-green-500/10 border-green-500/25 text-green-600 dark:text-green-400 cursor-default"
+                    : step.route
+                    ? "bg-orange-500/8 border-orange-500/20 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15 cursor-pointer"
+                    : "bg-muted/20 border-border text-muted-foreground cursor-default"
+                )}
+              >
+                <span className="text-[16px] leading-none">{step.emoji}</span>
+                <span className="text-[10px] font-semibold leading-tight">{step.label}</span>
+              </button>
+              {i < LAUNCH_ROADMAP.length - 1 && (
+                <div className="flex items-center shrink-0">
+                  <div className="w-3 h-px bg-border" />
+                  <ChevronDown className="w-3 h-3 text-muted-foreground/40 -rotate-90" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground/50 mt-3">
+          Click any step to jump directly to that tool in Content Flywheel
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── AI Recommendation Card ───────────────────────────────────────────────────
+
+function AiRecommendationCard({ rec, router, onCarousel, onScript }: {
+  rec: AiRecommendation; router: ReturnType<typeof useRouter>; onCarousel?: () => void; onScript?: () => void;
+}) {
+  const ctaMap: Record<string, { label: string; action: () => void }> = {
+    "Build Now":            { label: "Create This Product →", action: () => router.push("/dashboard/digital-products/create-from-research") },
+    "Validate First":       { label: "Generate Carousel →", action: () => onCarousel?.() },
+    "Create Content First": { label: "Generate Script →",   action: () => onScript?.() },
+    "Research More":        { label: "Refine Research",     action: () => {} },
+  };
+  const cta = ctaMap[rec.category] ?? ctaMap["Build Now"];
+  return (
+    <div className="rounded-2xl border-2 border-orange-500/25 bg-gradient-to-br from-orange-500/5 to-background overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-orange-500/20">
+        <Sparkles className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Recommended Next Step</span>
+        <span className={cn("ml-auto text-[11px] font-bold px-2.5 py-1 rounded-full border", CATEGORY_COLORS[rec.category] ?? CATEGORY_COLORS["Build Now"])}>
+          {rec.category}
+        </span>
+      </div>
+      <div className="p-5 space-y-4">
+        <p className="text-[16px] font-bold text-foreground leading-snug">&ldquo;{stripMd(rec.nextStep)}&rdquo;</p>
+        <p className="text-[13px] text-foreground/75 leading-relaxed">{stripMd(rec.reasoning)}</p>
+        <button
+          onClick={cta.action}
+          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-semibold transition-all"
+        >
+          <Zap className="w-4 h-4" />{cta.label}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Business Scorecard ───────────────────────────────────────────────────────
+
+const SCORE_COLORS = {
+  green:  "bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20 text-green-700 dark:text-green-400",
+  amber:  "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400",
+  red:    "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400",
+  blue:   "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-400",
+  purple: "bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/20 text-purple-700 dark:text-purple-400",
+  orange: "bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20 text-orange-700 dark:text-orange-400",
+} as const;
+
+// Visual score bar for numeric metrics
+function ScoreBar({ value, max = 100 }: { value: number; max?: number }) {
+  const pct = Math.min(100, Math.max(0, (value / max) * 100));
+  const barColor = pct >= 75 ? "bg-green-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden mt-1.5">
+      <div className={cn("h-full rounded-full transition-all duration-700", barColor)} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function scorecardColor(value: string | number): keyof typeof SCORE_COLORS {
+  if (typeof value === "number") {
+    if (value >= 75) return "green";
+    if (value >= 50) return "amber";
+    return "red";
+  }
+  const v = value.toLowerCase();
+  if (v === "easy" || v === "low" || v === "build now" || v === "very high") return "green";
+  if (v === "medium" || v === "validate first" || v === "high") return "amber";
+  if (v === "hard" || v === "very high competition" || v === "create content first" || v === "research more") return "red";
+  return "blue";
+}
+
+function ScorecardMetric({
+  icon, title, value, subLabel, colorKey,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string | number;
+  subLabel?: string;
+  colorKey: keyof typeof SCORE_COLORS;
+}) {
+  // Extract numeric part for bar rendering (e.g. "82/100" → 82, "75%" → 75)
+  const numericMatch = typeof value === "string" ? value.match(/^(\d+)/) : null;
+  const numericVal: number | null = numericMatch ? parseInt(numericMatch[1]) : typeof value === "number" ? value : null;
+  const showBar = numericVal !== null && numericVal <= 100;
+
+  return (
+    <div className={cn("rounded-xl border p-3 flex flex-col gap-1.5", SCORE_COLORS[colorKey])}>
+      <div className="flex items-center gap-1.5">
+        <span className="opacity-70 shrink-0">{icon}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{title}</span>
+      </div>
+      <div className="font-bold text-[20px] leading-tight">{value}</div>
+      {showBar && <ScoreBar value={numericVal!} />}
+      {subLabel && <div className="text-[11px] opacity-60 leading-tight mt-0.5">{subLabel}</div>}
+    </div>
+  );
+}
+
+function BusinessScorecard({ scorecard, report }: { scorecard: Scorecard; report: ResearchReport }) {
+  const metrics = [
+    {
+      icon: <Sparkles className="w-3.5 h-3.5" />,
+      title: "Opportunity Score",
+      value: `${scorecard.opportunityScore}/100`,
+      subLabel: scorecard.opportunityScore >= 75 ? "Strong opportunity" : scorecard.opportunityScore >= 50 ? "Moderate opportunity" : "Needs validation",
+      colorKey: scorecardColor(scorecard.opportunityScore),
+    },
+    {
+      icon: <BarChart3 className="w-3.5 h-3.5" />,
+      title: "Confidence Level",
+      value: `${scorecard.confidenceLevel}%`,
+      subLabel: "Research confidence",
+      colorKey: scorecardColor(scorecard.confidenceLevel),
+    },
+    {
+      icon: <Zap className="w-3.5 h-3.5" />,
+      title: "Time to Launch",
+      value: scorecard.timeToLaunch,
+      subLabel: "With Content Flywheel",
+      colorKey: "orange" as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Target className="w-3.5 h-3.5" />,
+      title: "Difficulty",
+      value: scorecard.difficulty,
+      subLabel: scorecard.difficulty === "Easy" ? "Beginner-friendly" : scorecard.difficulty === "Medium" ? "Some experience needed" : "Expert-level",
+      colorKey: scorecard.difficulty === "Easy" ? "green" : scorecard.difficulty === "Medium" ? "amber" : "red" as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Users className="w-3.5 h-3.5" />,
+      title: "Competition",
+      value: scorecard.competitionLevel,
+      subLabel: scorecard.competitionLevel === "Low" ? "Wide open" : scorecard.competitionLevel === "Medium" ? "Manageable" : "Competitive space",
+      colorKey: (scorecard.competitionLevel === "Low" ? "green" : scorecard.competitionLevel === "Medium" ? "amber" : "red") as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <TrendingUp className="w-3.5 h-3.5" />,
+      title: "Revenue Potential",
+      value: scorecard.revenuePotential,
+      subLabel: "Estimated monthly",
+      colorKey: "green" as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Globe className="w-3.5 h-3.5" />,
+      title: "Audience Demand",
+      value: scorecard.audienceDemand,
+      subLabel: scorecard.audienceDemand === "Very High" || scorecard.audienceDemand === "High" ? "Strong market pull" : "Growing audience",
+      colorKey: (scorecard.audienceDemand === "Very High" || scorecard.audienceDemand === "High" ? "green" : "amber") as keyof typeof SCORE_COLORS,
+    },
+    {
+      icon: <Lightbulb className="w-3.5 h-3.5" />,
+      title: "Recommended Priority",
+      value: scorecard.recommendedPriority,
+      subLabel: "AI assessment",
+      colorKey: (scorecard.recommendedPriority === "Build Now" ? "green" : scorecard.recommendedPriority === "Validate First" ? "amber" : "blue") as keyof typeof SCORE_COLORS,
+    },
+  ] as const;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-border/40 bg-gradient-to-r from-orange-500/5 to-transparent">
+        <BarChart3 className="w-4 h-4 text-orange-500" />
+        <span className="font-semibold text-[15px] text-foreground">Business Scorecard</span>
+        <span className="text-[11px] text-muted-foreground/50 ml-1">— understand the opportunity in 10 seconds</span>
+      </div>
+      <div className="p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {metrics.map((m, i) => (
+            <ScorecardMetric key={i} icon={m.icon} title={m.title} value={m.value} subLabel={m.subLabel} colorKey={m.colorKey} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Best Next Action Card ─────────────────────────────────────────────────────
+
+function BestNextActionCard({
+  bestNextAction, onCreateProduct,
+}: {
+  bestNextAction: BestNextActionData;
+  onCreateProduct: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-orange-500/8 via-background to-amber-500/5 overflow-hidden">
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-orange-500/20 bg-orange-500/8">
+        <span className="text-[18px] leading-none">🚀</span>
+        <span className="font-bold text-[14px] text-orange-600 dark:text-orange-400">Best Next Action</span>
+      </div>
+      <div className="p-5 space-y-4">
+        <div>
+          <h3 className="text-[18px] font-bold text-foreground leading-snug">{stripMd(bestNextAction.action)}</h3>
+          <p className="text-[13px] text-foreground/75 leading-relaxed mt-2">{stripMd(bestNextAction.reasoning)}</p>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          {bestNextAction.estimatedPrice && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground">💰 Selling price</span>
+              <span className="text-[13px] font-bold text-green-600 dark:text-green-400">{bestNextAction.estimatedPrice}</span>
+            </div>
+          )}
+          {bestNextAction.timeToFirstSale && (
+            <>
+              <div className="w-px h-4 bg-border" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground">⏱ First sale</span>
+                <span className="text-[13px] font-bold text-foreground">{bestNextAction.timeToFirstSale}</span>
+              </div>
+            </>
+          )}
+        </div>
+        <button
+          onClick={onCreateProduct}
+          className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[14px] font-bold transition-all shadow-sm"
+        >
+          <Package className="w-4 h-4" />
+          Create This Product
+          <ArrowRight className="w-4 h-4 ml-1" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Research Type Selector ───────────────────────────────────────────────────
+
+function ResearchTypeSelector({ selected, onSelect }: {
+  selected: string; onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50">Research Type</p>
+      <div className="grid grid-cols-3 gap-2">
+        {RESEARCH_TYPES.map(type => (
+          <button
+            key={type.id}
+            onClick={() => onSelect(type.id)}
+            className={cn(
+              "flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all",
+              selected === type.id
+                ? "bg-orange-500/10 border-orange-500/40 shadow-sm"
+                : "bg-card border-border hover:bg-accent/50 hover:border-orange-500/20"
+            )}
+          >
+            <div className="flex items-center gap-2 w-full">
+              <span className="text-[16px] leading-none">{type.emoji}</span>
+              <span className={cn(
+                "text-[12px] font-semibold leading-tight",
+                selected === type.id ? "text-orange-600 dark:text-orange-400" : "text-foreground"
+              )}>
+                {type.label}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground/70 leading-tight">{type.description}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Research Library Panel ───────────────────────────────────────────────────
+
+function ResearchLibraryPanel({
+  library, onLoad, onToggleFavourite, onDelete, onRefresh,
+}: {
+  library: SavedReport[];
+  onLoad: (saved: SavedReport) => void;
+  onToggleFavourite: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRefresh: (saved: SavedReport) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return library;
+    const q = search.toLowerCase();
+    return library.filter(r => r.query.toLowerCase().includes(q));
+  }, [library, search]);
+
+  if (library.length === 0) return null;
+
+  const formatDate = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffH = diffMs / 3600000;
+      if (diffH < 1) return "Just now";
+      if (diffH < 24) return `${Math.floor(diffH)}h ago`;
+      if (diffH < 168) return `${Math.floor(diffH / 24)}d ago`;
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    } catch { return ""; }
+  };
+
+  const getTypeInfo = (id: string) => RESEARCH_TYPES.find(t => t.id === id) ?? RESEARCH_TYPES[8];
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-accent/30 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Library className="w-4 h-4 text-orange-500" />
+          <span className="font-semibold text-[15px] text-foreground">Research Library</span>
+          <span className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[11px] font-bold">{library.length}</span>
+        </div>
+        {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-3">
+          {library.length > 3 && (
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search saved research…"
+              className="w-full px-3 py-2 rounded-xl border border-border bg-background text-[13px] text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-orange-500/40 transition-colors"
+            />
+          )}
+
+          <div className="space-y-2">
+            {filtered.slice(0, 8).map(saved => {
+              const typeInfo = getTypeInfo(saved.researchType);
+              return (
+                <div
+                  key={saved.id}
+                  className="group flex items-center gap-3 p-3 rounded-xl border border-border bg-background hover:bg-accent/30 hover:border-orange-500/20 transition-all"
+                >
+                  <span className="text-[18px] shrink-0">{typeInfo.emoji}</span>
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLoad(saved)}>
+                    <p className="text-[13px] font-semibold text-foreground truncate">{saved.query}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-[10px] font-medium text-muted-foreground/60 bg-muted/50 px-1.5 py-0.5 rounded-md border border-border">
+                        {typeInfo.label}
+                      </span>
+                      {saved.liveSourceCount != null && saved.liveSourceCount > 0 && (
+                        <span className="text-[10px] font-medium text-green-600 dark:text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-md border border-green-500/20">
+                          {saved.liveSourceCount} live
+                        </span>
+                      )}
+                      <span className="text-[11px] text-muted-foreground/50">{formatDate(saved.savedAt)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button
+                      onClick={() => onRefresh(saved)}
+                      title="Refresh Research"
+                      className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-orange-500 transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onToggleFavourite(saved.id)}
+                      title={saved.favourite ? "Unfavourite" : "Favourite"}
+                      className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                    >
+                      <Heart className={cn("w-3.5 h-3.5", saved.favourite ? "text-red-500 fill-red-500" : "text-muted-foreground")} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(saved.id)}
+                      title="Delete"
+                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {filtered.length === 0 && search && (
+            <p className="text-[13px] text-muted-foreground/50 text-center py-2">No results for &ldquo;{search}&rdquo;</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Founder OS Knowledge Comparison ─────────────────────────────────────────
+
+interface KBMatch {
+  id: string;
+  title: string;
+  category: string;
+  aiSummary?: string | null;
+  relevance: number;
+  matchedBy: "vector" | "text";
+}
+
+interface KBComparison {
+  matches: KBMatch[];
+  loaded: boolean;
+  saving: boolean;
+  saved: boolean;
+}
+
+/** Searches Founder OS after research completes and offers to save new insights. */
+function useFounderKBComparison() {
+  const [state, setState] = useState<KBComparison>({ matches: [], loaded: false, saving: false, saved: false });
+
+  const search = useCallback(async (query: string) => {
+    setState(s => ({ ...s, loaded: false, matches: [] }));
+    try {
+      const res = await fetch("/api/founder-knowledge/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, limit: 4, minRelevance: 0.3 }),
+      });
+      if (!res.ok) return; // Non-admin — silently skip
+      const results = await res.json() as { entry: KBMatch; relevance: number; matchedBy: "vector" | "text" }[];
+      setState(s => ({
+        ...s,
+        loaded: true,
+        matches: results.map(r => ({ ...r.entry, relevance: r.relevance, matchedBy: r.matchedBy })),
+      }));
+    } catch {
+      // 403 for non-admin — silently ignore
+    }
+  }, []);
+
+  const saveInsights = useCallback(async (report: ResearchReport, query: string) => {
+    setState(s => ({ ...s, saving: true }));
+    try {
+      // Extract 3 key insights from the report
+      const insightsToSave = [
+        { title: `Research: ${query}`, content: report.summary, type: "insight" },
+        ...(report.insights?.slice(0, 3).map(ins => ({
+          title: ins.slice(0, 120),
+          content: ins,
+          type: "insight",
+        })) ?? []),
+      ].slice(0, 4);
+
+      await Promise.all(insightsToSave.map(ins =>
+        fetch("/api/founder-knowledge/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: "research",
+            type: ins.type,
+            title: ins.title,
+            content: ins.content,
+            source: "research",
+            tags: [query.slice(0, 50)],
+          }),
+        }).catch(() => {})
+      ));
+      setState(s => ({ ...s, saving: false, saved: true }));
+    } catch {
+      setState(s => ({ ...s, saving: false }));
+    }
+  }, []);
+
+  const reset = useCallback(() => {
+    setState({ matches: [], loaded: false, saving: false, saved: false });
+  }, []);
+
+  return { ...state, search, saveInsights, reset };
+}
+
+/** Panel shown after research completes — compares new findings against Founder OS KB. */
+function KnowledgeComparisonPanel({
+  query,
+  report,
+  comparison,
+  onSave,
+}: {
+  query: string;
+  report: ResearchReport;
+  comparison: KBComparison & { saveInsights: (r: ResearchReport, q: string) => Promise<void> };
+  onSave: () => void;
+}) {
+  if (!comparison.loaded && !comparison.saving && !comparison.saved) return null;
+
+  const hasMatches = comparison.matches.length > 0;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+          <DatabaseZap className="w-3.5 h-3.5 text-purple-500" />
+        </div>
+        <p className="text-xs font-bold text-foreground">Founder OS Knowledge Check</p>
+        {comparison.loaded && (
+          <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${hasMatches ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-muted text-muted-foreground"}`}>
+            {hasMatches ? `${comparison.matches.length} related ${comparison.matches.length === 1 ? "entry" : "entries"} found` : "No matches yet"}
+          </span>
+        )}
+        {!comparison.loaded && !comparison.saved && (
+          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
+        )}
+      </div>
+
+      {/* Existing KB matches */}
+      {hasMatches && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Related knowledge in your OS</p>
+          {comparison.matches.map(match => (
+            <div key={match.id} className="flex items-start gap-2 px-2.5 py-2 rounded-xl bg-purple-500/5 border border-purple-500/10">
+              <GitMerge className="w-3 h-3 text-purple-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-foreground truncate">{match.title}</p>
+                {match.aiSummary && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{match.aiSummary}</p>
+                )}
+              </div>
+              <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full capitalize shrink-0">
+                {match.category.replace(/-/g, " ")}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Save new insights */}
+      {!comparison.saved ? (
+        <div className="flex items-center justify-between pt-1 border-t border-border/40">
+          <p className="text-[11px] text-muted-foreground">
+            {hasMatches
+              ? "Save new insights from this report to grow your knowledge base"
+              : "No existing knowledge matches — save this research to start building your KB"}
+          </p>
+          <button
+            onClick={() => comparison.saveInsights(report, query).then(onSave)}
+            disabled={comparison.saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-600 text-white text-[11px] font-semibold transition-colors shrink-0 ml-3 disabled:opacity-60"
+          >
+            {comparison.saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+            {comparison.saving ? "Saving…" : "Save to Founder OS"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+          <Check className="w-3.5 h-3.5 text-green-500" />
+          <p className="text-[11px] text-green-600 dark:text-green-400 font-semibold">
+            Insights saved — Founder OS is now smarter
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Research Sources Panel ───────────────────────────────────────────────────
+
+const SOURCE_STATUS_CONFIG: Record<SourceStatus, { label: string; className: string }> = {
+  "connected":     { label: "Connected",     className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20" },
+  "not-connected": { label: "Not Connected", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
+  "coming-soon":   { label: "Coming Soon",   className: "bg-muted text-muted-foreground/50 border-border/60" },
+  "error":         { label: "Error",         className: "bg-red-500/10 text-red-500/60 border-red-500/20" },
+};
+
+function ResearchSourcesPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (id: string) =>
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const totalSources = RESEARCH_SOURCE_CATEGORIES.reduce((acc, cat) => acc + cat.sources.length, 0);
+  const totalLive    = RESEARCH_SOURCE_CATEGORIES.reduce(
+    (acc, cat) => acc + cat.sources.filter(s => s.status === "connected").length, 0
+  );
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-accent/30 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <DatabaseZap className="w-4 h-4 text-orange-500 shrink-0" />
+          <span className="font-semibold text-[15px] text-foreground">Research Sources</span>
+          <span className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[11px] font-bold border border-orange-500/20">
+            {totalSources} sources
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[11px] font-bold border border-green-500/20">
+            {totalLive} live
+          </span>
+        </div>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+        }
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-2">
+          {RESEARCH_SOURCE_CATEGORIES.map(cat => {
+            const liveCount    = cat.sources.filter(s => s.status === "connected").length;
+            const comingCount  = cat.sources.filter(s => s.status === "coming-soon").length;
+            const isExpanded   = expandedCategories.has(cat.id);
+            const CatIcon      = cat.icon;
+
+            return (
+              <div key={cat.id} className="rounded-xl border border-border bg-background overflow-hidden">
+                <button
+                  onClick={() => toggleCategory(cat.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/20 transition-colors text-left"
+                >
+                  <span className="text-[16px] leading-none shrink-0">{cat.emoji}</span>
+                  <CatIcon className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-semibold text-foreground">{cat.label}</span>
+                      {liveCount > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                          {liveCount} live
+                        </span>
+                      )}
+                      {comingCount > 0 && (
+                        <span className="text-[10px] font-medium text-muted-foreground/40">
+                          +{comingCount} coming soon
+                        </span>
+                      )}
+                    </div>
+                    {!isExpanded && (
+                      <p className="text-[11px] text-muted-foreground/50 truncate mt-0.5">{cat.description}</p>
+                    )}
+                  </div>
+                  {isExpanded
+                    ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  }
+                </button>
+
+                {isExpanded && (
+                  <div className="px-4 pb-3 pt-0.5 space-y-1.5 border-t border-border/40">
+                    {cat.sources.map(source => {
+                      const badge = SOURCE_STATUS_CONFIG[source.status];
+                      return (
+                        <div
+                          key={source.id}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-muted/20 border border-border/50"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-semibold text-foreground">{source.name}</p>
+                            <p className="text-[11px] text-muted-foreground/55 truncate mt-0.5">{source.description}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {source.provider && (
+                              <span className="text-[9px] font-mono text-muted-foreground/30 hidden sm:block">
+                                {source.provider}
+                              </span>
+                            )}
+                            <span className={cn(
+                              "text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap",
+                              badge.className
+                            )}>
+                              {badge.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <p className="text-[11px] text-muted-foreground/40 text-center pt-1">
+            Adding a new provider only requires adding one object to the config.{" "}
+            <span className="text-orange-500/70">More sources shipping soon.</span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main ResearchTab ─────────────────────────────────────────────────────────
+
+export function ResearchTab({ onTabChange }: ResearchTabProps) {
+  const router = useRouter();
+  const { save, saving, saved } = useSaveToResearch();
+  const lib = useResearchLibrary();
+  const kb = useFounderKBComparison();
+
+  // Core state
+  const [state, setState]             = useState<ResearchState>("idle");
+  const [inputQuery, setInputQuery]   = useState("");
+  const [query, setQuery]             = useState("");
+  const [researchType, setResearchType] = useState("custom");
+  const [report, setReport]           = useState<ResearchReport | null>(null);
+  const [activeReportType, setActiveReportType] = useState("custom");
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [error, setError]             = useState<string | null>(null);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [advancedMode, setAdvancedMode] = useState(false);
+
+  // Sources panel
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+
+  // Sections
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set([
+    "summary", "insights", "content", "product", "plan",
+  ]));
+
+  // Chat follow-up
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput]       = useState("");
+  const [chatLoading, setChatLoading]   = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Misc
+  const [copiedKeywords, setCopiedKeywords] = useState(false);
+  const [exportCopied, setExportCopied]     = useState(false);
+  const [tasksAdded, setTasksAdded]         = useState(false);
+  const [carouselLoading, setCarouselLoading] = useState(false);
+  const [scriptLoading, setScriptLoading]     = useState(false);
+  const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Analyst streaming state
+  const [analysts, setAnalysts]         = useState<AnalystState[]>([]);
+  const [synthesisStatus, setSynthesisStatus] = useState<SynthesisStatus>("waiting");
+  const [providerData, setProviderData] = useState<ProviderDataMap>({});
+  const [sourceMeta, setSourceMeta]     = useState<SourceMeta[]>([]);
+  const [citations, setCitations]       = useState<SourceCitation[]>([]);
+
+  // Intent classification state — set by the intent-classified stream event
+  const [intentClassified, setIntentClassified] = useState<{
+    intent: string;
+    intentLabel: string;
+    reasoning: string;
+    expandedQueries: string[];
+  } | null>(null);
+
+  // Read note → research prefill on mount
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("note_to_research");
+      if (raw) {
+        const { topic } = JSON.parse(raw) as { topic: string; context?: string };
+        if (topic) setInputQuery(topic);
+        sessionStorage.removeItem("note_to_research");
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Animate loading steps
+  useEffect(() => {
+    if (state === "loading") {
+      setLoadingStep(0);
+      let i = 0;
+      stepTimerRef.current = setInterval(() => {
+        i++;
+        if (i < LOADING_STEPS.length) setLoadingStep(i);
+        else if (stepTimerRef.current) clearInterval(stepTimerRef.current);
+      }, 1400);
+    } else {
+      if (stepTimerRef.current) clearInterval(stepTimerRef.current);
+    }
+    return () => { if (stepTimerRef.current) clearInterval(stepTimerRef.current); };
+  }, [state]);
+
+  // Scroll chat to bottom
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  const toggleSection = (id: string) =>
+    setOpenSections(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  // Which advanced sections are always shown for this type
+  const alwaysShowCompetitors = activeReportType === "competitor";
+  const alwaysShowKeywords    = activeReportType === "seo-keywords";
+
+  const showSection = (key: "evidence" | "rootCauses" | "businessOpps" | "competitors" | "keywords") => {
+    if (key === "competitors") return alwaysShowCompetitors || advancedMode;
+    if (key === "keywords")    return alwaysShowKeywords    || advancedMode;
+    return advancedMode;
+  };
+
+  // ── Trigger search (NDJSON streaming) ────────────────────────────────────
+  const runSearch = useCallback(async (q: string, type: string) => {
+    setQuery(q);
+    setActiveReportType(type);
+    setReport(null);
+    setError(null);
+    setChatMessages([]);
+    kb.reset();
+    setChatInput("");
+    setAdvancedMode(false);
+    setOpenSections(new Set(["summary", "insights", "content", "product", "plan"]));
+    setAnalysts([]);
+    setSynthesisStatus("waiting");
+    setProviderData({});
+    setSourceMeta([]);
+    setCitations([]);
+    setIntentClassified(null);
+    setState("loading");
+
+    try {
+      const res = await fetch("/api/research/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, researchType: type, mode: "stream" }),
+      });
+      if (!res.ok || !res.body) throw new Error("Research request failed");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const event = JSON.parse(trimmed) as Record<string, unknown>;
+            const evType = event.type as string;
+
+            if (evType === "intent-classified") {
+              setIntentClassified({
+                intent:          String(event.intent ?? ""),
+                intentLabel:     String(event.intentLabel ?? ""),
+                reasoning:       String(event.reasoning ?? ""),
+                expandedQueries: Array.isArray(event.expandedQueries) ? (event.expandedQueries as string[]) : [],
+              });
+            } else if (evType === "init") {
+              const rawAnalysts = (event.analysts as Array<{id: string; displayName: string; emoji: string; description: string}> ?? []);
+              setAnalysts(rawAnalysts.map(a => ({
+                ...a,
+                status: "waiting" as AnalystStatus,
+              })));
+            } else if (evType === "analyst-update") {
+              const id = event.id as string;
+              const status = event.status as AnalystStatus;
+              setAnalysts(prev => prev.map(a =>
+                a.id === id
+                  ? { ...a, status, summary: (event.summary as string) ?? a.summary, usedFallback: (event.usedFallback as boolean) ?? a.usedFallback, duration: (event.duration as number) ?? a.duration }
+                  : a,
+              ));
+              if (status === "done" && event.data) {
+                setProviderData(prev => ({ ...prev, [id]: event.data as Record<string, unknown> }));
+              }
+            } else if (evType === "synthesis-start") {
+              setSynthesisStatus("working");
+            } else if (evType === "synthesis-done") {
+              const r = event.report as ResearchReport | undefined;
+              if (r) {
+                setReport(r);
+                setGeneratedAt((event.generatedAt as string) ?? new Date().toISOString());
+                setSourceMeta(Array.isArray(event.sourceMeta) ? (event.sourceMeta as SourceMeta[]) : []);
+                const eventCitations = Array.isArray(event.citations) ? (event.citations as SourceCitation[]) : [];
+                setCitations(eventCitations);
+                setSynthesisStatus("done");
+                setState("done");
+                // Compute live source metadata from sourceMeta
+                const liveSources = Array.isArray(event.sourceMeta)
+                  ? (event.sourceMeta as SourceMeta[]).filter(s => !s.usedFallback)
+                  : [];
+                // Auto-save to library with enriched metadata
+                lib.saveReport(q, type, r, {
+                  citations: eventCitations,
+                  liveSourceCount: liveSources.length,
+                  liveCategories: liveSources.map(s => s.displayName),
+                });
+                // KB compare (non-blocking)
+                void kb.search(q);
+                // Auto-save to user memory
+                const summaryContent = [
+                  r.summary ?? "",
+                  ...(r.insights ?? []).slice(0, 3),
+                  r.recommendedOpportunity?.name ? `Opportunity: ${r.recommendedOpportunity.name}` : "",
+                ].filter(Boolean).join("\n\n").slice(0, 4000);
+                void fetch("/api/user-memory/save", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    category: "research",
+                    type: "report",
+                    title: `Research: ${q.slice(0, 100)}`,
+                    content: summaryContent,
+                    source: "research",
+                    tags: [q.slice(0, 50), type].filter(Boolean),
+                    metadata: { query: q, researchType: type },
+                  }),
+                }).catch(() => {});
+              }
+            } else if (evType === "error") {
+              throw new Error(String(event.message ?? "Research error"));
+            }
+          } catch (parseErr) {
+            // Skip malformed NDJSON lines (only throw real errors)
+            if (parseErr instanceof Error && parseErr.message !== "Research error") continue;
+            if (parseErr instanceof Error) throw parseErr;
+          }
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Research failed");
+      setState("idle");
+    }
+  }, [lib]);
+
+  const handleSearch = () => {
+    const q = inputQuery.trim();
+    if (!q) return;
+    runSearch(q, researchType);
+  };
+
+  // ── Load saved report from library ────────────────────────────────────────
+  const handleLoadSaved = useCallback((saved: SavedReport) => {
+    setQuery(saved.query);
+    setActiveReportType(saved.researchType);
+    setReport(saved.report);
+    setGeneratedAt(saved.savedAt);
+    setChatMessages([]);
+    setChatInput("");
+    setAdvancedMode(false);
+    setOpenSections(new Set(["summary", "insights", "content", "product", "plan"]));
+    setState("done");
+  }, []);
+
+  // ── Chat follow-up ────────────────────────────────────────────────────────
+  const handleChat = async () => {
+    const input = chatInput.trim();
+    if (!input || !report) return;
+
+    const userMsg: ChatMessage = { role: "user", content: input };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const res = await fetch("/api/research/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          followUp: input,
+          reportContext: query,
+          query: report.summary.slice(0, 600),
+          conversationHistory: chatMessages,
+        }),
+      });
+      const data = await res.json() as { answer?: string; error?: string };
+      if (!res.ok || data.error) throw new Error(data.error ?? "Error");
+      setChatMessages(prev => [...prev, { role: "assistant", content: data.answer ?? "" }]);
+    } catch {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, I couldn't answer that. Please try again." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleCopyKeywords = () => {
+    if (!report) return;
+    navigator.clipboard.writeText(report.keywords.map(k => k.term).join(", "));
+    setCopiedKeywords(true);
+    setTimeout(() => setCopiedKeywords(false), 2000);
+  };
+
+  const handleSaveReport = () => {
+    if (!report) return;
+    const content = `${query}\n\n${report.summary}\n\nKey Insights:\n${report.insights.map(i => `• ${i}`).join("\n")}`;
+    save("full-report", `Research: ${query}`, content);
+  };
+
+  const handleCreateProduct = () => {
+    if (!report) return;
+    const bna = report.bestNextAction;
+    const rec = report.recommendedOpportunity;
+
+    // Derive audience from the top product opportunity if available
+    const derivedAudience =
+      report.productOpportunities?.[0]?.description ??
+      rec?.why?.slice(0, 200) ??
+      "";
+
+    const prefill = {
+      // Core fields
+      title:          bna?.action ?? rec?.name ?? query,
+      description:    rec?.why ?? report.summary?.slice(0, 300) ?? "",
+      niche:          query,
+      audience:       derivedAudience,
+      estimatedPrice: bna?.estimatedPrice ?? rec?.estimatedRevenue ?? "",
+      query,
+      reportSummary:  report.summary?.slice(0, 800) ?? "",
+      // Rich research data — passed through to /api/products/create-from-research
+      insights:             report.insights ?? [],
+      productOpportunities: report.productOpportunities ?? [],
+      keywords:             report.keywords ?? [],
+      actionPlan:           report.actionPlan ?? [],
+      competitorInsights:   report.competitorInsights ?? [],
+      researchType:         activeReportType ?? "market",
+    };
+    try {
+      sessionStorage.setItem("cf-research-prefill", JSON.stringify(prefill));
+    } catch { /* ignore */ }
+    router.push("/dashboard/digital-products/create-from-research");
+  };
+
+  // Generate carousel from insights → navigate directly to bundle editor
+  const handleCreateCarousel = useCallback(async (insights: string[]) => {
+    if (!report || carouselLoading) return;
+    setCarouselLoading(true);
+    try {
+      const res = await fetch("/api/research/create-carousel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ insights, query, style: "modern-business" }),
+      });
+      if (!res.ok) throw new Error("Failed to create carousel");
+      const { bundleId } = await res.json() as { bundleId: string };
+      router.push(`/dashboard/design-studio/bundle/${bundleId}`);
+    } catch (err) {
+      console.error("[handleCreateCarousel]", err);
+      setError("Carousel generation failed — please try again.");
+    } finally {
+      setCarouselLoading(false);
+    }
+  }, [report, query, carouselLoading, router]);
+
+  // Generate video guide script from insights → navigate directly to video guide editor
+  const handleCreateScript = useCallback(async (insights: string[]) => {
+    if (!report || scriptLoading) return;
+    setScriptLoading(true);
+    try {
+      const res = await fetch("/api/research/create-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ insights, query }),
+      });
+      if (!res.ok) throw new Error("Failed to create script");
+      const { libraryScriptId } = await res.json() as { libraryScriptId: string };
+      router.push(`/dashboard/digital-products/video-guide?libraryScriptId=${encodeURIComponent(libraryScriptId)}`);
+    } catch (err) {
+      console.error("[handleCreateScript]", err);
+      setError("Script generation failed — please try again.");
+    } finally {
+      setScriptLoading(false);
+    }
+  }, [report, query, scriptLoading, router]);
+
+  // Save the full report as a rich Note (TipTap JSON), then switch to Notes tab
+  const handleSaveAsNote = useCallback(() => {
+    if (!report) return;
+
+    const dateStr = generatedAt
+      ? new Date(generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+      : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+    const sections: string[] = [];
+
+    // ── Title ──────────────────────────────────────────────────────────────
+    sections.push(`# Research Report: ${query}\n*${activeReportType} analysis · ${dateStr}*`);
+
+    // ── Business Scorecard ────────────────────────────────────────────────
+    if (report.scorecard) {
+      const sc = report.scorecard;
+      sections.push(
+        `## Business Scorecard\n` +
+        `- **Opportunity Score:** ${sc.opportunityScore}/100\n` +
+        `- **Confidence Level:** ${sc.confidenceLevel}/100\n` +
+        `- **Audience Demand:** ${sc.audienceDemand}\n` +
+        `- **Competition:** ${sc.competitionLevel}\n` +
+        `- **Revenue Potential:** ${sc.revenuePotential}\n` +
+        `- **Difficulty:** ${sc.difficulty}\n` +
+        `- **Time to Launch:** ${sc.timeToLaunch}\n` +
+        `- **Priority:** ${sc.recommendedPriority}`
+      );
+    }
+
+    // ── Executive Summary ─────────────────────────────────────────────────
+    if (report.summary) {
+      sections.push(`## Executive Summary\n${report.summary}`);
+    }
+
+    // ── Key Insights ──────────────────────────────────────────────────────
+    if (report.insights?.length) {
+      sections.push(
+        `## Key Insights\n${report.insights.map((ins, i) => `${i + 1}. ${ins}`).join("\n")}`
+      );
+    }
+
+    // ── Product Opportunities ─────────────────────────────────────────────
+    if (report.productOpportunities?.length) {
+      sections.push(
+        `## Product Opportunities\n` +
+        report.productOpportunities.map(o =>
+          `### ${o.title}\n*${o.type} · ${o.priceRange}*\n${o.description}`
+        ).join("\n\n")
+      );
+    }
+
+    // ── Content Opportunities ─────────────────────────────────────────────
+    if (report.contentOpportunities?.length) {
+      sections.push(
+        `## Content Opportunities\n` +
+        report.contentOpportunities.map(o =>
+          `- **${o.title}** (${o.format}, ${o.difficulty}) — ${o.description}`
+        ).join("\n")
+      );
+    }
+
+    // ── Competitor Analysis ───────────────────────────────────────────────
+    if (report.competitorInsights?.length) {
+      sections.push(
+        `## Competitor Analysis\n` +
+        report.competitorInsights.map(c =>
+          `### ${c.name}\n` +
+          `- **Strength:** ${c.strength}\n` +
+          `- **Gap to exploit:** ${c.gap}` +
+          (c.whatToLearn ? `\n- **What to learn:** ${c.whatToLearn}` : "")
+        ).join("\n\n")
+      );
+    }
+
+    // ── Keywords ──────────────────────────────────────────────────────────
+    if (report.keywords?.length) {
+      sections.push(
+        `## Keywords\n` +
+        report.keywords.map(k =>
+          `- **${k.term}** (${k.intent}, ${k.opportunity} opportunity) — ${k.note}`
+        ).join("\n")
+      );
+    }
+
+    // ── Recommended Opportunity ───────────────────────────────────────────
+    if (report.recommendedOpportunity) {
+      const rec = report.recommendedOpportunity;
+      sections.push(
+        `## Recommended Opportunity\n` +
+        `**${rec.name}**\n` +
+        `${rec.why}\n` +
+        `- Estimated revenue: ${rec.estimatedRevenue}\n` +
+        `- Time to first sale: ${rec.timeToFirstSale}`
+      );
+    }
+
+    // ── AI Recommendation ─────────────────────────────────────────────────
+    if (report.aiRecommendation) {
+      const ai = report.aiRecommendation;
+      sections.push(
+        `## AI Recommendation\n` +
+        `**${ai.category}: ${ai.nextStep}**\n` +
+        `${ai.reasoning}`
+      );
+    }
+
+    // ── Best Next Action ──────────────────────────────────────────────────
+    if (report.bestNextAction) {
+      const bna = report.bestNextAction;
+      sections.push(
+        `## Best Next Action\n` +
+        `**${bna.action}**\n` +
+        `${bna.reasoning}\n` +
+        `- Price point: ${bna.estimatedPrice}\n` +
+        `- Time to first sale: ${bna.timeToFirstSale}`
+      );
+    }
+
+    // ── Action Plan ───────────────────────────────────────────────────────
+    if (report.actionPlan?.length) {
+      sections.push(
+        `## Action Plan\n` +
+        report.actionPlan.map(s =>
+          `${s.step}. **${s.action}**: ${s.detail}` +
+          (s.cta ? `\n   *Next: ${s.cta}*` : "")
+        ).join("\n")
+      );
+    }
+
+    // ── Build Path ────────────────────────────────────────────────────────
+    if (report.buildPath) {
+      const bp = report.buildPath;
+      sections.push(
+        `## Build Path\n` +
+        `### With Content Flywheel (${bp.withFlywheel.estimatedTime}, ${bp.withFlywheel.difficulty})\n` +
+        bp.withFlywheel.steps.map((s, i) => `${i + 1}. ${s}`).join("\n") +
+        `\n\n### Manual (${bp.manually.estimatedTime})\n` +
+        `Tools: ${bp.manually.tools.join(", ")}\n${bp.manually.note}`
+      );
+    }
+
+    const fullMarkdown = sections.join("\n\n");
+    const plainTextPreview =
+      `${query} research report — ` +
+      `${report.insights?.length ?? 0} insights, ` +
+      `${report.productOpportunities?.length ?? 0} product ideas, ` +
+      `${report.actionPlan?.length ?? 0} action steps`;
+
+    try {
+      const tipTapContent = markdownToTipTap(fullMarkdown);
+      sessionStorage.setItem(
+        "note_from_research",
+        JSON.stringify({ title: `Research: ${query}`, content: tipTapContent, body: plainTextPreview, tag: "research" })
+      );
+    } catch {}
+    onTabChange?.("notes");
+  }, [report, query, onTabChange, generatedAt, activeReportType]);
+
+  // Add all action plan steps to the todos list
+  const handleAddTasksFromPlan = useCallback(() => {
+    if (!report?.actionPlan?.length) return;
+    const newTasks = report.actionPlan.map(step => ({
+      id: Math.random().toString(36).slice(2, 10),
+      text: step.action,
+      completed: false,
+      priority: "medium" as const,
+      category: "growth",
+      notes: step.detail,
+      createdAt: Date.now(),
+    }));
+    try {
+      const existing = JSON.parse(localStorage.getItem("cf_todos") ?? "[]") as object[];
+      localStorage.setItem("cf_todos", JSON.stringify([...newTasks, ...existing]));
+      setTasksAdded(true);
+      setTimeout(() => setTasksAdded(false), 3000);
+    } catch {}
+  }, [report]);
+
+  const handleExportReport = useCallback(() => {
+    if (!report) return;
+    const lines = [
+      `# Research Report: ${query}`,
+      `*${activeReportType} · ${generatedAt ? new Date(generatedAt).toLocaleDateString("en-GB") : ""}*`,
+      "",
+      "## Executive Summary",
+      report.summary,
+      "",
+      "## Key Insights",
+      ...report.insights.map((ins, i) => `${i + 1}. ${ins}`),
+      "",
+      "## Product Opportunities",
+      ...report.productOpportunities.map(o => `- **${o.title}** | ${o.type} | ${o.priceRange}\n  ${o.description}`),
+      "",
+      "## Content Opportunities",
+      ...report.contentOpportunities.map(o => `- **${o.title}** (${o.format}, ${o.difficulty})\n  ${o.description}`),
+      "",
+      "## Action Plan",
+      ...report.actionPlan.map(s => `${s.step}. **${s.action}**: ${s.detail}`),
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    setExportCopied(true);
+    setTimeout(() => setExportCopied(false), 2500);
+  }, [report, query, activeReportType, generatedAt]);
+
+  const handleGenerateStrategy = useCallback(async () => {
+    if (!report) return;
+    const content = [
+      `# Marketing Strategy: ${query}`,
+      "",
+      "## Market Overview",
+      report.summary,
+      "",
+      "## Top Content Opportunities",
+      ...report.contentOpportunities.slice(0, 5).map(o => `### ${o.title}\n${o.description}\n*Format: ${o.format} · Difficulty: ${o.difficulty}*`),
+      "",
+      "## Product Strategy",
+      ...report.productOpportunities.slice(0, 4).map(o => `- **${o.title}** (${o.priceRange}) — ${o.description}`),
+      "",
+      "## Action Plan",
+      ...report.actionPlan.map(s => `${s.step}. **${s.action}**: ${s.detail}`),
+    ].join("\n");
+    await fetch("/api/founder-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "notes", type: "strategy", title: `Marketing Strategy: ${query}`, content }),
+    });
+    onTabChange?.("notes");
+  }, [report, query, onTabChange]);
+
+  const formatTime = (iso: string) => {
+    try { return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); }
+    catch { return ""; }
+  };
+
+  const currentTypeInfo = RESEARCH_TYPES.find(t => t.id === researchType) ?? RESEARCH_TYPES[8];
+  const activeTypeInfo  = RESEARCH_TYPES.find(t => t.id === activeReportType) ?? RESEARCH_TYPES[8];
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // IDLE STATE
+  // ════════════════════════════════════════════════════════════════════════════
+  if (state === "idle") {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6 py-4">
+
+        {/* Hero */}
+        <div className="text-center space-y-3 pt-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[12px] font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            AI Business Analyst
+          </div>
+          <h2 className="text-3xl font-bold text-foreground tracking-tight">
+            Research any market, niche, or topic
+          </h2>
+          <p className="text-muted-foreground text-[15px] max-w-xl mx-auto">
+            Get a structured report with evidence, root causes, opportunities, and a clear action plan. Adapted to your research goal.
+          </p>
+        </div>
+
+        {/* Powered by AI Research — onboarding card */}
+        <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-transparent p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Brain className="w-4 h-4 text-orange-500" />
+            <span className="font-semibold text-[14px] text-foreground">Powered by AI Research</span>
+          </div>
+          <p className="text-[13px] text-foreground/70 leading-relaxed">
+            Ask any business question and get a full structured report — with evidence, competitor analysis, product ideas, a step-by-step action plan, and a business scorecard.
+          </p>
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50">Example searches</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                "Find a profitable niche for nurses",
+                "Research competitors in Notion templates",
+                "What content is trending in productivity?",
+                "Validate my ebook idea for freelancers",
+                "Best digital products for teachers",
+                "How to price my Notion template",
+              ].map(ex => (
+                <button
+                  key={ex}
+                  onClick={() => setInputQuery(ex)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-accent hover:border-orange-500/20 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-all"
+                >
+                  <Search className="w-3 h-3 shrink-0 opacity-50" />
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Research Type Selector */}
+        <ResearchTypeSelector selected={researchType} onSelect={setResearchType} />
+
+        {/* Search box */}
+        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="p-4">
+            <textarea
+              ref={textareaRef}
+              value={inputQuery}
+              onChange={e => setInputQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSearch(); } }}
+              placeholder={currentTypeInfo.placeholder}
+              rows={3}
+              className="w-full bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground/50 outline-none resize-none leading-relaxed"
+            />
+          </div>
+
+          {/* Sources pill row */}
+          <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-semibold text-muted-foreground/50 uppercase tracking-wider mr-1">Sources</span>
+            {RESEARCH_SOURCE_CATEGORIES.filter(cat =>
+              cat.sources.some(s => s.status === "connected")
+            ).map(cat => (
+              <div
+                key={cat.id}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border bg-orange-500/10 border-orange-500/30 text-orange-500 text-[12px] font-medium"
+              >
+                <span className="text-[11px] leading-none">{cat.emoji}</span>
+                {cat.label}
+              </div>
+            ))}
+            <button
+              onClick={() => setSourcesOpen(prev => !prev)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all",
+                sourcesOpen
+                  ? "border-orange-500/30 text-orange-500 bg-orange-500/5"
+                  : "border-dashed border-border/60 text-muted-foreground/50 hover:border-orange-500/30 hover:text-orange-500"
+              )}
+            >
+              View all 63 sources
+              <ChevronDown className={cn("w-3 h-3 transition-transform duration-200", sourcesOpen && "rotate-180")} />
+            </button>
+          </div>
+
+          <div className="px-4 pb-4 flex items-center justify-between gap-3">
+            <p className="text-[11px] text-muted-foreground/40">
+              Press Enter to research · Shift+Enter for new line
+            </p>
+            <Button
+              onClick={handleSearch}
+              disabled={!inputQuery.trim()}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-6 h-9 gap-2 shrink-0"
+            >
+              <Search className="w-3.5 h-3.5" />
+              Research
+            </Button>
+          </div>
+        </div>
+
+        {/* Research Sources Panel */}
+        <ResearchSourcesPanel open={sourcesOpen} onToggle={() => setSourcesOpen(prev => !prev)} />
+
+        {error && (
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* Research Library */}
+        <ResearchLibraryPanel
+          library={lib.library}
+          onLoad={handleLoadSaved}
+          onToggleFavourite={lib.toggleFavourite}
+          onDelete={lib.deleteReport}
+          onRefresh={(saved) => {
+            setInputQuery(saved.query);
+            setResearchType(saved.researchType);
+            setTimeout(() => textareaRef.current?.focus(), 50);
+          }}
+        />
+
+        {/* Value props */}
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { icon: <TrendingUp className="w-4 h-4 text-orange-500" />, title: "Market Intelligence",  desc: "Discover gaps before your competitors do" },
+            { icon: <Brain className="w-4 h-4 text-orange-500" />,      title: "Root Cause Analysis",  desc: "Understand why opportunities exist, not just that they do" },
+            { icon: <Zap className="w-4 h-4 text-orange-500" />,        title: "Instant Execution",    desc: "One click to turn research into products, content, or campaigns" },
+          ].map((item, i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-2">
+              {item.icon}
+              <p className="text-[13px] font-semibold text-foreground">{item.title}</p>
+              <p className="text-[12px] text-muted-foreground/70">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // LOADING STATE — Analyst progress panel
+  // ════════════════════════════════════════════════════════════════════════════
+  if (state === "loading") {
+    const doneCount = analysts.filter(a => a.status === "done" || a.status === "error").length;
+    const totalCount = analysts.length;
+    const allAnalystsDone = totalCount > 0 && doneCount === totalCount;
+
+    return (
+      <div className="max-w-3xl mx-auto py-10 space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto">
+            <Sparkles className="w-6 h-6 text-orange-500 animate-pulse" />
+          </div>
+          <h3 className="text-xl font-bold text-foreground">Your research team is working…</h3>
+          <p className="text-sm text-muted-foreground italic">&ldquo;{query}&rdquo;</p>
+          {activeTypeInfo.id !== "custom" && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-500 text-[12px] font-medium">
+              {activeTypeInfo.emoji} {activeTypeInfo.label} mode
+            </span>
+          )}
+        </div>
+
+        {/* Intent classification card — shows what the engine understood */}
+        {intentClassified && (
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3.5 space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                <Brain className="w-3.5 h-3.5 text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[12px] font-bold text-blue-600 dark:text-blue-400">Intent understood</span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[10px] font-bold">
+                    {intentClassified.intentLabel}
+                  </span>
+                </div>
+                <p className="text-[11px] text-foreground/65 mt-0.5 leading-relaxed">{intentClassified.reasoning}</p>
+              </div>
+            </div>
+            {intentClassified.expandedQueries.length > 0 && (
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-blue-500/50 mb-1.5">Searching across {intentClassified.expandedQueries.length} semantic angles</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {intentClassified.expandedQueries.map((q, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded-md bg-blue-500/8 border border-blue-500/15 text-blue-600 dark:text-blue-400 text-[10px] font-medium"
+                    >
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Analyst cards */}
+        {analysts.length > 0 ? (
+          <div className="space-y-2.5">
+            {analysts.map(analyst => (
+              <div
+                key={analyst.id}
+                className={cn(
+                  "flex items-start gap-3.5 px-4 py-3.5 rounded-xl border transition-all duration-500",
+                  analyst.status === "done"    ? "bg-green-500/5  border-green-500/20"
+                  : analyst.status === "error" ? "bg-red-500/5    border-red-500/20"
+                  : analyst.status === "working" ? "bg-orange-500/8 border-orange-500/25"
+                  : "bg-muted/20 border-border opacity-50"
+                )}
+              >
+                <div className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base transition-all",
+                  analyst.status === "working" ? "animate-pulse" : "",
+                )}>
+                  {analyst.emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className={cn(
+                      "text-[13px] font-semibold",
+                      analyst.status === "done"    ? "text-green-700 dark:text-green-300"
+                      : analyst.status === "error" ? "text-red-600 dark:text-red-400"
+                      : analyst.status === "working" ? "text-orange-600 dark:text-orange-400"
+                      : "text-muted-foreground"
+                    )}>
+                      {analyst.displayName}
+                    </p>
+                    {analyst.usedFallback === false && analyst.status === "done" && (
+                      <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-500 dark:text-blue-400 text-[9px] font-bold uppercase tracking-wider">Live Data</span>
+                    )}
+                    {analyst.duration && analyst.status === "done" && (
+                      <span className="text-[10px] text-muted-foreground/50">{analyst.duration}s</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                    {analyst.status === "working" ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        Gathering intelligence…
+                      </span>
+                    ) : analyst.status === "done" && analyst.summary ? (
+                      analyst.summary
+                    ) : analyst.status === "error" ? (
+                      "Could not gather data — using AI knowledge"
+                    ) : (
+                      analyst.description
+                    )}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {analyst.status === "done"    ? <Check    className="w-4 h-4 text-green-500" />
+                   : analyst.status === "error" ? <AlertCircle className="w-4 h-4 text-red-500/60" />
+                   : analyst.status === "working" ? <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                   : <div className="w-4 h-4 rounded-full border border-border opacity-30" />}
+                </div>
+              </div>
+            ))}
+
+            {/* Synthesis step */}
+            {(allAnalystsDone || synthesisStatus !== "waiting") && (
+              <div className={cn(
+                "flex items-center gap-3.5 px-4 py-3.5 rounded-xl border transition-all duration-500",
+                synthesisStatus === "done"    ? "bg-green-500/5  border-green-500/20"
+                : synthesisStatus === "working" ? "bg-purple-500/8 border-purple-500/25"
+                : "bg-muted/20 border-border"
+              )}>
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0 text-base">🧠</div>
+                <div className="flex-1">
+                  <p className={cn(
+                    "text-[13px] font-semibold",
+                    synthesisStatus === "done"    ? "text-green-700 dark:text-green-300"
+                    : synthesisStatus === "working" ? "text-purple-600 dark:text-purple-400"
+                    : "text-muted-foreground"
+                  )}>
+                    Senior Analyst — Synthesis
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                    {synthesisStatus === "working" ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        Combining all intelligence into your report…
+                      </span>
+                    ) : synthesisStatus === "done" ? (
+                      "Report complete!"
+                    ) : (
+                      "Waiting for analysts to finish…"
+                    )}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {synthesisStatus === "done"    ? <Check  className="w-4 h-4 text-green-500" />
+                   : synthesisStatus === "working" ? <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                   : <div className="w-4 h-4 rounded-full border border-border opacity-30" />}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Fallback while init event arrives */
+          <div className="space-y-2.5 max-w-sm mx-auto">
+            {LOADING_STEPS.map((step, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-500",
+                  i < loadingStep  ? "bg-green-500/5 border-green-500/20 text-green-600 dark:text-green-400"
+                  : i === loadingStep ? "bg-orange-500/10 border-orange-500/30 text-orange-500"
+                  : "bg-muted/20 border-border text-muted-foreground/40"
+                )}
+              >
+                {i < loadingStep ? <Check className="w-4 h-4 shrink-0" />
+                  : i === loadingStep ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                  : <div className="w-4 h-4 shrink-0 rounded-full border border-current opacity-30" />}
+                <span className="text-[13px] font-medium">{step.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-center text-[12px] text-muted-foreground/40">
+          {totalCount > 0 ? `${doneCount} of ${totalCount} analysts finished` : "Assembling your research team…"}
+        </p>
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // DONE STATE — full report
+  // ════════════════════════════════════════════════════════════════════════════
+  if (!report) return null;
+
+  const CHAT_SUGGESTIONS = [
+    "Which opportunity should I start with?",
+    "What's the fastest way to validate this?",
+    "How should I price my first product here?",
+    "What content would go most viral in this niche?",
+  ];
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-4 pb-12">
+
+      {/* ── Knowledge Comparison Panel (admin-only, non-blocking) ─────────── */}
+      <KnowledgeComparisonPanel
+        query={query}
+        report={report}
+        comparison={{ ...kb, saveInsights: kb.saveInsights }}
+        onSave={() => {}}
+      />
+
+      {/* ── Intent Understanding Panel ────────────────────────────────────── */}
+      {intentClassified && (
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Brain className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">What the engine understood</span>
+            <span className="ml-auto px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-500 text-[10px] font-bold shrink-0">
+              {intentClassified.intentLabel}
+            </span>
+          </div>
+          <p className="text-[12px] text-foreground/70 leading-relaxed">{intentClassified.reasoning}</p>
+          {intentClassified.expandedQueries.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {intentClassified.expandedQueries.map((q, i) => (
+                <span key={i} className="px-2 py-0.5 rounded-md bg-blue-500/8 border border-blue-500/15 text-blue-500 dark:text-blue-400 text-[10px] font-medium">
+                  {q}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Report header ─────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 py-2">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="w-6 h-6 rounded-lg bg-orange-500/10 flex items-center justify-center">
+              <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+            </div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/50">Research Report</span>
+            {generatedAt && <span className="text-[11px] text-muted-foreground/40">· {formatTime(generatedAt)}</span>}
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/50 border border-border text-[11px] font-medium text-muted-foreground">
+              {activeTypeInfo.emoji} {activeTypeInfo.label}
+            </span>
+          </div>
+          <h2 className="text-xl font-bold text-foreground leading-tight">{query}</h2>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Generate Marketing Strategy */}
+          <button
+            onClick={handleGenerateStrategy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[12px] font-medium transition-all"
+          >
+            <Target className="w-3 h-3" />
+            Save Strategy
+          </button>
+          {/* Export */}
+          <button
+            onClick={handleExportReport}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-all",
+              exportCopied
+                ? "bg-green-500/10 border-green-500/20 text-green-600"
+                : "bg-background hover:bg-accent border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {exportCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {exportCopied ? "Copied!" : "Export"}
+          </button>
+          {/* Advanced toggle */}
+          <button
+            onClick={() => setAdvancedMode(!advancedMode)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-all",
+              advancedMode
+                ? "bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400"
+                : "bg-background border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+            )}
+          >
+            <Brain className="w-3 h-3" />
+            {advancedMode ? "Advanced: On" : "Advanced"}
+          </button>
+          <button
+            onClick={handleSaveReport}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-all",
+              saved.has("full-report")
+                ? "bg-green-500/10 border-green-500/20 text-green-600"
+                : "bg-background hover:bg-accent border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {saving === "full-report" ? <Loader2 className="w-3 h-3 animate-spin" /> : saved.has("full-report") ? <Check className="w-3 h-3" /> : <BookmarkPlus className="w-3 h-3" />}
+            {saved.has("full-report") ? "Saved!" : "Save"}
+          </button>
+          <button
+            onClick={() => setState("idle")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-accent text-[12px] font-medium text-muted-foreground hover:text-foreground transition-all"
+          >
+            <RefreshCw className="w-3 h-3" />
+            New
+          </button>
+        </div>
+      </div>
+
+      {/* ── One-click actions bar ─────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap p-4 rounded-2xl border border-border bg-gradient-to-r from-orange-500/5 to-amber-500/5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mr-0.5">Take action</span>
+        <button
+          onClick={handleCreateProduct}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white transition-all shadow-sm">
+          <Package className="w-3.5 h-3.5" />Build Product
+        </button>
+        <button
+          onClick={() => handleCreateCarousel(report.insights)}
+          disabled={carouselLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all disabled:opacity-60">
+          <Layers className="w-3.5 h-3.5" />{carouselLoading ? "Generating…" : "Create Design"}
+        </button>
+        <button
+          onClick={() => handleCreateScript(report.insights)}
+          disabled={scriptLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all disabled:opacity-60">
+          <Mic className="w-3.5 h-3.5" />{scriptLoading ? "Generating…" : "Video Script"}
+        </button>
+        <button
+          onClick={handleSaveAsNote}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-background hover:bg-accent text-foreground transition-all">
+          <StickyNote className="w-3.5 h-3.5" />Save as Note
+        </button>
+        <button
+          onClick={handleAddTasksFromPlan}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all",
+            tasksAdded ? "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400" : "border-border bg-background hover:bg-accent text-foreground")}>
+          {tasksAdded ? <Check className="w-3.5 h-3.5" /> : <Library className="w-3.5 h-3.5" />}
+          {tasksAdded ? "Tasks added!" : "Add Plan as Tasks"}
+        </button>
+      </div>
+
+      {/* ── Live Citations Strip ──────────────────────────────────────────── */}
+      {citations.length > 0 && (() => {
+        const highCitations   = citations.filter(c => c.relevance === "High");
+        const mediumCitations = citations.filter(c => c.relevance === "Medium");
+        const lowCitations    = citations.filter(c => c.relevance === "Low");
+        // If none are scored yet (legacy reports), show all ungrouped
+        const isScored = citations.some(c => c.relevance !== undefined);
+
+        const RELEVANCE_BADGE: Record<string, string> = {
+          "High":   "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+          "Medium": "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+          "Low":    "bg-muted/60 text-muted-foreground/50 border-border/60",
+        };
+        const SOURCE_EMOJI: Record<string, string> = {
+          "Wikipedia":    "📖",
+          "Hacker News":  "🔶",
+          "Reddit":       "🔴",
+          "News":         "📰",
+          "Semantic Scholar": "🎓",
+          "Web":          "🌐",
+        };
+
+        const CitationPill = ({ c }: { c: SourceCitation }) => (
+          <a
+            href={c.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={c.reason ? `${c.source}: ${c.reason}` : `${c.source}: ${c.title}`}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background border border-border hover:border-orange-500/30 hover:bg-orange-500/5 text-[11px] text-foreground/70 hover:text-foreground transition-all no-underline group max-w-[240px]"
+          >
+            <span className="text-[11px] leading-none shrink-0">{SOURCE_EMOJI[c.source] ?? "🔗"}</span>
+            <span className="font-medium truncate">{c.title}</span>
+            {c.relevance && (
+              <span className={cn("text-[9px] font-bold px-1 py-0.5 rounded border shrink-0", RELEVANCE_BADGE[c.relevance])}>
+                {c.relevance}
+              </span>
+            )}
+            <ExternalLink className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 transition-colors" />
+          </a>
+        );
+
+        return (
+          <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Live Sources</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-bold border border-green-500/20">
+                {citations.length} references
+              </span>
+              {isScored && highCitations.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-semibold border border-green-500/20">
+                  {highCitations.length} high relevance
+                </span>
+              )}
+            </div>
+
+            {isScored ? (
+              <div className="space-y-2.5">
+                {highCitations.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400">
+                      High relevance — directly on-intent
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {highCitations.map((c, i) => <CitationPill key={`h-${i}`} c={c} />)}
+                    </div>
+                  </div>
+                )}
+                {mediumCitations.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-yellow-600 dark:text-yellow-400">
+                      Medium relevance — related context
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mediumCitations.map((c, i) => <CitationPill key={`m-${i}`} c={c} />)}
+                    </div>
+                  </div>
+                )}
+                {lowCitations.length > 0 && (
+                  <details className="group">
+                    <summary className="cursor-pointer text-[9px] font-bold uppercase tracking-wider text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors select-none">
+                      {lowCitations.length} low relevance (keyword matches only) ▸
+                    </summary>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {lowCitations.map((c, i) => <CitationPill key={`l-${i}`} c={c} />)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {citations.map((c, i) => <CitationPill key={i} c={c} />)}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Business Scorecard ────────────────────────────────────────────── */}
+      {report.scorecard && (
+        <BusinessScorecard scorecard={report.scorecard} report={report} />
+      )}
+
+      {/* ── Best Next Action ──────────────────────────────────────────────── */}
+      {report.bestNextAction && (
+        <BestNextActionCard bestNextAction={report.bestNextAction} onCreateProduct={handleCreateProduct} />
+      )}
+
+      {/* ── Recommended Opportunity ────────────────────────────────────────── */}
+      {report.recommendedOpportunity && (
+        <RecommendedOpportunityCard opp={report.recommendedOpportunity} />
+      )}
+
+      {/* ── Build Path ────────────────────────────────────────────────────── */}
+      {report.buildPath && <BuildPathSection buildPath={report.buildPath} router={router} onCreateProduct={handleCreateProduct} />}
+
+      {/* ── Community Intelligence (Reddit) ──────────────────────────────── */}
+      {(() => {
+        const communityData = providerData.community;
+        const posts = Array.isArray(communityData?.posts) ? (communityData.posts as RedditPost[]) : [];
+        const themes = Array.isArray(communityData?.keyThemes) ? (communityData.keyThemes as string[]) : [];
+        const painPoints = Array.isArray(communityData?.painPoints) ? (communityData.painPoints as string[]) : [];
+        const communityInsights = typeof communityData?.communityInsights === "string" ? communityData.communityInsights : null;
+        if (posts.length === 0 && themes.length === 0) return null;
+        return (
+          <Section id="community" title="Community Intelligence" icon={<MessageSquare className="w-4 h-4" />} badge={posts.length > 0 ? posts.length : undefined} open={openSections.has("community")} onToggle={toggleSection}>
+            {communityInsights && (
+              <p className="text-[13px] text-foreground/80 leading-relaxed mb-3">{communityInsights}</p>
+            )}
+            {posts.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Live Reddit Posts</p>
+                {posts.map((post, i) => (
+                  <a
+                    key={i}
+                    href={post.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-3 p-3 rounded-xl border border-border bg-background hover:border-orange-500/20 hover:bg-accent/20 transition-all no-underline group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-foreground leading-snug group-hover:text-orange-500 transition-colors">{post.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-medium text-blue-500 dark:text-blue-400">r/{post.subreddit}</span>
+                        <span className="text-[10px] text-muted-foreground/50">▲ {post.score} · 💬 {post.numComments}</span>
+                      </div>
+                      {post.snippet && <p className="text-[11px] text-muted-foreground/60 mt-1 leading-relaxed line-clamp-2">{post.snippet}</p>}
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0 mt-1 group-hover:text-orange-500 transition-colors" />
+                  </a>
+                ))}
+              </div>
+            )}
+            {themes.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Key Discussion Themes</p>
+                <div className="flex flex-wrap gap-2">
+                  {themes.map((theme, i) => (
+                    <span key={i} className="px-2.5 py-1 rounded-lg bg-blue-500/8 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] font-medium">{theme}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {painPoints.length > 0 && (
+              <div className="space-y-1.5 mt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Community Pain Points</p>
+                {painPoints.map((pain, i) => (
+                  <div key={i} className="flex items-start gap-2 text-[12px] text-foreground/80">
+                    <span className="text-red-500 shrink-0 mt-0.5">•</span>
+                    {pain}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+        );
+      })()}
+
+      {/* ── Marketplace Intelligence ──────────────────────────────────────── */}
+      {(() => {
+        const mpData = providerData.marketplace;
+        const topProducts = Array.isArray(mpData?.topProducts) ? (mpData.topProducts as Array<{name: string; price: string; platform: string; description: string; estimatedSales: string}>) : [];
+        const gapOpportunities = Array.isArray(mpData?.gapOpportunities) ? (mpData.gapOpportunities as string[]) : [];
+        const priceRanges = mpData?.priceRanges as Record<string, string> | undefined;
+        const mpInsights = typeof mpData?.marketplaceInsights === "string" ? mpData.marketplaceInsights : null;
+        if (topProducts.length === 0 && gapOpportunities.length === 0) return null;
+        return (
+          <Section id="marketplace" title="Marketplace Intelligence" icon={<ShoppingBag className="w-4 h-4" />} badge={topProducts.length > 0 ? topProducts.length : undefined} open={openSections.has("marketplace")} onToggle={toggleSection}>
+            {mpInsights && <p className="text-[13px] text-foreground/80 leading-relaxed mb-3">{mpInsights}</p>}
+            {priceRanges && (
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {Object.entries(priceRanges).map(([tier, price]) => (
+                  <div key={tier} className="text-center p-3 rounded-xl border border-border bg-background">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 capitalize">{tier}</p>
+                    <p className="text-[16px] font-bold text-green-600 dark:text-green-400 mt-0.5">{price}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {topProducts.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Top Products Identified</p>
+                {topProducts.map((product, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-background">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-foreground">{product.name}</p>
+                      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{product.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-500 dark:text-purple-400 text-[10px] font-bold">{product.platform}</span>
+                      <span className="text-[13px] font-bold text-green-600 dark:text-green-400">{product.price}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {gapOpportunities.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Market Gaps Identified</p>
+                {gapOpportunities.map((gap, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-green-500/5 border border-green-500/10">
+                    <Lightbulb className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-foreground/80">{gap}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+        );
+      })()}
+
+      {/* ── Sources Used ─────────────────────────────────────────────────── */}
+      {sourceMeta.length > 0 && (
+        <div className="flex flex-wrap gap-2 py-2 border-t border-border/50">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40 self-center mr-1">Sources</span>
+          {sourceMeta.map(src => (
+            <span
+              key={src.id}
+              title={src.usedFallback ? "AI analysis (no live API)" : `${src.dataPoints} data points from live API`}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border",
+                src.usedFallback
+                  ? "bg-muted/30 border-border text-muted-foreground/60"
+                  : "bg-blue-500/8 border-blue-500/20 text-blue-600 dark:text-blue-400"
+              )}
+            >
+              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", src.usedFallback ? "bg-muted-foreground/30" : "bg-blue-400")} />
+              {src.displayName}
+              {!src.usedFallback && <span className="opacity-60">· Live</span>}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* ── Launch Roadmap ────────────────────────────────────────────────── */}
+      <LaunchRoadmap router={router} />
+
+      {/* ── 1. Executive Summary ───────────────────────────────────────────── */}
+      <Section id="summary" title="Executive Summary" icon={<FileText className="w-4 h-4" />} open={openSections.has("summary")} onToggle={toggleSection}>
+        <div className="space-y-3">
+          {report.summary.split(/\n\n+/).map((para, i) => (
+            <p key={i} className="text-[14px] text-foreground/90 leading-relaxed">{stripMd(para)}</p>
+          ))}
+          <QuickActions actions={[
+            { label: "Save to Research", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("summary", `Summary: ${query}`, report.summary) },
+            { label: "Save as Note", icon: <StickyNote className="w-3 h-3" />, onClick: handleSaveAsNote },
+          ]} />
+        </div>
+      </Section>
+
+      {/* ── 2. Key Insights ───────────────────────────────────────────────── */}
+      <Section id="insights" title="Key Insights" icon={<Lightbulb className="w-4 h-4" />} badge={report.insights.length} open={openSections.has("insights")} onToggle={toggleSection}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {report.insights.map((insight, i) => (
+            <div key={i} className="relative flex flex-col gap-2.5 p-4 rounded-xl border border-border bg-background hover:border-orange-500/20 hover:bg-accent/20 transition-all">
+              <div className="flex items-start gap-3">
+                <span className="w-6 h-6 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[11px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                <p className="text-[13px] text-foreground/90 leading-relaxed flex-1">{stripMd(insight)}</p>
+              </div>
+              <div className="flex gap-1.5 pl-9">
+                <button onClick={() => handleCreateCarousel([insight])} disabled={carouselLoading} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-orange-500/8 hover:bg-orange-500/15 text-orange-500 border border-orange-500/15 transition-all disabled:opacity-60">
+                  <Layers className="w-2.5 h-2.5" />{carouselLoading ? "…" : "Carousel"}
+                </button>
+                <button onClick={() => handleCreateScript([insight])} disabled={scriptLoading} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-background hover:bg-accent text-muted-foreground border border-border transition-all disabled:opacity-60">
+                  <Mic className="w-2.5 h-2.5" />{scriptLoading ? "…" : "Script"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <QuickActions actions={[
+          { label: carouselLoading ? "Generating…" : "Generate Carousel from All Insights", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights), primary: true },
+          { label: "Save Insights",                       icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("insights", `Insights: ${query}`, report.insights.map((ins, n) => `${n + 1}. ${ins}`).join("\n")) },
+        ]} />
+      </Section>
+
+      {/* ── 3. Evidence & Research Signals [advanced] ─────────────────────── */}
+      {showSection("evidence") && report.evidence && report.evidence.length > 0 && (
+        <Section id="evidence" title="Evidence & Research Signals" icon={<FlaskConical className="w-4 h-4" />} badge={report.evidence.length} open={openSections.has("evidence")} onToggle={toggleSection} advancedOnly>
+          <div className="space-y-3">
+            {report.evidence.map((ev, i) => (
+              <div key={i} className="p-4 rounded-xl border border-border bg-background space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-500 dark:text-blue-400 text-[10px] font-bold">
+                    {ev.source}
+                  </span>
+                </div>
+                <p className="text-[13px] font-semibold text-foreground leading-relaxed">{stripMd(ev.finding)}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(ev.context)}</p>
+              </div>
+            ))}
+          </div>
+          <QuickActions actions={[
+            { label: "Save Evidence", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("evidence", `Evidence: ${query}`, (report.evidence ?? []).map(e => `[${e.source}] ${e.finding}\n${e.context}`).join("\n\n")) },
+          ]} />
+        </Section>
+      )}
+
+      {/* ── 4. Root Causes [advanced] ─────────────────────────────────────── */}
+      {showSection("rootCauses") && report.rootCauses && report.rootCauses.length > 0 && (
+        <Section id="rootCauses" title="Root Causes" icon={<Brain className="w-4 h-4" />} badge={report.rootCauses.length} open={openSections.has("rootCauses")} onToggle={toggleSection} advancedOnly>
+          <div className="space-y-2">
+            {report.rootCauses.map((cause, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-purple-500/5 border border-purple-500/10 hover:border-purple-500/20 transition-colors">
+                <span className="text-purple-500 shrink-0 mt-0.5 font-bold text-[12px]">{i + 1}.</span>
+                <p className="text-[13px] text-foreground/90 leading-relaxed">{stripMd(cause)}</p>
+              </div>
+            ))}
+          </div>
+          <QuickActions actions={[
+            { label: "Turn into Note", icon: <StickyNote className="w-3 h-3" />,   onClick: () => onTabChange?.("notes") },
+            { label: "Save Causes",    icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("root-causes", `Root Causes: ${query}`, (report.rootCauses ?? []).map((c, n) => `${n + 1}. ${c}`).join("\n")) },
+          ]} />
+        </Section>
+      )}
+
+      {/* ── 5. Content Opportunities ──────────────────────────────────────── */}
+      <Section id="content" title="Content Opportunities" icon={<Layers className="w-4 h-4" />} badge={report.contentOpportunities.length} open={openSections.has("content")} onToggle={toggleSection}>
+        <div className="space-y-2.5">
+          {report.contentOpportunities.map((opp, i) => (
+            <div key={i} className="p-4 rounded-xl border border-border bg-background hover:border-orange-500/20 hover:bg-accent/20 transition-all">
+              <div className="flex items-start justify-between gap-3 mb-2.5">
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
+                    <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-blue-500/8 border-blue-500/20 text-blue-500 dark:text-blue-400">{opp.format}</span>
+                    <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold", DIFFICULTY_COLORS[opp.difficulty] ?? DIFFICULTY_COLORS.Medium)}>{opp.difficulty}</span>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
+                </div>
+              </div>
+              {/* Always-visible execution buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => handleCreateScript([opp.title + ": " + opp.description])} disabled={scriptLoading} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all disabled:opacity-60">
+                  <Mic className="w-3 h-3" />{scriptLoading ? "Generating…" : "Generate Script"}
+                </button>
+                <button onClick={() => handleCreateCarousel([opp.title + ": " + opp.description])} disabled={carouselLoading} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-background hover:bg-accent text-muted-foreground hover:text-foreground border border-border transition-all disabled:opacity-60">
+                  <Layers className="w-3 h-3" />{carouselLoading ? "Generating…" : "Make Carousel"}
+                </button>
+                <button onClick={() => save(`content-${i}`, opp.title, `${opp.description}\n\nFormat: ${opp.format}\nDifficulty: ${opp.difficulty}`)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-background hover:bg-accent text-muted-foreground hover:text-foreground border border-border transition-all">
+                  {saved.has(`content-${i}`) ? <Check className="w-3 h-3 text-green-500" /> : <BookmarkPlus className="w-3 h-3" />}
+                  {saved.has(`content-${i}`) ? "Saved!" : "Save"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <QuickActions actions={[
+          { label: carouselLoading ? "Generating…" : "Generate Carousel", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights), primary: true },
+          { label: scriptLoading ? "Generating Script…" : "Generate Video Guide",  icon: <Zap className="w-3 h-3" />,         onClick: () => handleCreateScript(report.insights) },
+          { label: "Save All",              icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("content-opps", `Content Opps: ${query}`, report.contentOpportunities.map(o => `${o.title} (${o.format}, ${o.difficulty})\n${o.description}`).join("\n\n")) },
+        ]} />
+      </Section>
+
+      {/* ── 6. Product Opportunities ──────────────────────────────────────── */}
+      <Section id="product" title="Product Opportunities" icon={<Package className="w-4 h-4" />} badge={report.productOpportunities.length} open={openSections.has("product")} onToggle={toggleSection}>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/60 bg-muted/30">
+                <th className="text-left py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Product Idea</th>
+                <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 w-[100px]">Type</th>
+                <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-green-600/70 dark:text-green-400/70 w-[110px]">Price Range</th>
+                <th className="py-2.5 px-3 w-[80px]" />
+              </tr>
+            </thead>
+            <tbody>
+              {report.productOpportunities.map((opp, i) => (
+                <tr key={i} className={cn("border-b border-border/40 hover:bg-accent/30 transition-colors", i === report.productOpportunities.length - 1 && "border-b-0")}>
+                  <td className="py-3 px-4">
+                    <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5 max-w-xs">{stripMd(opp.description)}</p>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="px-2 py-0.5 rounded-md border text-[10px] font-bold bg-purple-500/8 border-purple-500/20 text-purple-500 dark:text-purple-400 whitespace-nowrap">{opp.type}</span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="text-[13px] font-bold text-green-600 dark:text-green-400 whitespace-nowrap">{opp.priceRange}</span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <button onClick={handleCreateProduct} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 transition-all whitespace-nowrap">
+                      <Package className="w-3 h-3" />Create →
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <QuickActions actions={[
+          { label: "Create This Product",    icon: <Package className="w-3 h-3" />,      onClick: handleCreateProduct, primary: true },
+          { label: carouselLoading ? "Generating…" : "Generate Carousel", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights) },
+          { label: "Save All Ideas",         icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("product-opps", `Product Opps: ${query}`, report.productOpportunities.map(o => `${o.title}\n${o.description}\nType: ${o.type} · ${o.priceRange}`).join("\n\n")) },
+        ]} />
+      </Section>
+
+      {/* ── 7. Business Opportunities [advanced] ──────────────────────────── */}
+      {showSection("businessOpps") && report.businessOpportunities && report.businessOpportunities.length > 0 && (
+        <Section id="businessOpps" title="Business Opportunities" icon={<Building2 className="w-4 h-4" />} badge={report.businessOpportunities.length} open={openSections.has("businessOpps")} onToggle={toggleSection} advancedOnly>
+          <div className="space-y-3">
+            {report.businessOpportunities.map((opp, i) => (
+              <div key={i} className="p-4 rounded-xl border border-border bg-background space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[13px] font-semibold text-foreground">{stripMd(opp.title)}</p>
+                  <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold shrink-0", BIZ_OPP_COLORS[opp.type] ?? "bg-muted/30 border-border text-muted-foreground")}>
+                    {opp.type}
+                  </span>
+                </div>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(opp.description)}</p>
+              </div>
+            ))}
+          </div>
+          <QuickActions actions={[
+            { label: "Save Opportunities", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("biz-opps", `Business Opportunities: ${query}`, (report.businessOpportunities ?? []).map(o => `${o.title} [${o.type}]\n${o.description}`).join("\n\n")) },
+          ]} />
+        </Section>
+      )}
+
+      {/* ── 8. Competitor Insights ────────────────────────────────────────── */}
+      {showSection("competitors") && (
+        <Section id="competitors" title="Competitor Insights" icon={<Star className="w-4 h-4" />} badge={report.competitorInsights.length} open={openSections.has("competitors")} onToggle={toggleSection} advancedOnly={!alwaysShowCompetitors}>
+          {/* Column header row */}
+          <div className="grid grid-cols-[1fr_1fr_1fr] gap-3 mb-2 px-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Competitor</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Their Strength</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-green-600/70 dark:text-green-400/70">Your Opportunity</p>
+          </div>
+          <div className="space-y-2">
+            {report.competitorInsights.map((comp, i) => (
+              <div key={i} className="rounded-xl border border-border bg-background overflow-hidden hover:border-orange-500/20 transition-colors">
+                <div className="grid grid-cols-[1fr_1fr_1fr] gap-0 divide-x divide-border/60">
+                  <div className="p-3.5">
+                    <p className="text-[13px] font-bold text-foreground leading-snug">{stripMd(comp.name)}</p>
+                    {comp.popularProducts && (
+                      <p className="text-[11px] text-muted-foreground/60 mt-1 leading-relaxed">{stripMd(comp.popularProducts)}</p>
+                    )}
+                  </div>
+                  <div className="p-3.5">
+                    <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(comp.strength)}</p>
+                    {comp.contentStrategy && (
+                      <p className="text-[11px] text-muted-foreground/60 mt-1 italic leading-relaxed">{stripMd(comp.contentStrategy)}</p>
+                    )}
+                  </div>
+                  <div className="p-3.5 bg-green-500/4">
+                    <p className="text-[12px] text-green-700 dark:text-green-300 leading-relaxed font-medium">{stripMd(comp.gap)}</p>
+                    {comp.whatToLearn && (
+                      <p className="text-[11px] text-orange-500/80 mt-1.5 italic leading-relaxed">{stripMd(comp.whatToLearn)}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <QuickActions actions={[
+            { label: carouselLoading ? "Generating…" : "Create Positioning Content", icon: <Layers className="w-3 h-3" />, onClick: () => handleCreateCarousel(report.insights), primary: true },
+            { label: "Save Analysis",              icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("competitors", `Competitor Analysis: ${query}`, report.competitorInsights.map(c => `${c.name}\nStrength: ${c.strength}\nOpportunity: ${c.gap}`).join("\n\n")) },
+          ]} />
+        </Section>
+      )}
+
+      {/* ── 9. Keywords ───────────────────────────────────────────────────── */}
+      {showSection("keywords") && (
+        <Section id="keywords" title="Keywords & Search Intent" icon={<Hash className="w-4 h-4" />} badge={report.keywords.length} open={openSections.has("keywords")} onToggle={toggleSection} advancedOnly={!alwaysShowKeywords}>
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border/60 bg-muted/30">
+                  <th className="text-left py-2.5 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Keyword</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 w-[120px]">Intent</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 w-[100px]">Opportunity</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.keywords.map((kw, i) => (
+                  <tr key={i} className={cn("border-b border-border/40 hover:bg-accent/30 transition-colors", i === report.keywords.length - 1 && "border-b-0")}>
+                    <td className="py-2.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-semibold text-foreground text-[13px]">{kw.term}</span>
+                        {kw.type && <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-muted/40 border border-border text-muted-foreground">{kw.type}</span>}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-bold whitespace-nowrap", INTENT_COLORS[kw.intent] ?? INTENT_COLORS.informational)}>{kw.intent}</span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={cn("text-[11px] font-bold whitespace-nowrap", OPP_COLORS[kw.opportunity] ?? "text-muted-foreground")}>● {kw.opportunity}</span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className="text-[11px] text-muted-foreground leading-relaxed">{kw.note}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <QuickActions actions={[
+            { label: copiedKeywords ? "Copied!" : "Copy All Keywords", icon: copiedKeywords ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />, onClick: handleCopyKeywords, primary: true },
+            { label: "Save Keywords", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("keywords", `Keywords: ${query}`, report.keywords.map(k => `${k.term} (${k.intent}, ${k.opportunity} opp)\n${k.note}`).join("\n\n")) },
+          ]} />
+        </Section>
+      )}
+
+      {/* ── 10. Action Plan ───────────────────────────────────────────────── */}
+      <Section id="plan" title="Your Action Plan" icon={<Target className="w-4 h-4" />} badge={report.actionPlan.length} open={openSections.has("plan")} onToggle={toggleSection}>
+        <div className="space-y-3">
+          {report.actionPlan.map((step, i) => (
+            <div key={i} className="flex items-start gap-4 p-4 rounded-xl border border-border bg-background">
+              <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[13px] font-bold flex items-center justify-center shrink-0">
+                {step.step}
+              </div>
+              <div className="flex-1 space-y-2">
+                <p className="text-[13px] font-semibold text-foreground">{stripMd(step.action)}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{stripMd(step.detail)}</p>
+                {step.cta && <CtaButton cta={step.cta} router={router} onTabChange={onTabChange} onCarousel={() => handleCreateCarousel(report.insights)} onScript={() => handleCreateScript(report.insights)} />}
+              </div>
+            </div>
+          ))}
+        </div>
+        <QuickActions actions={[
+          { label: tasksAdded ? "Tasks added!" : "Add All as Tasks", icon: tasksAdded ? <Check className="w-3 h-3" /> : <Library className="w-3 h-3" />, onClick: handleAddTasksFromPlan, primary: true },
+          { label: "Save Action Plan", icon: <BookmarkPlus className="w-3 h-3" />, onClick: () => save("action-plan", `Action Plan: ${query}`, report.actionPlan.map(s => `Step ${s.step}: ${s.action}\n${s.detail}`).join("\n\n")) },
+        ]} />
+      </Section>
+
+      {/* ── AI Recommendation ─────────────────────────────────────────────── */}
+      {report.aiRecommendation && (
+        <AiRecommendationCard rec={report.aiRecommendation} router={router} onCarousel={() => handleCreateCarousel(report.insights)} onScript={() => handleCreateScript(report.insights)} />
+      )}
+
+      {/* ── AI Chat Follow-up ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border/40">
+          <MessageSquare className="w-4 h-4 text-orange-500" />
+          <span className="font-semibold text-[15px] text-foreground">Ask the AI Analyst</span>
+          {chatMessages.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-[11px] font-bold">
+              {Math.floor(chatMessages.length / 2)} {Math.floor(chatMessages.length / 2) === 1 ? "answer" : "answers"}
+            </span>
+          )}
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Chat messages */}
+          {chatMessages.length > 0 && (
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                  <div className={cn(
+                    "max-w-[85%] px-4 py-3 rounded-2xl text-[13px] leading-relaxed",
+                    msg.role === "user"
+                      ? "bg-orange-500 text-white rounded-br-sm"
+                      : "bg-muted/50 border border-border text-foreground/90 rounded-bl-sm"
+                  )}>
+                    {msg.role === "assistant" ? (
+                      <div className="space-y-0.5 text-[13px] leading-relaxed">{renderChatContent(msg.content)}</div>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-muted/50 border border-border">
+                    <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                  </div>
+                </div>
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+          )}
+
+          {/* Input */}
+          <div className="flex items-end gap-3">
+            <textarea
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChat(); } }}
+              placeholder={chatMessages.length === 0
+                ? `Ask anything about "${query}"… e.g. "Which content format would convert best for this niche?"`
+                : "Ask a follow-up question…"}
+              rows={2}
+              className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-[13px] text-foreground placeholder:text-muted-foreground/50 outline-none resize-none focus:border-orange-500/40 transition-colors leading-relaxed"
+            />
+            <Button
+              onClick={handleChat}
+              disabled={!chatInput.trim() || chatLoading}
+              className="bg-orange-500 hover:bg-orange-600 text-white h-10 px-4 shrink-0 gap-2"
+            >
+              {chatLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              Ask
+            </Button>
+          </div>
+
+          {/* Suggestions */}
+          {chatMessages.length === 0 && (
+            <div className="flex flex-wrap gap-2">
+              {CHAT_SUGGESTIONS.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setChatInput(s)}
+                  className="px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-accent text-[11px] text-muted-foreground hover:text-foreground transition-all"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

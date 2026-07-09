@@ -1,0 +1,344 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import { ChevronLeft, Check, Loader2, Sparkles, RefreshCw, Eye, Video, X, ImageIcon, Type, BookOpen, Palette, LayoutGrid, FileOutput, Megaphone, ExternalLink } from "lucide-react";
+
+const PANEL_TABS = [
+  { tab: "content",   Icon: BookOpen,   label: "Content"  },
+  { tab: "design",    Icon: Palette,    label: "Design"   },
+  { tab: "graphics",  Icon: ImageIcon,  label: "Graphics" },
+  { tab: "layout",    Icon: LayoutGrid, label: "Layout"   },
+  { tab: "export",    Icon: FileOutput, label: "Export"   },
+  { tab: "marketing", Icon: Megaphone,  label: "Mktg"     },
+  { tab: "ai",        Icon: Sparkles,   label: "AI"       },
+] as const;
+
+export type EditorToolbarProps = {
+  productTitle: string;
+  productId?: string;
+  saving: boolean;
+  lastSaved: Date | null;
+  formatLastSaved: (date: Date) => string;
+  isDark: boolean;
+  onAutoDesignClick: () => void;
+  onRegenerateDesign: () => void;
+  onPreview: () => void;
+  autoDesignLoading: boolean;
+  regenerateDesignLoading: boolean;
+  exportLabel: string;
+  showCreatedBanner: boolean;
+  onGenerateVideos: () => void;
+  onDismissCreatedBanner: () => void;
+  onGenerateImages: () => void;
+  onGenerateTypography: () => void;
+  generateImagesLoading: boolean;
+  generateImagesProgress?: { done: number; total: number } | null;
+  /** Panel tab controls */
+  activePanel?: string;
+  panelOpen?: boolean;
+  onPanelTabClick?: (tab: string) => void;
+};
+
+export function EditorToolbar({
+  productTitle,
+  productId,
+  saving,
+  lastSaved,
+  formatLastSaved,
+  isDark,
+  onAutoDesignClick,
+  onRegenerateDesign,
+  onPreview,
+  autoDesignLoading,
+  regenerateDesignLoading,
+  exportLabel,
+  showCreatedBanner,
+  onGenerateVideos,
+  onDismissCreatedBanner,
+  onGenerateImages,
+  onGenerateTypography,
+  generateImagesLoading,
+  generateImagesProgress,
+  activePanel,
+  panelOpen,
+  onPanelTabClick,
+}: EditorToolbarProps) {
+  return (
+    <>
+      <header
+        className={`shrink-0 sticky top-0 z-40 border-b backdrop-blur-sm shadow-sm ${
+          isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"
+        }`}
+      >
+        <div className="max-w-[1800px] mx-auto flex items-center justify-between gap-2 md:gap-6 px-3 md:px-6 h-14 overflow-x-hidden">
+          <div className="flex items-center gap-2 md:gap-6 min-w-0 shrink">
+            <Link
+              href="/dashboard/digital-products"
+              className={`text-sm shrink-0 flex items-center gap-1 ${
+                isDark ? "text-gray-400 hover:text-orange-500" : "text-gray-500 hover:text-orange-500"
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" /> Back
+            </Link>
+            <div
+              className={`h-5 w-px hidden sm:block ${isDark ? "bg-[#2A2A2A]" : "bg-gray-200"}`}
+            />
+            <h1
+              className={`text-base font-semibold truncate max-w-[120px] md:max-w-[280px] ${
+                isDark ? "text-white" : "text-gray-900"
+              }`}
+            >
+              {productTitle}
+            </h1>
+            {saving ? (
+              <span
+                className={`hidden sm:flex items-center gap-1.5 text-xs shrink-0 ${
+                  isDark ? "text-gray-400" : "text-gray-500"
+                }`}
+              >
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+              </span>
+            ) : lastSaved ? (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-600 shrink-0"
+                title={lastSaved.toLocaleString()}
+              >
+                <Check className="w-3.5 h-3.5" /> Saved ✓ · {formatLastSaved(lastSaved)}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+            {/* AI action buttons — hidden on mobile, accessible via the Edit panel slide-out */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={[
+                      "hidden md:inline-flex",
+                      isDark
+                        ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
+                    onClick={onAutoDesignClick}
+                    disabled={autoDesignLoading || regenerateDesignLoading}
+                  >
+                    {autoDesignLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline ml-1.5">Auto-Design</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Apply AI-suggested colours, fonts, and cover background
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={[
+                      "hidden md:inline-flex",
+                      isDark
+                        ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
+                    onClick={onRegenerateDesign}
+                    disabled={regenerateDesignLoading}
+                  >
+                    {regenerateDesignLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline ml-1.5">Regenerate Design</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Apply a new AI-generated design (colours, fonts, cover image)
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={[
+                      "hidden md:inline-flex",
+                      isDark
+                        ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
+                    onClick={onGenerateImages}
+                    disabled={generateImagesLoading || autoDesignLoading || regenerateDesignLoading}
+                  >
+                    {generateImagesLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {generateImagesProgress && (
+                          <span className="ml-1.5 text-xs">{generateImagesProgress.done}/{generateImagesProgress.total}</span>
+                        )}
+                      </>
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline ml-1.5">
+                      {generateImagesLoading ? "Generating…" : "Generate Images"}
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Auto-generate an AI image for each content page
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={[
+                      "hidden md:inline-flex",
+                      isDark
+                        ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                    ].join(" ")}
+                    onClick={onGenerateTypography}
+                    disabled={generateImagesLoading || autoDesignLoading || regenerateDesignLoading}
+                  >
+                    <Type className="w-4 h-4" />
+                    <span className="hidden sm:inline ml-1.5">Typography &amp; Pattern</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Generate typography or pattern designs for each content page
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="hidden md:inline-flex text-gray-400 hover:text-white hover:bg-[#2A2A2A]"
+                    onClick={onPreview}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Preview</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {productId && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={`/product/${productId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={[
+                        "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium border transition-colors",
+                        isDark
+                          ? "border-[#2A2A2A] text-gray-300 hover:bg-[#2A2A2A] hover:text-white"
+                          : "border-gray-200 text-gray-700 hover:bg-gray-100",
+                      ].join(" ")}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span className="hidden sm:inline">Preview as buyer</span>
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>Open the public product page as a buyer would see it</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <Button
+              size="sm"
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+              onClick={onPreview}
+            >
+              <Eye className="w-4 h-4" /> <span className="hidden sm:inline">Export </span>{exportLabel}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Panel tab bar — always visible, scrollable on mobile */}
+      {onPanelTabClick && (
+        <div className={`flex items-center border-b shrink-0 overflow-x-auto scrollbar-hide ${isDark ? "border-[#2A2A2A] bg-[#0F0F0F]/95" : "border-gray-200 bg-white/95"}`}>
+          <div className="flex items-center px-2 md:px-4 gap-0.5 md:gap-1 min-w-max">
+            {PANEL_TABS.map(({ tab, Icon, label }) => {
+              const active = activePanel === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => onPanelTabClick(tab)}
+                  className={`flex items-center gap-1 md:gap-1.5 px-2.5 md:px-3 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    active
+                      ? "border-orange-500 text-orange-600"
+                      : `border-transparent ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"}`
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {showCreatedBanner && (
+        <div
+          className={`flex items-center gap-2 px-3 py-2 border-b overflow-x-hidden ${
+            isDark ? "bg-orange-500/10 border-orange-500/30" : "bg-orange-50 border-orange-200"
+          }`}
+        >
+          <p
+            className={`text-xs font-medium min-w-0 truncate ${
+              isDark ? "text-orange-200" : "text-orange-900"
+            }`}
+          >
+            🎬 <span className="hidden sm:inline">{productTitle} is ready!</span> Get a Video Guide
+          </p>
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+            <Button
+              size="sm"
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-1 text-xs h-7 px-2"
+              onClick={onGenerateVideos}
+            >
+              <Video className="w-3 h-3" /> <span className="hidden sm:inline">Create</span> Video Guide
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={`h-7 w-7 p-0 ${
+                isDark
+                  ? "text-orange-200 hover:bg-orange-500/20"
+                  : "text-orange-800 hover:bg-orange-100"
+              }`}
+              onClick={onDismissCreatedBanner}
+              aria-label="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

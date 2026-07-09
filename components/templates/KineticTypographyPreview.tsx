@@ -1,0 +1,358 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type KineticScene = {
+  text: string;
+  accentWords: number; // first N words shown in accent colour
+  bgImage?: string;    // optional cinematic background image URL
+};
+
+export type KineticData = {
+  topic: string;
+  voiceId?: string;
+  colorScheme: "dark-orange" | "dark-blue" | "dark-green" | "dark-purple";
+  scenes: KineticScene[];
+};
+
+// ─── Color schemes ────────────────────────────────────────────────────────────
+
+const SCHEMES = {
+  "dark-orange": { bg: "#0A0A0A", accent: "#FF6B35", text: "#FFFFFF", glow: "rgba(255,107,53,0.2)" },
+  "dark-blue":   { bg: "#060D1F", accent: "#4776E6", text: "#FFFFFF", glow: "rgba(71,118,230,0.2)" },
+  "dark-green":  { bg: "#030F0A", accent: "#00C49A", text: "#FFFFFF", glow: "rgba(0,196,154,0.2)" },
+  "dark-purple": { bg: "#0D0814", accent: "#8E54E9", text: "#FFFFFF", glow: "rgba(142,84,233,0.2)" },
+};
+
+// ─── Single kinetic scene ─────────────────────────────────────────────────────
+
+function WordsSpan({ words, accentCount, scheme }: { words: string[]; accentCount: number; scheme: typeof SCHEMES["dark-orange"] }) {
+  return (
+    <>
+      {words.map((word, wi) => (
+        <span key={wi} style={{ color: wi < accentCount ? scheme.accent : scheme.text }}>
+          {word}{wi < words.length - 1 ? " " : ""}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function KineticSlide({
+  scene, scheme, index, total, wide = false,
+}: {
+  scene: KineticScene; scheme: typeof SCHEMES["dark-orange"]; index: number; total: number; wide?: boolean;
+}) {
+  const words = scene.text.split(/\s+/).filter(Boolean);
+  const accentCount = Math.min(scene.accentWords, words.length);
+  const progressPct = ((index + 1) / total) * 100;
+  const font = "'Inter', 'Helvetica Neue', Arial, sans-serif";
+  const hasBg = !!scene.bgImage;
+
+  const style = `
+    @keyframes kt-slide {
+      from { opacity: 0; transform: translateY(16px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .kt-in { animation: kt-slide 0.4s cubic-bezier(.22,1,.36,1) forwards; }
+  `;
+
+  // Shared background layer: cinematic image + dark overlay when bgImage is present
+  const bgLayer = hasBg ? (
+    <>
+      <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${scene.bgImage})`, backgroundSize: "cover", backgroundPosition: "center", zIndex: 0 }} />
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1 }} />
+    </>
+  ) : null;
+
+  if (!wide) {
+    // Portrait: centered
+    return (
+      <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        position: "relative", overflow: "hidden", padding: "8% 7%", boxSizing: "border-box" }}>
+        <style>{style}</style>
+        {bgLayer}
+        {!hasBg && (
+          <div style={{ position: "absolute", top: "30%", left: "50%", transform: "translate(-50%,-50%)",
+            width: "80%", height: "60%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none", zIndex: 1 }} />
+        )}
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, transition: "width 0.4s", zIndex: 10 }} />
+        <div style={{ position: "absolute", top: "5%", right: "6%", color: "rgba(255,255,255,0.25)", fontSize: "clamp(9px,1.4vw,12px)", fontWeight: 600, letterSpacing: "0.1em", zIndex: 10 }}>
+          {index + 1}/{total}
+        </div>
+        <div className="kt-in" style={{ textAlign: "center", position: "relative", zIndex: 10, maxWidth: "90%" }}>
+          <p style={{ fontSize: "clamp(18px,4vw,52px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em" }}>
+            <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
+          </p>
+        </div>
+        <div style={{ position: "absolute", bottom: "10%", left: "50%", transform: "translateX(-50%)", width: "clamp(24px,4vw,44px)", height: 3, background: scheme.accent, borderRadius: 2, opacity: 0.55, zIndex: 10 }} />
+      </div>
+    );
+  }
+
+  const layout = index % 3;
+
+  if (layout === 0) {
+    // Layout A: ghost number left + text right
+    return (
+      <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
+        display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
+        <style>{style}</style>
+        {bgLayer}
+        {!hasBg && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 65%)`, pointerEvents: "none", zIndex: 1 }} />}
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, zIndex: 10 }} />
+        {/* left accent bar */}
+        <div style={{ position: "absolute", left: 0, top: 0, width: 6, height: "100%", background: scheme.accent, opacity: 0.7, zIndex: 10 }} />
+        {/* ghost number */}
+        <div style={{ position: "absolute", left: "3%", top: "50%", transform: "translateY(-50%)",
+          fontSize: "clamp(80px,28vw,220px)", fontWeight: 900, lineHeight: 1,
+          color: scheme.accent, opacity: hasBg ? 0.12 : 0.07, letterSpacing: "-0.05em", userSelect: "none", pointerEvents: "none", zIndex: 10 }}>
+          {index + 1}
+        </div>
+        <div className="kt-in" style={{ position: "relative", zIndex: 10, marginLeft: "28%", paddingRight: "5%", maxWidth: "70%" }}>
+          <div style={{ fontSize: "clamp(7px,1vw,11px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: scheme.accent, marginBottom: "8%", opacity: 0.85 }}>
+            Part {index + 1} of {total}
+          </div>
+          <p style={{ fontSize: "clamp(14px,3.5vw,44px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em" }}>
+            <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
+          </p>
+        </div>
+        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2, zIndex: 10 }}>
+          {index + 1} / {total}
+        </div>
+      </div>
+    );
+  }
+
+  if (layout === 1) {
+    // Layout B: centered with flanking rules + corner brackets
+    const corner = { position: "absolute" as const, width: "clamp(12px,3vw,28px)", height: "clamp(12px,3vw,28px)" };
+    return (
+      <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
+        display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+        <style>{style}</style>
+        {bgLayer}
+        {!hasBg && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%,${scheme.glow} 0%,transparent 60%)`, pointerEvents: "none", zIndex: 1 }} />}
+        <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, zIndex: 10 }} />
+        {/* corner brackets */}
+        {[
+          { top: "4%", left: "3%", borderTop: `3px solid ${scheme.accent}`, borderLeft: `3px solid ${scheme.accent}` },
+          { top: "4%", right: "3%", borderTop: `3px solid ${scheme.accent}`, borderRight: `3px solid ${scheme.accent}` },
+          { bottom: "4%", left: "3%", borderBottom: `3px solid ${scheme.accent}`, borderLeft: `3px solid ${scheme.accent}` },
+          { bottom: "4%", right: "3%", borderBottom: `3px solid ${scheme.accent}`, borderRight: `3px solid ${scheme.accent}` },
+        ].map((s, i) => <div key={i} style={{ ...corner, ...s, zIndex: 10 }} />)}
+        <div className="kt-in" style={{ position: "relative", zIndex: 10, maxWidth: "80%", textAlign: "center", padding: "0 4%" }}>
+          {/* top rule */}
+          <div style={{ display: "flex", alignItems: "center", gap: "2%", marginBottom: "6%" }}>
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.35 }} />
+            <span style={{ fontSize: "clamp(6px,0.9vw,10px)", fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color: scheme.accent, opacity: 0.8, whiteSpace: "nowrap" }}>
+              {index + 1} / {total}
+            </span>
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.35 }} />
+          </div>
+          <p style={{ fontSize: "clamp(14px,3.5vw,44px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em" }}>
+            <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
+          </p>
+          {/* bottom rule */}
+          <div style={{ display: "flex", alignItems: "center", gap: "2%", marginTop: "6%" }}>
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.25 }} />
+            <div style={{ flex: 1, height: 1.5, background: scheme.accent, opacity: 0.25 }} />
+          </div>
+        </div>
+        <div style={{ position: "absolute", bottom: "5%", right: "4%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2, zIndex: 10 }}>
+          {Math.round(progressPct)}%
+        </div>
+      </div>
+    );
+  }
+
+  // Layout C: left-aligned text + dot grid + vertical bar right
+  const dots = Array.from({ length: 42 });
+  return (
+    <div style={{ width: "100%", height: "100%", background: hasBg ? "#000" : scheme.bg, fontFamily: font,
+      display: "flex", alignItems: "center", position: "relative", overflow: "hidden" }}>
+      <style>{style}</style>
+      {bgLayer}
+      {!hasBg && (
+        <div style={{ position: "absolute", top: "50%", left: "30%", transform: "translate(-50%,-50%)",
+          width: "70%", height: "80%", background: `radial-gradient(ellipse,${scheme.glow} 0%,transparent 70%)`, pointerEvents: "none", zIndex: 1 }} />
+      )}
+      <div style={{ position: "absolute", top: 0, left: 0, height: 3, width: `${progressPct}%`, background: scheme.accent, zIndex: 10 }} />
+      <div className="kt-in" style={{ position: "relative", zIndex: 10, padding: "0 0 0 7%", maxWidth: "70%" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "2%", marginBottom: "6%" }}>
+          <div style={{ width: "clamp(6px,1vw,10px)", height: "clamp(6px,1vw,10px)", borderRadius: "50%", background: scheme.accent }} />
+          <span style={{ fontSize: "clamp(6px,0.9vw,10px)", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: scheme.accent, opacity: 0.85 }}>
+            Scene {index + 1}
+          </span>
+        </div>
+        <p style={{ fontSize: "clamp(14px,3.5vw,44px)", fontWeight: 900, lineHeight: 1.2, margin: 0, letterSpacing: "-0.01em", textAlign: "left" }}>
+          <WordsSpan words={words} accentCount={accentCount} scheme={scheme} />
+        </p>
+      </div>
+      {/* vertical bar */}
+      <div style={{ position: "absolute", right: "23%", top: "10%", height: "80%", width: 2, background: scheme.accent, opacity: 0.15, borderRadius: 2, zIndex: 10 }} />
+      {/* dot grid */}
+      <div style={{ position: "absolute", right: "4%", top: "50%", transform: "translateY(-50%)",
+        display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: "clamp(4px,0.8vw,10px)", opacity: hasBg ? 0.06 : 0.1, zIndex: 10 }}>
+        {dots.map((_, i) => (
+          <div key={i} style={{ width: "clamp(3px,0.5vw,6px)", height: "clamp(3px,0.5vw,6px)", borderRadius: "50%", background: scheme.accent }} />
+        ))}
+      </div>
+      <div style={{ position: "absolute", bottom: "5%", left: "7%", fontSize: "clamp(7px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.18)", letterSpacing: 2, zIndex: 10 }}>
+        {index + 1} / {total}
+      </div>
+    </div>
+  );
+}
+
+// ─── Preview player ───────────────────────────────────────────────────────────
+
+const SLIDE_HOLD_MS = 3500;
+
+export const KINETIC_COLOR_OPTIONS = [
+  { value: "dark-orange" as const, label: "Dark Orange (default)" },
+  { value: "dark-blue"   as const, label: "Dark Blue" },
+  { value: "dark-green"  as const, label: "Dark Green" },
+  { value: "dark-purple" as const, label: "Dark Purple" },
+];
+
+export const KINETIC_VOICE_OPTIONS = [
+  { value: "EXAVITQu4vr4xnSDxMaL", label: "Sarah (calm, clear)" },
+  { value: "TX3LPaxmHKxFdv7VOQHJ", label: "Liam (deep, authoritative)" },
+  { value: "pNInz6obpgDQGcFmaJgB", label: "Adam (neutral, clean)" },
+  { value: "jBpfuIE2acCO8z3wKNLl", label: "Matilda (energetic)" },
+  { value: "onwK4e9ZLuTAKqWW03F9", label: "Daniel (professional)" },
+];
+
+export function KineticTypographyPreview({ data, voiceover = false, aspectRatio = "9:16", voiceId }: { data: KineticData; voiceover?: boolean; aspectRatio?: "9:16" | "16:9"; voiceId?: string }) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const scheme = SCHEMES[data.colorScheme];
+  const total = data.scenes.length;
+
+  const stopAudio = () => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+  };
+
+  const goTo = (idx: number) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    stopAudio();
+    setCurrentIdx(idx);
+  };
+
+  // Auto-advance timer — duration based on word count
+  useEffect(() => {
+    if (!playing) return;
+    const scene = data.scenes[currentIdx];
+    const wordCount = (scene?.text ?? "").split(/\s+/).filter(Boolean).length;
+    const durationMs = Math.max(2000, Math.round((wordCount / 2.5) * 1000) + 600);
+    timerRef.current = setTimeout(() => {
+      if (currentIdx < total - 1) {
+        setCurrentIdx(i => i + 1);
+      } else {
+        setPlaying(false);
+      }
+    }, durationMs);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [playing, currentIdx, total, data.scenes]);
+
+  // Voiceover: use ElevenLabs via preview-tts route
+  useEffect(() => {
+    if (!voiceover || !playing) return;
+    const text = data.scenes[currentIdx]?.text;
+    if (!text) return;
+    let cancelled = false;
+    stopAudio();
+    fetch("/api/templates/preview-tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voiceId: voiceId ?? data.voiceId }),
+    })
+      .then(r => r.ok ? r.blob() : Promise.reject())
+      .then(blob => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.play().catch(() => {});
+        audio.onended = () => URL.revokeObjectURL(url);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; stopAudio(); };
+  }, [currentIdx, playing, voiceover, voiceId, data.voiceId, data.scenes]);
+
+  const scene = data.scenes[currentIdx];
+  if (!scene) return null;
+
+  const is16x9 = aspectRatio === "16:9";
+
+  return (
+    <div className="flex flex-col gap-3 w-full select-none">
+      {/* Preview — switches between 9:16 and 16:9 */}
+      <div
+        className="relative mx-auto w-full"
+        style={is16x9 ? { maxWidth: 640, aspectRatio: "16/9" } : { maxWidth: 380, aspectRatio: "9/16" }}
+      >
+        <div className="absolute inset-0 rounded-2xl overflow-hidden shadow-2xl">
+          <KineticSlide
+            key={currentIdx}
+            scene={scene}
+            scheme={scheme}
+            index={currentIdx}
+            total={total}
+            wide={is16x9}
+          />
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="flex items-center justify-center gap-3 mt-1">
+        <button
+          onClick={() => goTo(Math.max(0, currentIdx - 1))}
+          disabled={currentIdx === 0}
+          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
+        >←</button>
+        <button
+          onClick={() => { if (playing) { stopAudio(); } setPlaying(p => !p); }}
+          className="px-5 py-1.5 rounded-lg text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white transition"
+        >{playing ? "⏸ Pause" : "▶ Play"}</button>
+        <button
+          onClick={() => goTo(Math.min(total - 1, currentIdx + 1))}
+          disabled={currentIdx === total - 1}
+          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 disabled:opacity-30 transition"
+        >→</button>
+      </div>
+
+      {/* Dot indicators */}
+      <div className="flex justify-center gap-1.5 flex-wrap">
+        {data.scenes.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => goTo(i)}
+            className={`rounded-full transition-all ${i === currentIdx ? "w-5 h-2 bg-orange-500" : "w-2 h-2 bg-gray-300 dark:bg-gray-600"}`}
+          />
+        ))}
+      </div>
+
+      {/* Scene list */}
+      <div className="mt-2 space-y-2 max-h-56 overflow-y-auto pr-1">
+        {data.scenes.map((s, i) => (
+          <button
+            key={i}
+            onClick={() => goTo(i)}
+            className={`w-full text-left rounded-lg border p-3 text-sm transition ${i === currentIdx ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
+          >
+            <span className="font-semibold text-gray-400 mr-2">#{i + 1}</span>
+            {s.text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

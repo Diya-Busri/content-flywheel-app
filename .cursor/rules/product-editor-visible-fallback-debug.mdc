@@ -1,0 +1,56 @@
+---
+description: Add visible red debug view when ProductEditor renders but UI is invisible/empty
+globs: "**/digital-products/**/ProductEditor.tsx"
+alwaysApply: false
+---
+
+# ProductEditor – Visible Fallback When UI Is Invisible/Empty
+
+When **Console shows NO errors**, the **page IS rendering** (divs visible in Elements), but the **UI looks invisible or empty**, the problem is likely one of:
+
+1. Product content is empty/null  
+2. CSS is hiding everything  
+3. Component is stuck in a "restoring" or conditional state  
+
+## QUICK FIX: Add visible fallback content
+
+**Target:** `ProductEditor.tsx` – find the **return** that renders the main editor (after loading and `!product` checks) and **temporarily** replace it with this debug view:
+
+```typescript
+return (
+  <div className="min-h-screen bg-red-500 p-8 text-white">
+    <h1 className="text-4xl mb-4">DEBUG VIEW</h1>
+    <p>Product ID: {productId}</p>
+    <p>Product loaded: {product ? 'YES' : 'NO'}</p>
+    <p>Product title: {product?.title}</p>
+
+    <div className="mt-8 bg-white text-black p-4">
+      <h2 className="text-2xl mb-4">Product Content:</h2>
+      <div dangerouslySetInnerHTML={{ __html: product?.content || 'NO CONTENT' }} />
+    </div>
+  </div>
+)
+```
+
+**Notes:**
+
+- Use the same `productId` and `product` (and any other names) as in the existing component (e.g. if the component uses `product` from state, keep that).
+- If the editor returns `<ProductEditorContext.Provider>…<ProductEditorView /></ProductEditorContext.Provider>`, replace that **entire** return (for the success path only) with the debug div above so the red view is what the user sees.
+- This is **temporary** – only to confirm render and data; revert once the cause is known.
+
+## What this does
+
+- **Bright red background** → confirms the component is rendering and not hidden by CSS.
+- **Product ID / loaded / title** → confirms product data is present.
+- **Product content block** → shows whether `product.content` (or equivalent) has HTML or is empty.
+
+If you see the red screen with text:
+
+- Rendering works.
+- The issue is in the **complex UI** (e.g. ProductEditorView or nested components), not in data loading for this page.
+
+## After adding
+
+- Save the file, refresh the browser.
+- **Screenshot** what you see (red view with or without content).
+- Use that to decide: fix the real UI vs fix data/content. Then remove this debug return and restore the proper editor UI.

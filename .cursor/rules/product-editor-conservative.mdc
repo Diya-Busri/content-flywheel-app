@@ -1,0 +1,64 @@
+---
+description: Conservative fix approach for ProductEditor – do not rewrite entire file; fix step by step
+globs: "**/digital-products/**/ProductEditor.tsx"
+alwaysApply: false
+---
+
+# ProductEditor – Conservative, Step-by-Step Fixes Only
+
+**STOP rewriting the entire ProductEditor.tsx file.** The page keeps breaking when the file is fully rewritten.
+
+Fix it **step by step** and **do not touch** existing working parts.
+
+## STEP 1 – Get the editor showing again (minimal change)
+
+1. Open: `app/dashboard/digital-products/[id]/edit/ProductEditor.tsx`
+2. Find the **return statement** (around line 1200+).
+3. Ensure the **return** has this basic structure (or equivalent minimal layout):
+
+```typescript
+if (loading) {
+  return <div className="flex items-center justify-center h-screen">Loading...</div>
+}
+
+if (!product) {
+  return <div className="flex items-center justify-center h-screen">Product not found</div>
+}
+
+return (
+  <div className="flex h-screen bg-gray-900">
+    {/* Left sidebar */}
+    <aside className="w-64 border-r border-gray-800 p-4">
+      <h2>Tools</h2>
+    </aside>
+
+    {/* Main canvas */}
+    <main className="flex-1 p-8">
+      <div className="bg-white p-8">
+        <div dangerouslySetInnerHTML={{ __html: product.content }} />
+      </div>
+    </main>
+
+    {/* Right sidebar */}
+    <aside className="w-80 border-l border-gray-800 p-4">
+      <h2>Properties</h2>
+    </aside>
+  </div>
+)
+```
+
+## DO NOT
+
+- Rewrite the entire file
+- Change the data fetching logic
+- Remove existing state or handlers
+- Add complex new features in one go
+
+## DO
+
+- Fix only the return statement (or the minimal JSX needed to show the page)
+- Keep the structure simple
+- Ensure product data is displayed
+- Improve the UI gradually **after** the basic layout works
+
+After the basic layout works, improve the UI in small, incremental steps.
