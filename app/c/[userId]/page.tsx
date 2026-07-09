@@ -167,10 +167,54 @@ export default async function CreatorProfilePage({
       )}
 
       {/* ── Hero banner ── */}
-      <div style={{ position: "relative", height: "160px", overflow: "hidden" }}>
-        <div style={{ width: "100%", height: "100%", background: bannerBg }} />
-        {/* Gradient fade — blend into the page background (tinted, not hard white) */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "60px", background: `linear-gradient(to bottom, transparent 0%, ${t.isDark ? t.page : `${accent}18`} 60%, ${t.page} 100%)` }} />
+      <div style={{ position: "relative", height: bannerImageUrl ? "220px" : "200px", overflow: "hidden" }}>
+
+        {bannerImageUrl ? (
+          /* Photo banner — full bleed image pinned to top */
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={bannerImageUrl}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }}
+          />
+        ) : bannerGradient ? (
+          /* Custom gradient set by creator */
+          <div style={{ width: "100%", height: "100%", background: `linear-gradient(${bannerGradient})` }} />
+        ) : (
+          /* ── Designed default banner ── */
+          <div style={{
+            width: "100%", height: "100%", position: "relative", overflow: "hidden",
+            background: t.isDark
+              ? `linear-gradient(135deg, ${accent}ee 0%, ${accent}99 40%, #0a0a0c 100%)`
+              : `linear-gradient(135deg, ${accent} 0%, ${accent}cc 50%, ${accent}88 100%)`,
+          }}>
+            {/* Decorative circles */}
+            <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "200px", height: "200px", borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+            <div style={{ position: "absolute", bottom: "-60px", right: "15%", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
+            <div style={{ position: "absolute", top: "20px", left: "-30px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
+            {/* Grid dots pattern */}
+            <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px)", backgroundSize: "28px 28px", opacity: 0.6 }} />
+            {/* Brand text */}
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", flexDirection: "column",
+              alignItems: "flex-start", justifyContent: "flex-end",
+              padding: "0 28px 32px",
+            }}>
+              <p style={{ margin: "0 0 6px", fontSize: "28px", fontWeight: "900", color: "#fff", letterSpacing: "-0.8px", lineHeight: 1.1, textShadow: "0 2px 12px rgba(0,0,0,0.2)" }}>
+                {brandName}
+              </p>
+              {tagline && (
+                <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "rgba(255,255,255,0.85)", letterSpacing: "-0.1px" }}>
+                  {tagline}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Gradient fade into page */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "70px", background: `linear-gradient(to bottom, transparent 0%, ${t.page}cc 70%, ${t.page} 100%)` }} />
       </div>
 
       {/* ── Content ── */}
