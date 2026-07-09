@@ -54,6 +54,15 @@ import {
   messagesTable,
   communityReportsTable,
 } from "./schema/messaging-schema";
+import { creatorReferralsTable } from "./schema/creator-referrals-schema";
+import { featuredCreditEventsTable } from "./schema/featured-credits-schema";
+import { creatorScoresTable } from "./schema/creator-scores-schema";
+import { featuredProductsTable } from "./schema/featured-products-schema";
+import { referralsTable } from "./schema/referrals-schema";
+import { productOrdersTable } from "./schema/product-orders-schema";
+import { productReviewsTable } from "./schema/product-reviews-schema";
+import { creatorFollowsTable } from "./schema/creator-follows-schema";
+import { storeSettingsTable } from "./schema/store-settings-schema";
 
 // Define the schema properly
 const schema = {
@@ -113,6 +122,16 @@ const schema = {
   conversationParticipants: conversationParticipantsTable,
   messages: messagesTable,
   communityReports: communityReportsTable,
+  // Rewards & Marketplace
+  creatorReferrals: creatorReferralsTable,
+  featuredCreditEvents: featuredCreditEventsTable,
+  creatorScores: creatorScoresTable,
+  featuredProducts: featuredProductsTable,
+  referrals: referralsTable,
+  productOrders: productOrdersTable,
+  productReviews: productReviewsTable,
+  creatorFollows: creatorFollowsTable,
+  storeSettings: storeSettingsTable,
 };
 
 // Connection options tuned for Supabase pgBouncer (port 6543 pooler).

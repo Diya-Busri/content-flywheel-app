@@ -70,6 +70,15 @@ function creatorInitials(name: string) {
   return name.split(" ").map((w) => w[0]?.toUpperCase() ?? "").slice(0, 2).join("") || "CF";
 }
 
+// Creator level — mirrors CREATOR_LEVELS in lib/rewards-config.ts
+function getCreatorLevelBadge(salesCount: number | null): { emoji: string; label: string } {
+  const s = salesCount ?? 0;
+  if (s >= 250) return { emoji: "💎", label: "Elite" };
+  if (s >= 50)  return { emoji: "⭐", label: "Pro" };
+  if (s >= 5)   return { emoji: "🚀", label: "Rising" };
+  return { emoji: "🌱", label: "New" };
+}
+
 const AVATAR_COLORS = ["#f97316","#8b5cf6","#3b82f6","#10b981","#ec4899","#f59e0b","#6366f1"];
 function avatarColor(userId: string) {
   let h = 0;
@@ -674,7 +683,7 @@ function ProductCard({
               )}
             </span>
 
-            {/* Creator avatar + name */}
+            {/* Creator avatar + name + level */}
             <Link
               href={`/marketplace/creator/${item.creatorUserId}`}
               onClick={(e) => e.stopPropagation()}
@@ -684,9 +693,17 @@ function ProductCard({
               <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: bgColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "#fff", flexShrink: 0 }}>
                 {initials}
               </div>
-              <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 600, maxWidth: "90px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 600, maxWidth: "70px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {item.creatorName}
               </span>
+              {(() => {
+                const lvl = getCreatorLevelBadge(item.salesCount);
+                return (
+                  <span style={{ fontSize: "10px", lineHeight: 1, whiteSpace: "nowrap", opacity: 0.8 }} title={lvl.label}>
+                    {lvl.emoji}
+                  </span>
+                );
+              })()}
             </Link>
           </div>
         </div>

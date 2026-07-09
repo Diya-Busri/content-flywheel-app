@@ -11,6 +11,7 @@ import { profilesTable } from "@/db/schema/profiles-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, sql } from "drizzle-orm";
 import { awardVideoCredits } from "@/lib/award-credits";
+import { markReferralConverted, markReferralTrialActive, checkSalesMilestones, checkRevenueMilestones, recomputeCreatorScore } from "@/lib/rewards-helpers";
 
 /**
  * Award video credits to a subscriber, identified by their Stripe customer ID.
@@ -235,6 +236,13 @@ async function handleCheckoutSession(event: Stripe.Event) {
         });
 
         console.log(`[webhook] Activated subscription for user ${checkoutSession.client_reference_id} (status: ${subStatus})`);
+
+        // Mark referral as trial_active when user starts trial
+        if (subStatus === "trialing") {
+          markReferralTrialActive(checkoutSession.client_reference_id).catch((e) =>
+            console.error("[rewards] markReferralTrialActive failed:", e)
+          );
+        }
       } catch (error) {
         console.error(`Error activating subscription via webhook: ${error}`);
       }
@@ -291,6 +299,29 @@ async function handlePaymentSuccess(event: Stripe.Event) {
         const planLabel = interval === "year" ? "Annual plan renewal" : "Monthly plan renewal";
         await addSubscriptionVideoCredits(customerId, interval, planLabel, `stripe:invoice:${invoice.id}`)
           .catch((e) => console.error("[sub-credits] Failed to add renewal credits:", e));
+      }
+
+      // Award referral credit when trial converts to paid (billing_reason = subscription_create after trial)
+      const isTrialConversion = invoice.billing_reason === "subscription_create" && subscription.status === "active";
+      if (isTrialConversion) {
+        // Look up creator userId from customerId
+        const [profile] = await db
+          .select({ userId: profilesTable.userId })
+          .from(profilesTable)
+          .where(eq(profilesTable.stripeCustomerId, customerId))
+          .limit(1);
+
+        if (profile?.userId) {
+          markReferralConverted(profile.userId).catch((e) =>
+            console.error("[rewards] markReferralConverted failed:", e)
+          );
+          // Also recompute score and sales/revenue milestones
+          Promise.all([
+            checkSalesMilestones(profile.userId),
+            checkRevenueMilestones(profile.userId),
+            recomputeCreatorScore(profile.userId),
+          ]).catch((e) => console.error("[rewards] milestone check failed:", e));
+        }
       }
     } catch (error) {
       console.error(`Error processing payment success: ${error}`);

@@ -4,10 +4,12 @@ import { productsTable } from "@/db/schema/products-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { creatorFollowsTable } from "@/db/schema/creator-follows-schema";
+import { creatorScoresTable } from "@/db/schema/creator-scores-schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 import FollowButton from "@/components/FollowButton";
 import type { MarketingAssets } from "@/db/schema/products-schema";
+import { getCreatorLevel } from "@/lib/rewards-config";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +55,7 @@ export default async function CreatorProfilePage({
       .then((r) => r[0]).catch(() => undefined),
   ]);
 
-  const [products, activeBundles, followerCountRow] = await Promise.all([
+  const [products, activeBundles, followerCountRow, creatorScore] = await Promise.all([
     db.select({ id: productsTable.id, title: productsTable.title, marketingAssets: productsTable.marketingAssets })
       .from(productsTable)
       .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
@@ -67,9 +69,16 @@ export default async function CreatorProfilePage({
       .from(creatorFollowsTable)
       .where(eq(creatorFollowsTable.followedId, userId))
       .then((r) => r[0]).catch(() => ({ count: 0 })),
+    db.select({ salesCount: creatorScoresTable.salesCount, level: creatorScoresTable.level })
+      .from(creatorScoresTable)
+      .where(eq(creatorScoresTable.userId, userId))
+      .limit(1)
+      .then((r) => r[0]).catch(() => undefined),
   ]);
 
   const followerCount = followerCountRow?.count ?? 0;
+  const salesCount = creatorScore?.salesCount ?? 0;
+  const creatorLevel = getCreatorLevel(salesCount);
 
   const brandName = (storeSettings?.storeName?.trim() || brandVoice?.brandName?.trim() || "Creator") as string;
   const initials = brandName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -262,9 +271,22 @@ export default async function CreatorProfilePage({
         </div>
 
         {/* Name + tagline + bio */}
-        <h1 style={{ margin: "0 0 4px", fontSize: "28px", fontWeight: "800", color: t.text, letterSpacing: "-0.8px", lineHeight: 1.15 }}>
-          {brandName}
-        </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+          <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: t.text, letterSpacing: "-0.8px", lineHeight: 1.15 }}>
+            {brandName}
+          </h1>
+          {/* Creator level badge */}
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: "4px",
+            padding: "3px 10px", borderRadius: "999px",
+            background: t.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+            border: `1px solid ${t.cardBorder}`,
+            fontSize: "12px", fontWeight: "700", color: t.subText,
+            letterSpacing: "0.01em", whiteSpace: "nowrap",
+          }}>
+            {creatorLevel.emoji} {creatorLevel.label}
+          </span>
+        </div>
         {tagline && (
           <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: "600", color: accent }}>
             {tagline}
