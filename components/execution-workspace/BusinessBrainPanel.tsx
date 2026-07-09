@@ -1,24 +1,30 @@
 /**
- * BusinessBrainPanel — Phase 2.0
+ * BusinessBrainPanel — Phase 2.1 (Autonomous)
  * ──────────────────────────────────────────────────────────────────────────────
  * Auto-triggers on first workspace visit after pipeline completion.
  * Calls POST /api/launch/brain, caches result in DB via the API.
  *
+ * Autonomous fix system:
+ *  - Automatable recommendations show "Auto-Fix" — one click re-runs the agent
+ *  - Non-automatable recommendations show "Requires your input" with reason
+ *  - "Apply All Auto-Fixes" button applies everything automatable at once
+ *
  * Sections:
  *  1. Header — Business Score ring + Launch Score ring + summary verdict
  *  2. Section grid — 6 scored cards (market, product, design, store, marketing, launch readiness)
- *  3. Smart Recommendations — priority-sorted, each with Apply Fix button
+ *  3. Smart Recommendations — priority-sorted, auto-fix first
  */
 "use client";
 
 import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   Brain, Loader2, RefreshCw, CheckCircle2, AlertTriangle,
-  XCircle, ArrowRight, TrendingUp, Package, Palette,
+  XCircle, TrendingUp, Package, Palette,
   Store, Megaphone, Rocket, ChevronDown, ChevronUp,
-  Zap, Target, Sparkles,
+  Zap, Sparkles, Bot, User, Play,
 } from "lucide-react";
-import type { BrainResult, BrainRecommendation, LaunchStageResults } from "@/db/schema/launch-schema";
+import type { BrainResult, BrainRecommendation } from "@/db/schema/launch-schema";
 
 /* ─── Props ─────────────────────────────────────────────────────────────────── */
 
@@ -30,7 +36,7 @@ interface BusinessBrainPanelProps {
   initialBrain: BrainResult | undefined;
 }
 
-/* ─── Loading messages shown while brain is thinking ─────────────────────────── */
+/* ─── Loading messages ───────────────────────────────────────────────────────── */
 
 const LOADING_MESSAGES = [
   { emoji: "🔍", text: "Analysing market opportunity…" },
@@ -117,7 +123,6 @@ function SectionCard({ icon, label, score, summary, items }: SectionCardProps) {
           hasItems ? "hover:bg-muted/20 cursor-pointer" : "cursor-default",
         ].join(" ")}
       >
-        {/* Mini score ring */}
         <div className="relative w-9 h-9 shrink-0">
           <svg className="-rotate-90 w-9 h-9" viewBox="0 0 36 36">
             <circle cx="18" cy="18" r={r} fill="none" stroke="currentColor"
@@ -169,45 +174,54 @@ function SectionCard({ icon, label, score, summary, items }: SectionCardProps) {
 /* ─── Recommendation card ────────────────────────────────────────────────────── */
 
 const PRIORITY_STYLES = {
-  high:   { badge: "bg-red-500/15 text-red-400 border-red-500/20",   dot: "bg-red-400",    label: "High priority" },
-  medium: { badge: "bg-amber-500/15 text-amber-400 border-amber-500/20", dot: "bg-amber-400",  label: "Medium priority" },
-  low:    { badge: "bg-muted/40 text-muted-foreground border-border/40",  dot: "bg-muted-foreground/40", label: "Low priority"  },
+  high:   { badge: "bg-red-500/15 text-red-400 border-red-500/20",        dot: "bg-red-400",               label: "High priority" },
+  medium: { badge: "bg-amber-500/15 text-amber-400 border-amber-500/20",  dot: "bg-amber-400",             label: "Medium priority" },
+  low:    { badge: "bg-muted/40 text-muted-foreground border-border/40",   dot: "bg-muted-foreground/40",   label: "Low priority" },
 };
 
-const CONFIDENCE_LABEL = {
-  high:   "High confidence",
-  medium: "Medium confidence",
-  low:    "Lower confidence",
-};
-
-const ACTION_LABELS: Record<BrainRecommendation["actionType"], string> = {
-  edit_product:       "Edit Product",
-  edit_store:         "Edit Store",
-  regenerate_design:  "Open Design Studio",
-  edit_marketing:     "Edit Content",
-  manual:             "View Details",
-};
+type FixStatus = "idle" | "applying" | "applied" | "error";
 
 function RecommendationCard({
-  rec, productId, storeUrl, launchId,
+  rec, launchId, onApplied,
 }: {
-  rec: BrainRecommendation; productId: string; storeUrl: string; launchId: string;
+  rec: BrainRecommendation; launchId: string; onApplied: () => void;
 }) {
+  const router = useRouter();
   const p = PRIORITY_STYLES[rec.priority];
-  const [expanded, setExpanded] = useState(false);
+  const [expanded,  setExpanded]  = useState(false);
+  const [fixStatus, setFixStatus] = useState<FixStatus>("idle");
+  const [fixError,  setFixError]  = useState<string | null>(null);
 
-  /* Resolve actionHref — substitute real productId / launchId / storeUrl */
-  const raw = rec.actionHref
-    ?.replace("[id]",       productId)
-    ?.replace("[launchId]", launchId)
-    ?? (rec.actionType === "edit_product"      ? `/dashboard/digital-products/${productId}/edit`
-      : rec.actionType === "edit_store"        ? `/dashboard/digital-products/${productId}/edit#publish`
-      : rec.actionType === "regenerate_design" ? `/dashboard/digital-products/${productId}/edit`
-      : rec.actionType === "edit_marketing"    ? `/dashboard/launch/${launchId}/workspace`
-      : undefined);
+  const automatable = rec.automatable ?? (rec.actionType !== "manual");
 
-  /* Guard: never render a button if a placeholder bracket wasn't resolved */
-  const resolvedHref = raw && !raw.includes("[") ? raw : undefined;
+  const applyFix = useCallback(async () => {
+    if (!rec.stage) return;
+    setFixStatus("applying");
+    setFixError(null);
+    try {
+      const res = await fetch("/api/launch/brain/apply", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          launchId,
+          stage:          rec.stage,
+          fixInstruction: rec.fixInstruction,
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json() as { error?: string };
+        throw new Error(e.error ?? "Apply failed");
+      }
+      setFixStatus("applied");
+      onApplied();
+      // Short delay so the user sees "Applied ✓" before the redirect
+      await new Promise(r => setTimeout(r, 800));
+      router.push(`/dashboard/launch/${launchId}`);
+    } catch (err) {
+      setFixError(err instanceof Error ? err.message : "Failed");
+      setFixStatus("error");
+    }
+  }, [rec.stage, rec.fixInstruction, launchId, router, onApplied]);
 
   return (
     <div className={[
@@ -216,15 +230,30 @@ function RecommendationCard({
     ].join(" ")}>
       {/* Header */}
       <div className="flex items-start gap-3 px-4 py-3">
-        <div className="flex flex-col items-center gap-1 pt-0.5 shrink-0">
+        {/* Priority badge */}
+        <div className="shrink-0 pt-0.5">
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${p.badge}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`} />
             {p.label}
           </span>
         </div>
+
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-bold text-foreground leading-snug">{rec.title}</p>
           <p className="text-[11px] text-muted-foreground/70 mt-1 leading-snug">{rec.detail}</p>
+        </div>
+
+        {/* Automatable badge */}
+        <div className="shrink-0 pt-0.5">
+          {automatable ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              <Bot className="w-2.5 h-2.5" /> AI can fix
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-muted/30 text-muted-foreground/50 border border-border/30">
+              <User className="w-2.5 h-2.5" /> Your input
+            </span>
+          )}
         </div>
       </div>
 
@@ -251,26 +280,59 @@ function RecommendationCard({
               <p className="text-[11px] text-muted-foreground/70 leading-snug">{rec.impact}</p>
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40">Confidence:</p>
-            <p className="text-[9px] text-muted-foreground/60">{CONFIDENCE_LABEL[rec.confidence]}</p>
-          </div>
+          {automatable && rec.fixInstruction && (
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">What the AI will do</p>
+              <p className="text-[11px] text-muted-foreground/70 leading-snug">{rec.fixInstruction}</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Apply Fix */}
-      {resolvedHref && (
-        <div className="px-4 pb-3 pt-2">
-          <a
-            href={resolvedHref}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[12px] font-bold transition-colors"
-          >
-            <Zap className="w-3.5 h-3.5" />
-            {ACTION_LABELS[rec.actionType]}
-            <ArrowRight className="w-3 h-3" />
-          </a>
-        </div>
-      )}
+      {/* Action footer */}
+      <div className="px-4 pb-3 pt-2 border-t border-border/20">
+        {automatable ? (
+          <div className="flex items-center gap-2">
+            {fixStatus === "idle" && (
+              <button
+                onClick={() => void applyFix()}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[12px] font-bold transition-colors"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                Auto-Fix
+                <Zap className="w-3 h-3" />
+              </button>
+            )}
+            {fixStatus === "applying" && (
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-purple-600/50 text-white/70 text-[12px] font-bold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Applying fix…
+              </div>
+            )}
+            {fixStatus === "applied" && (
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-green-600/20 text-green-400 text-[12px] font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Applied — re-running pipeline…
+              </div>
+            )}
+            {fixStatus === "error" && (
+              <>
+                <div className="text-[11px] text-red-400">{fixError}</div>
+                <button
+                  onClick={() => void applyFix()}
+                  className="text-[11px] text-muted-foreground/60 hover:text-foreground underline"
+                >
+                  Retry
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground/50 italic">
+            Requires your input — see details above
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -278,14 +340,16 @@ function RecommendationCard({
 /* ─── Main component ─────────────────────────────────────────────────────────── */
 
 export function BusinessBrainPanel({
-  launchId, productId, storeUrl, goal, initialBrain,
+  launchId, productId: _productId, storeUrl: _storeUrl, goal: _goal, initialBrain,
 }: BusinessBrainPanelProps) {
-  const [brain,    setBrain]    = useState<BrainResult | null>(initialBrain ?? null);
-  const [status,   setStatus]   = useState<"idle" | "loading" | "complete" | "error">(
+  const router = useRouter();
+  const [brain,       setBrain]       = useState<BrainResult | null>(initialBrain ?? null);
+  const [status,      setStatus]      = useState<"idle" | "loading" | "complete" | "error">(
     initialBrain ? "complete" : "idle"
   );
-  const [msgIdx,   setMsgIdx]   = useState(0);
-  const [error,    setError]    = useState<string | null>(null);
+  const [msgIdx,      setMsgIdx]      = useState(0);
+  const [error,       setError]       = useState<string | null>(null);
+  const [applyingAll, setApplyingAll] = useState(false);
 
   /* Auto-run on mount if no cached result */
   useEffect(() => {
@@ -298,9 +362,7 @@ export function BusinessBrainPanel({
   /* Cycle loading messages */
   useEffect(() => {
     if (status !== "loading") return;
-    const t = setInterval(() => {
-      setMsgIdx(i => (i + 1) % LOADING_MESSAGES.length);
-    }, 2800);
+    const t = setInterval(() => setMsgIdx(i => (i + 1) % LOADING_MESSAGES.length), 2800);
     return () => clearInterval(t);
   }, [status]);
 
@@ -322,11 +384,46 @@ export function BusinessBrainPanel({
       setBrain(data.brain);
       setStatus("complete");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError(msg);
+      setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
     }
   }, [launchId]);
+
+  /* Apply ALL automatable fixes — uses the highest-priority stage */
+  const applyAllFixes = useCallback(async (recs: BrainRecommendation[]) => {
+    const automatable = recs.filter(r => (r.automatable ?? r.actionType !== "manual") && r.stage);
+    if (!automatable.length) return;
+
+    // Sort by stage order and pick the earliest — clearing it clears downstream too
+    const STAGE_ORDER = ["research", "product", "design", "marketing", "store"];
+    const earliest = automatable.sort(
+      (a, b) => STAGE_ORDER.indexOf(a.stage!) - STAGE_ORDER.indexOf(b.stage!)
+    )[0];
+
+    // Combine all fix instructions into one
+    const combinedInstruction = automatable
+      .filter(r => r.fixInstruction)
+      .map(r => r.fixInstruction)
+      .join(" Additionally: ");
+
+    setApplyingAll(true);
+    try {
+      const res = await fetch("/api/launch/brain/apply", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          launchId,
+          stage:          earliest.stage,
+          fixInstruction: combinedInstruction || earliest.fixInstruction,
+        }),
+      });
+      if (!res.ok) throw new Error("Apply all failed");
+      await new Promise(r => setTimeout(r, 600));
+      router.push(`/dashboard/launch/${launchId}`);
+    } catch {
+      setApplyingAll(false);
+    }
+  }, [launchId, router]);
 
   /* ── Loading state ── */
   if (status === "loading") {
@@ -378,10 +475,12 @@ export function BusinessBrainPanel({
     );
   }
 
-  /* ── Complete state ── */
   if (!brain) return null;
 
   const { sections, recommendations } = brain;
+
+  const automatableRecs = recommendations.filter(r => r.automatable ?? r.actionType !== "manual");
+  const manualRecs      = recommendations.filter(r => !(r.automatable ?? r.actionType !== "manual"));
 
   const sectionCards = [
     {
@@ -431,10 +530,6 @@ export function BusinessBrainPanel({
     },
   ];
 
-  const highRecs   = recommendations.filter(r => r.priority === "high");
-  const medRecs    = recommendations.filter(r => r.priority === "medium");
-  const lowRecs    = recommendations.filter(r => r.priority === "low");
-
   return (
     <div className="mt-8 space-y-5">
 
@@ -443,14 +538,11 @@ export function BusinessBrainPanel({
       {/* ── Score header ── */}
       <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/[0.06] to-purple-600/[0.02] p-5">
         <div className="flex flex-col sm:flex-row items-center gap-6">
-          {/* Score rings */}
           <div className="flex items-center gap-6 shrink-0">
             <ScoreRing score={brain.businessScore} size={88} label="Business Score" sublabel="overall" />
             <div className="h-14 w-px bg-border/30" />
             <ScoreRing score={brain.launchScore}   size={88} label="Launch Score"   sublabel="readiness" />
           </div>
-
-          {/* Summary */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <Brain className="w-4 h-4 text-purple-400 shrink-0" />
@@ -489,17 +581,56 @@ export function BusinessBrainPanel({
             </span>
           </div>
 
+          {/* Apply All banner — only show if there are automatable fixes */}
+          {automatableRecs.length > 0 && (
+            <div className="mb-4 rounded-xl border border-purple-500/20 bg-purple-500/[0.04] p-4 flex items-center gap-3">
+              <Bot className="w-5 h-5 text-purple-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-bold text-foreground">
+                  {automatableRecs.length} improvement{automatableRecs.length !== 1 ? "s" : ""} can be applied automatically
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                  The AI will re-run the relevant agents with targeted improvements
+                </p>
+              </div>
+              <button
+                onClick={() => void applyAllFixes(recommendations)}
+                disabled={applyingAll}
+                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-[12px] font-bold transition-colors"
+              >
+                {applyingAll ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Applying…</>
+                ) : (
+                  <><Play className="w-3.5 h-3.5" /> Apply All</>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Individual cards — automatable first */}
           <div className="space-y-3">
-            {[...highRecs, ...medRecs, ...lowRecs].map(rec => (
-              <RecommendationCard
-                key={rec.id}
-                rec={rec}
-                productId={productId}
-                storeUrl={storeUrl}
-                launchId={launchId}
-              />
-            ))}
+            {[...automatableRecs, ...manualRecs]
+              .sort((a, b) => {
+                const order = { high: 0, medium: 1, low: 2 };
+                return order[a.priority] - order[b.priority];
+              })
+              .map(rec => (
+                <RecommendationCard
+                  key={rec.id}
+                  rec={rec}
+                  launchId={launchId}
+                  onApplied={() => {/* applied state shown inline */}}
+                />
+              ))
+            }
           </div>
+
+          {/* Manual-only footer note */}
+          {manualRecs.length > 0 && automatableRecs.length > 0 && (
+            <p className="mt-3 text-[10px] text-muted-foreground/40 text-center">
+              {manualRecs.length} recommendation{manualRecs.length !== 1 ? "s" : ""} above require your personal input
+            </p>
+          )}
         </div>
       )}
 
@@ -507,7 +638,7 @@ export function BusinessBrainPanel({
   );
 }
 
-/* ─── Section header (shared between loading/error/complete) ─────────────────── */
+/* ─── Section header ─────────────────────────────────────────────────────────── */
 
 function BrainHeader({ onRerun }: { onRerun?: () => void }) {
   return (

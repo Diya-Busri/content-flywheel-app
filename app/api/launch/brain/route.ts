@@ -48,11 +48,15 @@ function buildBrainPrompt(results: LaunchStageResults, goal: string): string {
     product: results.product ?? null,
     design: results.design
       ? {
-          assetsCount:  results.design.assetsCount,
-          hasCover:     !!results.design.coverUrl,
-          hasMockup:    !!results.design.mockupUrl,
-          hasThumbnail: !!results.design.thumbnailUrl,
-          hasSocial:    !!results.design.socialUrl,
+          assetsCount:      results.design.assetsCount,
+          // Template covers have no URL but DO have a designId — both count as "has cover"
+          hasCover:         !!results.design.coverUrl
+                              || (Array.isArray(results.design.concepts) && results.design.concepts.some(c => !!(c as { designId?: string }).designId)),
+          hasCoverDesign:   Array.isArray(results.design.concepts) && results.design.concepts.some(c => !!(c as { designId?: string }).designId),
+          hasMockup:        !!results.design.mockupUrl,
+          // Template thumbnails have designId but no URL — both count
+          hasThumbnail:     !!results.design.thumbnailUrl || !!(results.design.thumbnailDesignId as string | undefined),
+          hasSocial:        !!results.design.socialUrl,
         }
       : null,
     marketing: results.marketing
@@ -98,6 +102,13 @@ CRITICAL RULES — follow these exactly:
 6. If a data section is null or missing, give it a low score and explain exactly what's missing
 7. businessScore = weighted average: market(15%) + product(25%) + design(15%) + store(20%) + marketing(15%) + launchReadiness(10%)
 8. launchScore reflects readiness to go live RIGHT NOW, not potential after improvements
+9. AUTOMATION RULES — classify every recommendation as automatable or not:
+   - automatable: true → the AI can re-run this stage automatically to fix it (design, marketing, product, store improvements)
+   - automatable: false → genuinely requires the user (e.g. pricing decisions, adding personal photos, setting checkout URL)
+   - IMPORTANT: cover image issues, marketing gaps, product content gaps, SEO gaps are ALL automatable — never tell the user to manually fix something the AI can regenerate
+   - If design.hasCover is true OR design.hasCoverDesign is true, do NOT recommend creating a cover — it already exists
+   - "stage" field must be the pipeline stage to re-run: "design", "marketing", "product", or "store"
+   - "fixInstruction" must be a clear, specific instruction to the regenerating agent (max 2 sentences)
 
 Return ONLY valid JSON — no markdown fences, no explanation before or after:
 
@@ -143,11 +154,14 @@ Return ONLY valid JSON — no markdown fences, no explanation before or after:
       "priority": "<high|medium|low>",
       "category": "<product|design|store|marketing|pricing>",
       "title": "<imperative, max 8 words>",
-      "detail": "<exactly what to do — be specific, reference actual content from the project>",
+      "detail": "<exactly what the AI will improve — be specific, reference actual content from the project>",
       "reasoning": "<cite specific evidence from the project data>",
       "impact": "<qualitative: what improves and why, no made-up numbers>",
       "confidence": "<high|medium|low>",
       "actionType": "<edit_product|edit_store|regenerate_design|edit_marketing|manual>",
+      "automatable": <true|false>,
+      "stage": "<design|marketing|product|store|null>",
+      "fixInstruction": "<specific instruction for the agent when it re-runs, e.g. 'Add a dedicated section on international student use cases and include marketing strategies targeting international students on TikTok and Instagram'>",
       "actionHref": "<relevant page path — use /dashboard/digital-products/[id]/edit for product/design edits, /dashboard/digital-products/[id]/edit#publish for store/publish, /dashboard/launch/[launchId]/workspace for marketing content>"
     }
   ]

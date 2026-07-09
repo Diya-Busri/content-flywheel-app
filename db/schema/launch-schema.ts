@@ -23,6 +23,22 @@ export type BrainRecommendation = {
   confidence:  "high" | "medium" | "low";
   actionType:  "edit_product" | "edit_store" | "regenerate_design" | "edit_marketing" | "manual";
   actionHref?: string;
+  /**
+   * Whether this fix can be applied automatically by re-running the relevant AI agent.
+   * true  = AI re-runs the stage with fixInstruction as extra context
+   * false = requires the user to manually make changes
+   */
+  automatable:     boolean;
+  /**
+   * Which pipeline stage to re-run when applying this fix automatically.
+   * Downstream stages re-run automatically (e.g. fixing "design" also re-runs marketing + store).
+   */
+  stage?:          "research" | "product" | "design" | "marketing" | "store";
+  /**
+   * Specific instruction passed to the agent when re-running this stage.
+   * Tells the agent exactly what to improve, e.g. "Add a chapter on international students".
+   */
+  fixInstruction?: string;
 };
 
 export type BrainResult = {

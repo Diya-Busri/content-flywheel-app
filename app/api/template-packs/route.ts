@@ -127,28 +127,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-/**
- * DELETE: Delete all template packs for the current user.
- * Called from Library → Template Packs tab "Delete All".
- */
-export async function DELETE() {
-  try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    try {
-      await db.delete(templatePacksTable).where(eq(templatePacksTable.userId, userId));
-    } catch (e) {
-      if (isMissingTemplatePacksTable(e)) {
-        return NextResponse.json({ ok: true }); // table doesn't exist yet — nothing to delete
-      }
-      throw e;
-    }
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error("[template-packs] DELETE error:", e);
-    return NextResponse.json({ error: "Failed to delete template packs" }, { status: 500 });
-  }
-}

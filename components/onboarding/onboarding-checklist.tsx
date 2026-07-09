@@ -22,13 +22,19 @@ const ITEMS: ChecklistItem[] = [
 
 type OnboardingChecklistProps = {
   steps: OnboardingSteps | null;
+  enabledFeatures?: string[] | null;
   onStepsChange?: () => void;
 };
 
-export function OnboardingChecklist({ steps, onStepsChange }: OnboardingChecklistProps) {
+export function OnboardingChecklist({ steps, enabledFeatures, onStepsChange }: OnboardingChecklistProps) {
   const [collapsed, setCollapsed] = useState(false);
 
-  const visibleItems = ITEMS;
+  const visibleItems = ITEMS.filter((item) => {
+    if (item.key === "firstProduct" && enabledFeatures != null) {
+      return enabledFeatures.includes("digital_products");
+    }
+    return true;
+  });
 
   const completed = visibleItems.filter((item) => steps?.[item.key] === true).length;
   const total = visibleItems.length;

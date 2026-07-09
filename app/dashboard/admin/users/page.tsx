@@ -27,7 +27,6 @@ export default function AdminUsersPage() {
   const [grantNote, setGrantNote] = useState<Record<string, string>>({});
   const [suspending, setSuspending] = useState<string | null>(null);
   const [suspendReason, setSuspendReason] = useState("");
-  const [activating, setActivating] = useState<string | null>(null);
   const { toast } = useToast();
 
   async function load() {
@@ -62,21 +61,6 @@ export default function AdminUsersPage() {
       }
     } catch {}
     setSuspending(null);
-  }
-
-  async function handleActivatePro(userId: string) {
-    setActivating(userId);
-    try {
-      const res = await fetch(`/api/admin/users/${userId}/activate`, { method: "POST" });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (data.ok) {
-        toast({ title: "Account activated as Pro ✓" });
-        setUsers(prev => prev.map(u => u.userId === userId ? { ...u, membership: "pro", status: "active" } : u));
-      } else {
-        toast({ title: "Failed", description: data.error, variant: "destructive" });
-      }
-    } catch { toast({ title: "Network error", variant: "destructive" }); }
-    setActivating(null);
   }
 
   async function handleGrant(userId: string, amount: number) {
@@ -172,15 +156,6 @@ export default function AdminUsersPage() {
                       {grantingId === user.userId ? <Loader2 className="w-3 h-3 animate-spin" /> : <CreditCard className="w-3 h-3" />}
                       <span className="ml-1">Apply</span>
                     </Button>
-                    {user.membership !== "pro" && (
-                      <button
-                        className="text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-50 bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400"
-                        disabled={activating === user.userId}
-                        onClick={() => void handleActivatePro(user.userId)}
-                      >
-                        {activating === user.userId ? <Loader2 className="w-3 h-3 animate-spin inline" /> : "Make Pro"}
-                      </button>
-                    )}
                     <button
                       className={`text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-50 ${
                         user.status === "suspended"

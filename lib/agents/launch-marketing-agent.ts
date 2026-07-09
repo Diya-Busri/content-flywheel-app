@@ -108,6 +108,11 @@ export async function runLaunchMarketingAgent(ctx: ExecutionContext): Promise<vo
   };
 
   /* ── Build request body ── */
+  // Pick up Business Brain fix instruction if this is an auto-fix re-run
+  const fixInstruction = ctx.memory?.fixInstruction as string | undefined;
+  const fixStage       = ctx.memory?.fixStage       as string | undefined;
+  const additionalContext = (fixStage === "marketing" && fixInstruction) ? fixInstruction : undefined;
+
   const requestBody: Record<string, unknown> = {
     productId,
     productName,
@@ -121,6 +126,8 @@ export async function runLaunchMarketingAgent(ctx: ExecutionContext): Promise<vo
     competitorInsights:   research?.competitorInsights,
     productOpportunities: research?.productOpportunities,
     actionPlan:           research?.actionPlan,
+    // Business Brain improvement instruction (present on auto-fix re-runs only)
+    ...(additionalContext ? { additionalContext } : {}),
   };
 
   /* ── Call streaming marketing API ── */

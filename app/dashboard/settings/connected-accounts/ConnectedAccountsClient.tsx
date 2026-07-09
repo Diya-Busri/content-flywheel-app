@@ -37,7 +37,7 @@ import { useToast } from "@/components/ui/use-toast";
 /** Platforms whose OAuth is temporarily blocked — shown faded with a manual-token bypass. */
 const OAUTH_UNAVAILABLE: ConnectedPlatform[] = ["instagram", "facebook"];
 
-type ConnectedPlatform = "tiktok" | "youtube" | "instagram" | "facebook" | "linkedin" | "x";
+type ConnectedPlatform = "tiktok" | "youtube" | "instagram" | "facebook";
 
 type ConnectedAccount = {
   id: string;
@@ -54,21 +54,17 @@ type ApiResponse = {
 };
 
 const PLATFORM_LABELS: Record<ConnectedPlatform, string> = {
-  tiktok:    "TikTok",
-  youtube:   "YouTube",
+  tiktok: "TikTok",
+  youtube: "YouTube",
   instagram: "Instagram",
-  facebook:  "Facebook",
-  linkedin:  "LinkedIn",
-  x:         "X (Twitter)",
+  facebook: "Facebook",
 };
 
 const PLATFORM_DESCRIPTIONS: Record<ConnectedPlatform, string> = {
-  tiktok:    "Auto-upload videos to your TikTok account",
-  youtube:   "Upload to your YouTube channel",
+  tiktok: "Auto-upload videos to your TikTok account",
+  youtube: "Upload to your YouTube channel",
   instagram: "Sign in with Facebook to link a Page connected to your Instagram Business account",
-  facebook:  "Share videos to your Facebook page",
-  linkedin:  "Post articles and updates to your LinkedIn profile or company page",
-  x:         "Post threads and updates to your X (Twitter) account",
+  facebook: "Share videos to your Facebook page",
 };
 
 export default function ConnectedAccountsClient() {
@@ -155,7 +151,7 @@ export default function ConnectedAccountsClient() {
         description: e instanceof Error ? e.message : "Could not load connected accounts",
         variant: "destructive",
       });
-      setData({ connected: [], platforms: ["tiktok", "youtube", "instagram", "facebook", "linkedin", "x"] });
+      setData({ connected: [], platforms: ["tiktok", "youtube", "instagram", "facebook"] });
     } finally {
       setLoading(false);
     }
@@ -331,7 +327,7 @@ export default function ConnectedAccountsClient() {
       },
       {} as Record<ConnectedPlatform, ConnectedAccount[]>
     ) ?? ({} as Record<ConnectedPlatform, ConnectedAccount[]>);
-  const platforms = data?.platforms ?? (["tiktok", "youtube", "instagram", "facebook", "linkedin", "x"] as ConnectedPlatform[]);
+  const platforms = data?.platforms ?? (["tiktok", "youtube", "instagram", "facebook"] as ConnectedPlatform[]);
 
   if (loading) {
     return (

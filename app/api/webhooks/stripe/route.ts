@@ -12,7 +12,6 @@ import { emailSequencesTable, emailSequenceStepsTable } from "@/db/schema/email-
 import { emailSequenceEnrollmentsTable } from "@/db/schema/email-sequence-enrollments-schema";
 import { deliverWebhooks } from "@/lib/deliver-webhook";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
-import { promoCodesTable } from "@/db/schema/promo-codes-schema";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { affiliateLinksTable, affiliateCommissionsTable } from "@/db/schema/affiliate-links-schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
@@ -177,16 +176,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       ...trialFields,
     });
   }
-
-  // Increment platform promo code usedCount if one was applied
-  const promoCode = session.metadata?.promoCode;
-  if (promoCode) {
-    await db
-      .update(promoCodesTable)
-      .set({ usedCount: sql`${promoCodesTable.usedCount} + 1` })
-      .where(eq(promoCodesTable.code, promoCode))
-      .catch((err) => console.warn("[stripe-webhook] Failed to increment promo usedCount:", err));
-  }
 }
 
 async function handleProductPurchase(session: Stripe.Checkout.Session) {
@@ -202,24 +191,10 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
   const buyerName = session.customer_details?.name ?? null;
   const amountCents = session.amount_total ?? 0;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
-
-  // Idempotency guard — Stripe retries webhooks for up to 72 hours on 5xx.
-  // If we already processed this session, reuse the existing download token
-  // and return early rather than creating a duplicate order.
-  const [existingOrder] = await db
-    .select({ downloadToken: productOrdersTable.downloadToken })
-    .from(productOrdersTable)
-    .where(eq(productOrdersTable.stripeSessionId, session.id))
-    .limit(1);
-
-  if (existingOrder) {
-    console.log("[stripe-webhook] product_purchase already processed, skipping:", session.id);
-    return;
-  }
-
   const downloadToken = crypto.randomUUID();
   const downloadExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
 
   // Insert order record
   await db.insert(productOrdersTable).values({
@@ -234,7 +209,7 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     downloadToken,
     downloadExpiresAt,
     emailSent: false,
-  }).onConflictDoNothing();
+  });
 
   // Fetch product title + marketingAssets for email and sequence enrollment
   const [product] = await db

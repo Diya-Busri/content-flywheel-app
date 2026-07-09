@@ -20,7 +20,7 @@ import {
   VIRAL_CAPTION_BOTTOM_PAD,
   VIRAL_CAPTION_FONT_SIZES,
 } from "@/lib/video-caption-ffmpeg";
-import { Loader2, Check, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2, Image as ImageIcon } from "lucide-react";
+import { Loader2, Menu, PanelLeftClose, ZoomIn, ZoomOut, Maximize2, PanelRightOpen, Undo2, Redo2, SkipBack, SkipForward, Play, Pause, Film, Mic, Type, Music2, Image as ImageIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar-context";
 import { useToast } from "@/components/ui/use-toast";
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -84,9 +84,6 @@ const ELEMENT_TYPES = {
   STICKER: "sticker",
 } as const;
 
-type MotionPreset = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down" | "ken-burns" | "shake" | "pulse-glow";
-type SceneEffects = { motionBlur?: boolean; softGlow?: boolean; filmGrain?: boolean; vignette?: boolean; particles?: boolean; };
-
 type Scene = {
   id: string;
   title: string;
@@ -99,14 +96,6 @@ type Scene = {
   startTime?: number;
   /** Per-clip audio (e.g. voiceover from Template Studio). When set, used for this clip in playback and export. */
   audioUrl?: string | null;
-  /** Original image URL saved before animation — used for undo / Restore Original. */
-  originalImageUrl?: string | null;
-  /** Per-scene animation progress state. */
-  animationState?: "rendering" | "complete" | "failed" | null;
-  /** CSS-based cinematic motion preset applied to the background in preview. */
-  motionPreset?: MotionPreset | null;
-  /** Visual effects overlays (vignette, grain, glow, particles, motion blur). */
-  sceneEffects?: SceneEffects | null;
 };
 
 function isBackgroundEl(el: SceneElement): el is BackgroundElement {
@@ -123,15 +112,6 @@ function isGraphicEl(el: SceneElement): el is GraphicElement {
 }
 function isStickerEl(el: SceneElement): el is StickerElement {
   return el.type === "sticker";
-}
-
-/** Returns inline CSS for the CSS-keyframe motion preset on the background wrapper. */
-function getMotionStyle(preset: MotionPreset | null | undefined, duration: number, playing: boolean): React.CSSProperties {
-  if (!preset || preset === "none") return {};
-  const dur = `${Math.max(duration, 0.5).toFixed(2)}s`;
-  const loop = preset === "shake" || preset === "pulse-glow" ? "infinite" : "1";
-  const ease = preset === "ken-burns" ? "ease-in-out" : "linear";
-  return { animation: `cf-${preset} ${dur} ${ease} ${loop} both`, animationPlayState: playing ? "running" : "paused" };
 }
 
 type SceneAsset =
@@ -1476,23 +1456,8 @@ function VideoTimelineInner() {
   const [aiImagePrompt, setAiImagePrompt] = useState("");
   const [aiImageLoading, setAiImageLoading] = useState(false);
   const [aiGeneratedImages, setAiGeneratedImages] = useState<string[]>([]);
-  // Animate scene — Set of scene IDs currently being rendered/polled
-  const [animatingScenes, setAnimatingScenes] = useState<Set<string>>(new Set());
-
-  // ── Autosave / persistence ────────────────────────────────────────────────
-  /** "saving" | "saved" | "error" — shown in header status chip. "idle" hides chip. */
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  /** True when scene state has changed since the last successful DB write. */
-  const [hasUnsaved, setHasUnsaved] = useState(false);
-  /**
-   * DB video ID created by autosave during this session (set after first POST).
-   * Used as fallback when ?projectId is not yet in the URL (avoids duplicate POSTs).
-   */
-  const autosaveDbIdRef = useRef<string | null>(null);
-  /** Guard: prevents concurrent POST calls while the first create is in-flight. */
-  const isCreatingProjectRef = useRef(false);
-  // ──────────────────────────────────────────────────────────────────────────
-
+  // Animate scene
+  const [animatingSceneIndex, setAnimatingSceneIndex] = useState<number | null>(null);
   /** Index of scene whose trailing transition badge popover is open (i.e. transition between scene[i] and scene[i+1]) */
   const [transitionBadgeOpen, setTransitionBadgeOpen] = useState<number | null>(null);
   const [transitionBadgePos, setTransitionBadgePos] = useState<{ x: number; y: number } | null>(null);
@@ -2532,98 +2497,13 @@ function VideoTimelineInner() {
     }
   }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration]);
 
-  /**
-   * autosaveToDb — persists the current timeline state to the DB.
-   * - If a project already exists in the URL (?projectId) or was created this session
-   *   (autosaveDbIdRef), it PATCHes.
-   * - Otherwise it POSTs to create a new project (guarded by isCreatingProjectRef to
-   *   prevent concurrent creates).
-   * Does NOT update the URL — that is handled by the explicit Save button / handleSaveToLibrary.
-   */
-  const autosaveToDb = useCallback(async () => {
-    if (typeof window === "undefined" || scenes.length === 0) return;
-
-    const content: Record<string, unknown> = {
-      scriptId,
-      scenes,
-      captions,
-      voiceoverUrl: voiceoverUrl?.startsWith("http") ? voiceoverUrl : null,
-      musicUrl: musicUrl?.startsWith("http") ? musicUrl : null,
-      musicVolume,
-      captionPosition,
-      captionFontSize,
-      captionTextColor,
-      captionAnimation,
-      captionBackground,
-      captionDisplayMode,
-      sceneTransition: sceneTransitionType,
-      aspectRatio,
-      voiceoverDuration: voiceoverDuration > 0 ? voiceoverDuration : undefined,
-      savedAt: new Date().toISOString(),
-    };
-
-    try {
-      // Prefer URL project ID, then one we created this session
-      const existingId = projectIdFromUrl ?? autosaveDbIdRef.current;
-
-      if (existingId) {
-        const res = await fetch(`/api/video-timeline/videos/${encodeURIComponent(existingId)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: (scriptName?.trim() || "Untitled Project").slice(0, 500),
-            metadata: content,
-          }),
-        });
-        if (!res.ok) { setSaveStatus("error"); return; }
-      } else {
-        // First-ever save — create a new project
-        if (isCreatingProjectRef.current) return; // another POST is already in-flight
-        isCreatingProjectRef.current = true;
-        try {
-          const res = await fetch("/api/video-timeline/save", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: (scriptName?.trim() || "Untitled Project").slice(0, 500),
-              content,
-            }),
-          });
-          if (!res.ok) { setSaveStatus("error"); return; }
-          const data = await res.json().catch(() => ({})) as { id?: string };
-          if (data.id) {
-            autosaveDbIdRef.current = data.id;
-            // Silently update URL so browser Back/reload and handleSaveToLibrary use the right id
-            const url = new URL(window.location.href);
-            url.searchParams.set("projectId", data.id);
-            window.history.replaceState({}, "", url.toString());
-          }
-        } finally {
-          isCreatingProjectRef.current = false;
-        }
-      }
-
-      setSaveStatus("saved");
-      setHasUnsaved(false);
-    } catch {
-      setSaveStatus("error");
-    }
-  }, [scenes, captions, scriptId, scriptName, voiceoverUrl, musicUrl, musicVolume,
-      captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground,
-      captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration, projectIdFromUrl]);
-
   // When scene count changes (add/remove), save draft immediately so scenes don't disappear on refresh
   useEffect(() => {
     if (scenes.length !== prevSceneCountRef.current) {
       prevSceneCountRef.current = scenes.length;
       saveDraft();
-      if (scenes.length > 0) {
-        setSaveStatus("saving");
-        setHasUnsaved(true);
-        void autosaveToDb();
-      }
     }
-  }, [scenes.length, scenes, saveDraft, autosaveToDb]);
+  }, [scenes.length, scenes, saveDraft]);
 
   // Persist draft to localStorage so refresh doesn't lose progress (debounced)
   useEffect(() => {
@@ -2631,31 +2511,6 @@ function VideoTimelineInner() {
     const t = setTimeout(saveDraft, 1500);
     return () => clearTimeout(t);
   }, [scriptId, projectIdFromUrl, scriptName, scenes, captions, voiceoverUrl, musicUrl, musicVolume, captionPosition, captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode, sceneTransitionType, aspectRatio, voiceoverDuration, saveDraft]);
-
-  // DB autosave — fires for ALL projects (new unsaved and existing), debounced 1.5 s.
-  // Runs in parallel with the localStorage draft above.
-  useEffect(() => {
-    if (typeof window === "undefined" || scenes.length === 0) return;
-    setSaveStatus("saving");
-    setHasUnsaved(true);
-    const t = setTimeout(() => { void autosaveToDb(); }, 1500);
-    return () => clearTimeout(t);
-  }, [scenes, captions, scriptName, voiceoverUrl, musicUrl, musicVolume, captionPosition,
-      captionFontSize, captionTextColor, captionAnimation, captionBackground, captionDisplayMode,
-      sceneTransitionType, aspectRatio, voiceoverDuration, autosaveToDb]);
-
-  // Navigation guard — warn user before leaving with unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsaved && saveStatus !== "saved") {
-        e.preventDefault();
-        // Chrome requires returnValue to be set
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasUnsaved, saveStatus]);
 
   // Audio events: time update, duration, play/pause
   const onTimeUpdate = useCallback(() => {
@@ -3029,90 +2884,43 @@ function VideoTimelineInner() {
 
   const animateSceneImage = useCallback(async (sceneIndex: number) => {
     const scene = scenes[sceneIndex];
-    if (!scene) return;
-    const media = getSceneBackgroundMedia(scene);
+    const media = scene ? getSceneBackgroundMedia(scene) : null;
     if (!media?.url) {
       toast({ title: "No image to animate", description: "Add an image to this scene first", variant: "destructive" });
       return;
     }
-    if (media.type === "video") {
-      toast({ title: "Already a video", description: "Remove the current video to animate a new image", variant: "destructive" });
-      return;
-    }
-
-    const sceneId = scene.id;
-    const originalImageUrl = media.url;
-    const motionPrompt = `Subtle cinematic motion for: ${scene.title || "this scene"}. Keep composition identical, add gentle camera movement only.`;
-
-    // Preserve original + mark as rendering
-    setAnimatingScenes(prev => new Set([...prev, sceneId]));
-    setScenes(prev => prev.map(s => s.id !== sceneId ? s : {
-      ...s,
-      originalImageUrl,
-      animationState: "rendering" as const,
-    }));
-
-    const onSuccess = (videoUrl: string) => {
-      setScenes(prev => prev.map(s => s.id !== sceneId ? s : {
-        ...s,
-        elements: s.elements.map((el, ei) => ei === 0
-          ? { ...el, media: { url: videoUrl, type: "video" as const } }
-          : el),
-        animationState: "complete" as const,
-      }));
-      setAnimatingScenes(prev => { const n = new Set(prev); n.delete(sceneId); return n; });
-      toast({ title: "Scene animated ✨", description: "Background replaced with video" });
-    };
-
-    const onFailure = (msg: string) => {
-      setScenes(prev => prev.map(s => s.id !== sceneId ? s : { ...s, animationState: "failed" as const }));
-      setAnimatingScenes(prev => { const n = new Set(prev); n.delete(sceneId); return n; });
-      toast({ title: "Animation failed", description: msg, variant: "destructive" });
-    };
-
+    setAnimatingSceneIndex(sceneIndex);
     try {
-      // Submit to Fal Kling animation queue (correct endpoint)
-      const res = await fetch("/api/content-studio/ai-story/animate", {
+      const res = await fetch("/api/chat/coach/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: originalImageUrl, motionPrompt, aspectRatio }),
+        body: JSON.stringify({
+          prompt: `Subtle cinematic motion animation of: ${scene.title || "this scene"}. Keep composition identical, add gentle camera movement only.`,
+          aspectRatio: "16:9",
+          sourceImageUrl: media.url,
+        }),
       });
-      const data = await res.json().catch(() => ({})) as {
-        requestId?: string; videoUrl?: string; error?: string; code?: string;
-      };
-
+      const data = await res.json().catch(() => ({})) as { url?: string; videoUrl?: string; error?: string };
       if (!res.ok) {
-        onFailure(data.code === "NO_VIDEO_CREDITS"
-          ? "You need 1 video credit to animate a scene"
-          : (data.error || "Try again"));
+        toast({ title: "Animation failed", description: data.error || "Try again", variant: "destructive" });
         return;
       }
-
-      // Synchronous result (rare — Fal returned video directly)
-      if (data.videoUrl) { onSuccess(data.videoUrl); return; }
-
-      // Async queue: poll status every 5 s for up to 5 minutes
-      if (data.requestId) {
-        const rid = data.requestId;
-        for (let i = 0; i < 60; i++) {
-          await new Promise(r => setTimeout(r, 5000));
-          try {
-            const sr = await fetch(`/api/content-studio/ai-story/animate/status?requestId=${encodeURIComponent(rid)}`);
-            const sd = await sr.json().catch(() => ({})) as { status?: string; videoUrl?: string; error?: string };
-            if (sd.status === "COMPLETED" && sd.videoUrl) { onSuccess(sd.videoUrl); return; }
-            if (sd.status === "FAILED") { onFailure(sd.error || "Animation job failed"); return; }
-            // IN_QUEUE / IN_PROGRESS → keep polling
-          } catch { /* network blip — keep polling */ }
-        }
-        onFailure("Animation timed out — please try again");
-        return;
+      const animUrl = data.videoUrl ?? data.url;
+      if (animUrl) {
+        setScenes((prev) => prev.map((s, si) => si !== sceneIndex ? s : {
+          ...s,
+          elements: s.elements.map((el, ei) => ei === 0 ? { ...el, media: { url: animUrl, type: "video" as const } } : el),
+        }));
+        toast({ title: "Scene animated ✨" });
+      } else {
+        toast({ title: "No animation returned", variant: "destructive" });
       }
-
-      onFailure("Unexpected response from animation service");
     } catch (err) {
-      onFailure(err instanceof Error ? err.message : "Try again");
+      toast({ title: "Animation failed", description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
+    } finally {
+      setAnimatingSceneIndex(null);
     }
-  }, [scenes, toast, aspectRatio]);
+  }, [scenes, toast]);
 
   const searchStockPhotos = useCallback(async (query: string) => {
     if (!query.trim()) return;
@@ -3480,12 +3288,11 @@ function VideoTimelineInner() {
   );
 
   /** Save timeline project to the existing videos table (via API; content stored in metadata).
-   *  If projectId is already in the URL (project was previously saved) OR autosave already
-   *  created a project this session, PATCHes that row instead of creating a duplicate. */
+   *  If projectId is already in the URL (project was previously saved), PATCHes the existing
+   *  row instead of creating a duplicate library entry. */
   const handleSaveToLibrary = useCallback(async (opts?: { silent?: boolean }) => {
     try {
-      // Prefer URL param, then the ID autosave created silently this session
-      const existingProjectId = searchParams.get("projectId") ?? autosaveDbIdRef.current;
+      const existingProjectId = searchParams.get("projectId");
       const metadata: Record<string, unknown> = {
         ...saveProjectPayload.content,
         savedAt: new Date().toISOString(),
@@ -3794,20 +3601,6 @@ function VideoTimelineInner() {
             const media = getSceneBackgroundMedia(scene);
             if (!media?.url) return;
             try {
-              // Map CSS motion preset to Ken Burns FFmpeg params for export
-              const motionToKB: Record<string, { disableKenBurns?: boolean; kenBurnsZoomMax?: number }> = {
-                "none":       { disableKenBurns: true },
-                "zoom-in":    { disableKenBurns: false, kenBurnsZoomMax: 1.4 },
-                "zoom-out":   { disableKenBurns: false, kenBurnsZoomMax: 1.3 },
-                "pan-left":   { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
-                "pan-right":  { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
-                "pan-up":     { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
-                "pan-down":   { disableKenBurns: false, kenBurnsZoomMax: 1.15 },
-                "ken-burns":  { disableKenBurns: false, kenBurnsZoomMax: 1.45 },
-                "shake":      { disableKenBurns: true },
-                "pulse-glow": { disableKenBurns: true },
-              };
-              const kbParams = scene.motionPreset ? (motionToKB[scene.motionPreset] ?? {}) : {};
               const res = await fetch("/api/videos/prerender-scene", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -3817,7 +3610,6 @@ function VideoTimelineInner() {
                   duration: scene.duration,
                   resolution,
                   sceneKey: scene.id,
-                  ...kbParams,
                 }),
               });
               const data = (await res.json().catch(() => ({}))) as { segmentUrl?: string };
@@ -4662,21 +4454,6 @@ function VideoTimelineInner() {
           </button>
         </div>
 
-        {/* Autosave status chip */}
-        {saveStatus !== "idle" && (
-          <span className="flex items-center gap-1 text-[10px] min-w-[64px] select-none">
-            {saveStatus === "saving" && (
-              <><Loader2 className="h-3 w-3 animate-spin text-[#606060]" /><span className="text-[#606060]">Saving…</span></>
-            )}
-            {saveStatus === "saved" && (
-              <><Check className="h-3 w-3 text-green-500" /><span className="text-[#505050]">Saved</span></>
-            )}
-            {saveStatus === "error" && (
-              <span className="text-red-400">Save failed</span>
-            )}
-          </span>
-        )}
-
         {/* Reload from Library — only shown for saved projects, useful when images finish generating after the page opened */}
         {projectIdFromUrl && (
           <button
@@ -4968,50 +4745,16 @@ function VideoTimelineInner() {
                       </div>
                     )}
                     {/* Animate selected scene button */}
-                    {selectedSceneIndex !== null && (() => {
-                      const selScene = scenes[selectedSceneIndex];
-                      const selId = selScene?.id ?? "";
-                      const isAnimating = animatingScenes.has(selId);
-                      const animState = selScene?.animationState;
-                      return (
-                        <div className="mt-1.5 flex flex-col gap-1">
-                          <button
-                            type="button"
-                            onClick={() => animateSceneImage(selectedSceneIndex)}
-                            disabled={isAnimating}
-                            className="w-full py-1 rounded border border-[#f97316]/40 bg-[#f97316]/10 hover:bg-[#f97316]/20 disabled:opacity-50 text-white text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
-                          >
-                            {isAnimating
-                              ? <><span className="animate-spin">⟳</span> Animating…</>
-                              : animState === "failed"
-                                ? <><Film className="h-3 w-3" /> Retry Animation</>
-                                : <><Film className="h-3 w-3" /> Animate Scene {selectedSceneIndex + 1}</>}
-                          </button>
-                          {animState === "failed" && (
-                            <p className="text-[9px] text-red-400 text-center">Animation failed — original image preserved</p>
-                          )}
-                          {animState === "complete" && selScene?.originalImageUrl && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const orig = selScene.originalImageUrl!;
-                                setScenes(prev => prev.map(s => s.id !== selId ? s : {
-                                  ...s,
-                                  elements: s.elements.map((el, ei) => ei === 0
-                                    ? { ...el, media: { url: orig, type: "image" as const } }
-                                    : el),
-                                  animationState: null,
-                                  originalImageUrl: null,
-                                }));
-                              }}
-                              className="w-full py-1 rounded border border-white/20 bg-white/5 hover:bg-white/10 text-white/70 text-[9px] font-medium flex items-center justify-center gap-1 transition-colors"
-                            >
-                              ↩ Restore Original Image
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {selectedSceneIndex !== null && (
+                      <button
+                        type="button"
+                        onClick={() => animateSceneImage(selectedSceneIndex)}
+                        disabled={animatingSceneIndex !== null}
+                        className="w-full mt-1.5 py-1 rounded border border-[#f97316]/40 bg-[#f97316]/10 hover:bg-[#f97316]/20 disabled:opacity-50 text-white text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        {animatingSceneIndex === selectedSceneIndex ? <><span className="animate-spin">⟳</span> Animating…</> : <><Film className="h-3 w-3" /> Animate Scene {selectedSceneIndex + 1}</>}
+                      </button>
+                    )}
                   </div>
 
                   {/* Stock photo search */}
@@ -5371,12 +5114,6 @@ function VideoTimelineInner() {
                   )}
                   {/* Current scene (transition out) */}
                   <div className="absolute inset-0 w-full h-full" style={currentLayerStyle}>
-                  {/* Motion-animated background wrapper — keyed to scene so animation restarts on scene change */}
-                  <div
-                    key={`motion-${sceneData?.id ?? "none"}`}
-                    className="absolute inset-0 w-full h-full"
-                    style={getMotionStyle(sceneData?.motionPreset, sceneData?.duration ?? 5, isPlaying)}
-                  >
                   {/* Background */}
                   {backgroundMedia?.type === "image" ? (
                     <>
@@ -5425,49 +5162,6 @@ function VideoTimelineInner() {
                       </div>
                     </div>
                   )}
-                  </div>
-                  {/* Scene effects overlays */}
-                  {sceneData?.sceneEffects?.motionBlur && (
-                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 1, backdropFilter: "blur(1.5px)" }} />
-                  )}
-                  {sceneData?.sceneEffects?.softGlow && (
-                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2, background: "radial-gradient(ellipse at 50% 40%, rgba(255,220,120,0.22) 0%, transparent 65%)", mixBlendMode: "screen" as const }} />
-                  )}
-                  {sceneData?.sceneEffects?.vignette && (
-                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 3, background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.78) 100%)" }} />
-                  )}
-                  {sceneData?.sceneEffects?.filmGrain && (
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{
-                        zIndex: 4,
-                        opacity: 0.28,
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-                        backgroundSize: "200px 200px",
-                        animation: "cf-film-grain 0.08s steps(1) infinite",
-                        mixBlendMode: "overlay" as const,
-                      }}
-                    />
-                  )}
-                  {sceneData?.sceneEffects?.particles && (
-                    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 5 }}>
-                      {[...Array(10)].map((_, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            position: "absolute",
-                            width: `${2 + (i % 3)}px`,
-                            height: `${2 + (i % 3)}px`,
-                            borderRadius: "50%",
-                            background: i % 2 === 0 ? "rgba(255,210,80,0.9)" : "rgba(200,160,255,0.75)",
-                            left: `${(i * 11 + 5) % 88}%`,
-                            bottom: 0,
-                            animation: `cf-particle-float ${2.5 + (i % 3) * 0.7}s ${(i * 0.4) % 2.1}s ease-out infinite`,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
                   {/* Elements overlay */}
                   {elements.slice(1).map((element) => (
                     <div
@@ -5477,7 +5171,6 @@ function VideoTimelineInner() {
                         left: `${"position" in element && element.position ? element.position.x : 50}%`,
                         top: `${"position" in element && element.position ? element.position.y : 50}%`,
                         transform: "translate(-50%, -50%)",
-                        zIndex: 10,
                       }}
                     >
                       {isTextEl(element) && (
@@ -6012,63 +5705,6 @@ function VideoTimelineInner() {
                   </div>
                 )}
 
-                {/* Motion Preset */}
-                {selectedSceneIndex !== null && (
-                  <div className="mb-4">
-                    <label className="text-xs font-medium text-[#606060] block mb-1.5">Motion</label>
-                    <select
-                      className="w-full rounded border border-[#2a2a2a] bg-[#0f0f0f] text-white px-2 py-1.5 text-xs"
-                      value={scenes[selectedSceneIndex]?.motionPreset ?? "none"}
-                      onChange={(e) => {
-                        const val = e.target.value as MotionPreset;
-                        setScenes(prev => prev.map((s, i) => i !== selectedSceneIndex ? s : { ...s, motionPreset: val === "none" ? null : val }));
-                      }}
-                    >
-                      <option value="none">None</option>
-                      <option value="zoom-in">Slow Zoom In</option>
-                      <option value="zoom-out">Slow Zoom Out</option>
-                      <option value="pan-left">Pan Left</option>
-                      <option value="pan-right">Pan Right</option>
-                      <option value="pan-up">Pan Up</option>
-                      <option value="pan-down">Pan Down</option>
-                      <option value="ken-burns">Ken Burns</option>
-                      <option value="shake">Shake</option>
-                      <option value="pulse-glow">Pulse Glow</option>
-                    </select>
-                  </div>
-                )}
-                {/* Scene Effects */}
-                {selectedSceneIndex !== null && (
-                  <div className="mb-4">
-                    <label className="text-xs font-medium text-[#606060] block mb-1.5">Effects</label>
-                    <div className="grid grid-cols-2 gap-1">
-                      {(["motionBlur", "softGlow", "filmGrain", "vignette", "particles"] as const).map((fx) => {
-                        const fxLabels: Record<string, string> = { motionBlur: "Motion Blur", softGlow: "Soft Glow", filmGrain: "Film Grain", vignette: "Vignette", particles: "Particles" };
-                        const active = Boolean(scenes[selectedSceneIndex]?.sceneEffects?.[fx]);
-                        return (
-                          <button
-                            key={fx}
-                            type="button"
-                            onClick={() => {
-                              if (selectedSceneIndex === null) return;
-                              setScenes(prev => prev.map((s, i) => i !== selectedSceneIndex ? s : {
-                                ...s,
-                                sceneEffects: { ...(s.sceneEffects ?? {}), [fx]: !active },
-                              }));
-                            }}
-                            className={`rounded px-2 py-1.5 text-[10px] font-medium transition-all ${
-                              active
-                                ? "bg-[#f97316] text-white"
-                                : "bg-[#1a1a1a] border border-[#2a2a2a] text-[#606060] hover:text-white hover:border-[#3a3a3a]"
-                            }`}
-                          >
-                            {fxLabels[fx]}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
                 {selectedSceneIndex !== null && scenes[selectedSceneIndex]?.animationType && (
                   <div className="mb-4">
                     <label className="text-xs font-medium text-[#a0a0a0] block mb-1.5">Animation</label>

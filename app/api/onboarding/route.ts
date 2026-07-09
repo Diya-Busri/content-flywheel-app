@@ -41,7 +41,7 @@ export async function GET() {
     }
     const { data, error } = await supabase
       .from("profiles")
-      .select("onboarding_completed, onboarding_steps, stripe_connect_charges_enabled")
+      .select("onboarding_completed, onboarding_steps")
       .eq("user_id", userId)
       .single();
     if (error || !data) {
@@ -50,26 +50,9 @@ export async function GET() {
       );
     }
     const steps = (data.onboarding_steps as OnboardingSteps) ?? {};
-
-    // Auto-derive the Stripe step from the live charges flag so it never
-    // stays stuck when the user has connected Stripe but watchDemo was never
-    // explicitly set in onboarding_steps.
-    const stripeConnected = data.stripe_connect_charges_enabled === true;
-    const derivedSteps: OnboardingSteps = stripeConnected
-      ? { ...steps, watchDemo: true }
-      : steps;
-
-    // Persist the fix so future GETs are instant (fire-and-forget)
-    if (stripeConnected && !steps.watchDemo) {
-      void supabase
-        .from("profiles")
-        .update({ onboarding_steps: derivedSteps })
-        .eq("user_id", userId);
-    }
-
     return NextResponse.json({
       onboardingCompleted: data.onboarding_completed === true,
-      onboardingSteps: derivedSteps,
+      onboardingSteps: steps,
     });
   } catch (err) {
     console.error("[onboarding GET]", err);

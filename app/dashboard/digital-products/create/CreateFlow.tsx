@@ -145,29 +145,11 @@ export default function CreateFlow() {
           Back
         </Link>
 
-        {/* Step breadcrumb */}
-        <div className="flex items-center gap-1.5 mb-3 text-[11px] font-medium">
-          <span className="text-orange-500 uppercase tracking-wider">Step 1</span>
-          <span className="text-gray-300 dark:text-[#444]">→</span>
-          <span className="text-gray-400 dark:text-[#666]">Step 2: Scripts</span>
-          <span className="text-gray-300 dark:text-[#444]">→</span>
-          <span className="text-gray-400 dark:text-[#666]">Step 3: Review</span>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-medium text-orange-500 uppercase tracking-wider">Step 1 of 3</span>
         </div>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-1">Product Details</h1>
-        <p className="text-gray-500 dark:text-[#A0A0A0] text-sm mb-3">
-          Upload your product file — AI creates video scripts and marketing copy tailored to your offer.
-        </p>
-        {/* What you'll get strip */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-gray-400 dark:text-[#666] mb-8 border border-gray-100 dark:border-[#1F1F1F] bg-gray-50 dark:bg-[#151515] rounded-xl px-4 py-2.5">
-          <span className="font-semibold text-gray-500 dark:text-[#888] text-[10px] uppercase tracking-wider mr-1">You&apos;ll get:</span>
-          <span>🎬 Video scripts</span>
-          <span className="text-gray-200 dark:text-[#333]">·</span>
-          <span>📱 Social captions</span>
-          <span className="text-gray-200 dark:text-[#333]">·</span>
-          <span>📧 Email copy</span>
-          <span className="text-gray-200 dark:text-[#333]">·</span>
-          <span>🔖 Hashtags</span>
-        </div>
+        <p className="text-gray-500 dark:text-[#A0A0A0] text-base mb-10">Tell us about your product</p>
 
         <div className="space-y-8">
           <div className="space-y-2">
@@ -194,16 +176,7 @@ export default function CreateFlow() {
               rows={4}
               className="bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A] text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-[#666] resize-none"
             />
-            <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">
-              {productDescription.length > 0 ? (
-                <span>
-                  <span className={productDescription.length < 80 ? "text-amber-500" : "text-green-500"}>{productDescription.length} chars</span>
-                  {productDescription.length < 80 ? " · Add more detail for better scripts" : " · Great — more detail means better AI output"}
-                </span>
-              ) : (
-                "The more detail you provide, the better your video scripts will be."
-              )}
-            </p>
+            <p className="text-xs text-gray-500 dark:text-[#A0A0A0]">The more detail you provide, the better your video scripts will be. Character count: {productDescription.length}</p>
           </div>
 
           <div className="space-y-2">
@@ -284,19 +257,16 @@ export default function CreateFlow() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-gray-900 dark:text-white">
-              Product Type{" "}
-              <span className="text-gray-400 dark:text-[#A0A0A0] font-normal text-xs">(helps tailor your scripts)</span>
-            </Label>
+            <Label className="text-gray-900 dark:text-white">Product Type</Label>
             <Select value={productType} onValueChange={(v: ProductType) => setProductType(v)}>
               <SelectTrigger className="bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2A2A2A]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="digital">Digital Product (eBook, template, PDF…)</SelectItem>
-                <SelectItem value="course">Course or Workshop</SelectItem>
-                <SelectItem value="service">Service or Coaching</SelectItem>
+                <SelectItem value="digital">Digital Product</SelectItem>
                 <SelectItem value="physical">Physical Product</SelectItem>
+                <SelectItem value="service">Service</SelectItem>
+                <SelectItem value="course">Course</SelectItem>
               </SelectContent>
             </Select>
           </div>

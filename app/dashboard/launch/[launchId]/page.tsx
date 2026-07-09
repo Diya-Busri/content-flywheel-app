@@ -797,6 +797,7 @@ export default function LaunchExecutionPage() {
         launchId:     proj.id,
         goal:         proj.goal,
         stageResults: latestResultsRef.current,
+        memory:       (proj.memory ?? undefined) as Record<string, unknown> | undefined,
         callbacks: {
           onStep:     setCurrentSteps,
           onProgress: (pct, label) => {

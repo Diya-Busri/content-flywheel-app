@@ -1,46 +1,28 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus, Check, GripVertical, X, ChevronDown, Bookmark, BookmarkCheck,
   Calendar, Tag, StickyNote, Target, ListTodo, ChevronLeft, ChevronRight,
-  Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap, List,
-  Heading2, Quote, FlaskConical, BarChart2, Megaphone, BookOpen, Brain,
-  FileText, Lightbulb, ChevronUp, Loader2,
-  Pin, Minus, Copy, Clock,
-  LayoutDashboard, Package, Sparkles, ArrowRight, TrendingUp, PlayCircle, Bot,
-  Activity, Shield,
+  Trash2, Pencil, CheckCircle2, Search, AlertCircle, Zap, Bold, List,
+  Heading2, Quote
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { useWorkspaceAdmin } from "@/components/workspace-admin-context";
-import { NotesTab } from "@/components/notes/NotesTab";
-import { ResearchTab } from "@/components/workspace/ResearchTab";
-import BusinessBrainTab from "@/components/workspace/BusinessBrainTab";
-import AgentCentreTab from "@/components/workspace/AgentCentreTab";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WorkspaceTab = "dashboard" | "todos" | "notes" | "calendar" | "goals"
-  | "research" | "memory" | "agents" | "founder-os" | "marketing-psychology" | "copywriting" | "content-ideas"
-  | "analytics" | "distribution" | "experiments";
+type WorkspaceTab = "todos" | "notes" | "calendar" | "goals";
 type Priority = "high" | "medium" | "low";
 type TodoFilter = "all" | "active" | "completed";
 
-interface Subtask { id: string; text: string; completed: boolean; }
 interface Todo {
   id: string; text: string; completed: boolean; priority: Priority;
   category?: string; dueDate?: string; createdAt: number;
-  subtasks?: Subtask[];
-  recurring?: "daily" | "weekly" | "monthly";
-  duration?: number; // minutes
-  notes?: string;
 }
 interface SavedTask { id: string; text: string; priority: Priority; category?: string; }
-type NoteTag = "script" | "idea" | "research" | "strategy" | "personal";
-interface Note { id: string; title: string; body: string; content?: string; updatedAt: number; tag?: NoteTag; pinned?: boolean; }
+interface Note { id: string; title: string; body: string; updatedAt: number; }
 interface CalEvent { id: string; title: string; date: string; type: "post" | "launch" | "task" | "other"; platform?: string; }
 interface Goal { id: string; label: string; target: number; current: number; unit: string; deadline?: string; color: string; }
 
@@ -69,35 +51,6 @@ const DEFAULT_GOALS: Goal[] = [
   { id: "products", label: "Products Listed",     target: 25,   current: 0, unit: "",  color: "#3b82f6", deadline: "" },
 ];
 const GOAL_COLORS = ["#f97316","#a855f7","#3b82f6","#10b981","#ef4444","#ec4899"];
-
-const NOTE_TAGS: Record<NoteTag, { label: string; pill: string; dot: string }> = {
-  script:   { label: "Script",   pill: "bg-purple-500/15 text-purple-500 dark:text-purple-400 border-purple-500/20",  dot: "bg-purple-500" },
-  idea:     { label: "Idea",     pill: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",      dot: "bg-amber-500" },
-  research: { label: "Research", pill: "bg-blue-500/15 text-blue-500 dark:text-blue-400 border-blue-500/20",          dot: "bg-blue-500" },
-  strategy: { label: "Strategy", pill: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",      dot: "bg-green-500" },
-  personal: { label: "Personal", pill: "bg-pink-500/15 text-pink-500 dark:text-pink-400 border-pink-500/20",          dot: "bg-pink-500" },
-};
-
-const NOTE_TEMPLATES: Record<string, { label: string; emoji: string; title: string; body: string; tag: NoteTag }> = {
-  blank: {
-    label: "Blank", emoji: "📄", title: "", body: "", tag: "idea",
-  },
-  "hook-script": {
-    label: "Hook Script", emoji: "🎬", tag: "script",
-    title: "Hook Script",
-    body: "## Hook\n\n\n## Problem\n\n\n## Solution / Transition\n\n\n## CTA\n\n",
-  },
-  "content-idea": {
-    label: "Content Idea", emoji: "💡", tag: "idea",
-    title: "Content Idea",
-    body: "## Angle\n\n\n## Hook options\n- \n- \n- \n\n## Key points\n- \n- \n\n## CTA\n\n",
-  },
-  "strategy-brief": {
-    label: "Strategy Brief", emoji: "📊", tag: "strategy",
-    title: "Strategy Brief",
-    body: "## Goal\n\n\n## Target audience\n\n\n## Key message\n\n\n## Channels\n\n\n## Success metrics\n\n",
-  },
-};
 const STARTER_TASKS: { text: string; priority: Priority; category: string }[] = [
   { text: "Record and post one short-form video today",  priority: "high",   category: "content" },
   { text: "Reply to comments on your last 3 posts",       priority: "medium", category: "growth" },
@@ -106,95 +59,8 @@ const STARTER_TASKS: { text: string; priority: Priority; category: string }[] = 
   { text: "Write your welcome email sequence",           priority: "medium", category: "content" },
 ];
 
-const DURATION_OPTIONS = [
-  { value: 15, label: "15 min" }, { value: 30, label: "30 min" },
-  { value: 45, label: "45 min" }, { value: 60, label: "1 hour" },
-  { value: 90, label: "1.5 hours" }, { value: 120, label: "2 hours" },
-  { value: 180, label: "3 hours" },
-];
-
-// ─── Knowledge Base helpers ───────────────────────────────────────────────────
-
-const KB_AI_SUGGESTIONS: Record<string, { label: string; href: string }[]> = {
-  "marketing-psychology": [
-    { label: "Generate Headlines", href: "/dashboard/design-studio" },
-    { label: "Inspire Landing Page Copy", href: "/dashboard/design-studio" },
-    { label: "Create Hook from This", href: "/dashboard/workspace?tab=content-ideas" },
-  ],
-  "copywriting": [
-    { label: "Turn into Product Description", href: "/dashboard/library?create=true" },
-    { label: "Open Design Studio", href: "/dashboard/design-studio" },
-    { label: "Ask AI Coach", href: "/dashboard/ai-coach" },
-  ],
-  "content-ideas": [
-    { label: "Expand into Script", href: "/dashboard/workspace?tab=notes" },
-    { label: "Build Video Guide", href: "/dashboard/design-studio?tab=video" },
-    { label: "Add to Calendar", href: "/dashboard/workspace?tab=calendar" },
-  ],
-  "analytics": [
-    { label: "Create Experiment", href: "/dashboard/workspace?tab=experiments" },
-    { label: "Ask AI Coach for Next Steps", href: "/dashboard/ai-coach" },
-  ],
-  "distribution": [
-    { label: "Build Promotion Strategy", href: "/dashboard/ai-coach" },
-    { label: "Open Design Studio", href: "/dashboard/design-studio" },
-  ],
-  "experiments": [
-    { label: "Get AI Analysis", href: "/dashboard/ai-coach" },
-    { label: "Roll Out to Distribution", href: "/dashboard/workspace?tab=distribution" },
-    { label: "Record in Analytics", href: "/dashboard/workspace?tab=analytics" },
-  ],
-};
-
-const CATEGORY_LABELS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
-  "marketing-psychology": { label: "Mktg Psychology", icon: Brain },
-  "copywriting":          { label: "Copywriting",     icon: FileText },
-  "content-ideas":        { label: "Content Ideas",   icon: Lightbulb },
-  "analytics":            { label: "Analytics",       icon: BarChart2 },
-  "distribution":         { label: "Distribution",    icon: Megaphone },
-  "experiments":          { label: "Experiments",     icon: FlaskConical },
-  "research":             { label: "Research",        icon: BookOpen },
-};
-
-function tagColor(tag: string): string {
-  const palette = [
-    "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
-    "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-    "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-    "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20",
-    "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
-  ];
-  let h = 0;
-  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) % palette.length;
-  return palette[Math.abs(h) % palette.length];
-}
-
-function fmtRelative(dateStr: string): string {
-  if (!dateStr) return "";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
 function uid() { return Math.random().toString(36).slice(2, 10); }
 function isOverdue(d?: string) { return !!d && new Date(d) < new Date(new Date().toDateString()); }
-function fmtDuration(mins: number): string {
-  const h = Math.floor(mins / 60); const m = mins % 60;
-  if (h === 0) return `${m}m`;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
-function getNextRecurringDate(date: string, r: "daily" | "weekly" | "monthly"): string {
-  const d = new Date(date + "T12:00:00");
-  if (r === "daily") d.setDate(d.getDate() + 1);
-  else if (r === "weekly") d.setDate(d.getDate() + 7);
-  else d.setMonth(d.getMonth() + 1);
-  return d.toISOString().slice(0, 10);
-}
 function fmtDate(d?: string) {
   if (!d) return null;
   const today = new Date(new Date().toDateString()).getTime();
@@ -229,604 +95,11 @@ function RingProgress({ pct, color, size = 80 }: { pct: number; color: string; s
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
 
 const TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
-  { id: "dashboard", label: "Today",          icon: <LayoutDashboard className="w-4 h-4" /> },
-  { id: "todos",     label: "To-Do List",     icon: <ListTodo className="w-4 h-4" /> },
-  { id: "notes",     label: "Notes",          icon: <StickyNote className="w-4 h-4" /> },
-  { id: "calendar",  label: "Calendar",       icon: <Calendar className="w-4 h-4" /> },
-  { id: "goals",     label: "Goals",          icon: <Target className="w-4 h-4" /> },
-  { id: "research",  label: "Research",       icon: <BookOpen className="w-4 h-4" /> },
-  { id: "memory",    label: "Business Brain", icon: <Brain className="w-4 h-4" /> },
-  { id: "agents",    label: "Agent Team",     icon: <Bot className="w-4 h-4" /> },
+  { id: "todos",    label: "To-Do List",       icon: <ListTodo className="w-4 h-4" /> },
+  { id: "notes",    label: "Notes",            icon: <StickyNote className="w-4 h-4" /> },
+  { id: "calendar", label: "Content Calendar", icon: <Calendar className="w-4 h-4" /> },
+  { id: "goals",    label: "Goals",            icon: <Target className="w-4 h-4" /> },
 ];
-
-const ADMIN_TABS: { id: WorkspaceTab; label: string; icon: React.ReactNode }[] = [
-  { id: "founder-os",            label: "Founder OS",           icon: <Brain className="w-4 h-4" /> },
-  { id: "marketing-psychology",  label: "Mktg Psychology",      icon: <Brain className="w-4 h-4" /> },
-  { id: "copywriting",           label: "Copywriting",          icon: <FileText className="w-4 h-4" /> },
-  { id: "content-ideas",         label: "Content Ideas",        icon: <Lightbulb className="w-4 h-4" /> },
-  { id: "analytics",             label: "Analytics",            icon: <BarChart2 className="w-4 h-4" /> },
-  { id: "distribution",          label: "Distribution",         icon: <Megaphone className="w-4 h-4" /> },
-  { id: "experiments",           label: "Experiments",          icon: <FlaskConical className="w-4 h-4" /> },
-];
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// WORKSPACE DASHBOARD — "Today" OS View
-// ═══════════════════════════════════════════════════════════════════════════════
-
-interface ActiveProduct { id: string; title: string; status: string; format?: string; updatedAt?: string; }
-
-interface OrchestratorDecision {
-  id: string; title: string; description: string | null; priority: number; isActioned: boolean;
-}
-interface OrchestratorState {
-  healthScore: { overall: number; grade: "A" | "B" | "C" | "D" | "F" };
-  decisions: OrchestratorDecision[];
-}
-interface AgentDiscovery {
-  id: string; agentType: string; discoveryType: string; title: string;
-  description: string | null; confidence: number; priority: number;
-  actionLabel: string | null; actionUrl: string | null; createdAt: string;
-}
-interface BrainRecommendation {
-  id: string; title: string; description: string; priority: number;
-}
-
-const AGENT_COLORS_DASH: Record<string, { text: string; bg: string; border: string }> = {
-  research:   { text: "text-blue-600 dark:text-blue-400",   bg: "bg-blue-500/10",   border: "border-blue-500/20" },
-  product:    { text: "text-green-600 dark:text-green-400", bg: "bg-green-500/10",  border: "border-green-500/20" },
-  content:    { text: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/20" },
-  analytics:  { text: "text-orange-600 dark:text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-  experiment: { text: "text-pink-600 dark:text-pink-400",   bg: "bg-pink-500/10",   border: "border-pink-500/20" },
-  coach:      { text: "text-teal-600 dark:text-teal-400",   bg: "bg-teal-500/10",   border: "border-teal-500/20" },
-};
-const DISCOVERY_ICONS: Record<string, string> = {
-  opportunity: "🎯", warning: "⚠️", insight: "💡", recommendation: "⚡",
-};
-
-function WorkspaceDashboard({ onTabChange }: { onTabChange: (tab: WorkspaceTab) => void }) {
-  const router = useRouter();
-
-  // Local state
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [goals, setGoals] = useState<Goal[]>(DEFAULT_GOALS);
-
-  // API state
-  const [activeProduct, setActiveProduct] = useState<ActiveProduct | null>(null);
-  const [productLoading, setProductLoading] = useState(true);
-  const [orchestrator, setOrchestrator] = useState<OrchestratorState | null>(null);
-  const [discoveries, setDiscoveries] = useState<AgentDiscovery[]>([]);
-  const [brainRecs, setBrainRecs] = useState<BrainRecommendation[]>([]);
-  const [briefExpanded, setBriefExpanded] = useState(false);
-
-  // AI Plan My Day
-  const [planLoading, setPlanLoading] = useState(false);
-  const [plan, setPlan] = useState<string | null>(null);
-  const [planError, setPlanError] = useState<string | null>(null);
-
-  // Load local data
-  useEffect(() => {
-    try { const t = localStorage.getItem("cf_todos"); if (t) setTodos(JSON.parse(t) as Todo[]); } catch {}
-    try { const n = localStorage.getItem("cf_notes"); if (n) setNotes(JSON.parse(n) as Note[]); } catch {}
-    try { const g = localStorage.getItem("cf_goals"); if (g) setGoals(JSON.parse(g) as Goal[]); } catch {}
-  }, []);
-
-  // Fetch API data in parallel — all non-blocking
-  useEffect(() => {
-    fetch("/api/products")
-      .then(r => r.ok ? r.json() : { products: [] })
-      .then(({ products }) => {
-        const p = (products as ActiveProduct[]).find(p => p.status !== "archived") ?? null;
-        setActiveProduct(p);
-      }).catch(() => {}).finally(() => setProductLoading(false));
-
-    fetch("/api/orchestrator")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data && !data.error) setOrchestrator(data as OrchestratorState); })
-      .catch(() => {});
-
-    fetch("/api/agents/discoveries?limit=6&daysBack=14")
-      .then(r => r.ok ? r.json() : [])
-      .then(data => { if (Array.isArray(data)) setDiscoveries(data as AgentDiscovery[]); })
-      .catch(() => {});
-
-    fetch("/api/intelligence/recommendations")
-      .then(r => r.ok ? r.json() : { recommendations: [] })
-      .then(data => { if (Array.isArray(data?.recommendations)) setBrainRecs(data.recommendations as BrainRecommendation[]); })
-      .catch(() => {});
-  }, []);
-
-  // Derived
-  const today = new Date().toISOString().slice(0, 10);
-  const activeTodos = todos.filter(t => !t.completed);
-  const highPriorityTodos = [...activeTodos].sort((a, b) => {
-    const ord: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
-    return ord[a.priority] - ord[b.priority];
-  }).slice(0, 5);
-  const overdueCount = activeTodos.filter(t => t.dueDate && t.dueDate < today).length;
-  const completedToday = todos.filter(t => t.completed).length;
-  const totalToday = todos.length;
-  const progressPct = totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0;
-  const recentNotes = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
-  const topDecisions = (orchestrator?.decisions ?? []).filter(d => !d.isActioned).slice(0, 4);
-  const healthScore = orchestrator?.healthScore.overall ?? null;
-  const healthGrade = orchestrator?.healthScore.grade ?? null;
-  const healthColor = healthScore !== null
-    ? (healthScore >= 70 ? "text-green-500" : healthScore >= 40 ? "text-orange-500" : "text-red-500")
-    : "text-muted-foreground";
-
-  // AI Recommendations: brain recs → fallback to local heuristics
-  const localFallbackRecs: { icon: string; text: string; tab?: WorkspaceTab; href?: string }[] = [];
-  if (overdueCount > 0) localFallbackRecs.push({ icon: "⚠️", text: `${overdueCount} task${overdueCount > 1 ? "s are" : " is"} overdue — tackle these first.`, tab: "todos" });
-  if (activeTodos.length === 0) localFallbackRecs.push({ icon: "✅", text: "All tasks done! Add new tasks to keep momentum going.", tab: "todos" });
-  if (!activeProduct && !productLoading) localFallbackRecs.push({ icon: "📦", text: "Create your first digital product from AI research.", href: "/dashboard/digital-products/create-from-research" });
-  if (activeProduct?.status === "draft") localFallbackRecs.push({ icon: "🚀", text: `"${activeProduct.title}" is still a draft — finish and publish it!`, href: `/dashboard/digital-products/${activeProduct.id}/edit` });
-  if (notes.length === 0) localFallbackRecs.push({ icon: "📝", text: "Capture an idea in notes before it disappears.", tab: "notes" });
-  localFallbackRecs.push({ icon: "🔍", text: "Run AI research to find your next product opportunity.", tab: "research" });
-
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 17) return "Good afternoon";
-    return "Good evening";
-  })();
-  const dateStr = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
-
-  const handlePlanDay = async () => {
-    setPlanLoading(true); setPlanError(null); setPlan(null);
-    const taskList = highPriorityTodos.map(t => `- [${t.priority}] ${t.text}${t.dueDate ? ` (due ${t.dueDate})` : ""}`).join("\n");
-    const goalList = goals.map(g => `${g.label}: ${g.current}/${g.target} ${g.unit}`).join(", ");
-    const productInfo = activeProduct ? `Active product: "${activeProduct.title}" (${activeProduct.status})` : "No active product";
-    const discoveryContext = discoveries.slice(0, 3).map(d => `- ${d.title}`).join("\n");
-    const prompt = `You are a productivity coach for a digital creator and online entrepreneur. Based on their current situation, create a focused daily action plan.
-
-Tasks (${activeTodos.length} active, ${overdueCount} overdue):
-${taskList || "No tasks yet"}
-Goals: ${goalList || "None set"}
-${productInfo}
-Notes: ${notes.length} saved
-${discoveryContext ? `Agent discoveries:\n${discoveryContext}` : ""}
-
-Create a concise, motivating daily action plan with 3-5 prioritised actions. Format as a numbered list. Be direct and specific. Keep each item to 1 sentence. End with one motivational sentence.`;
-    try {
-      const res = await fetch("/api/research/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "plan" }) });
-      const json = await res.json() as { summary?: string; error?: string };
-      if (json.summary) setPlan(json.summary);
-      else setPlanError(json.error ?? "No plan returned.");
-    } catch { setPlanError("Could not generate plan. Try again."); }
-    finally { setPlanLoading(false); }
-  };
-
-  return (
-    <div className="space-y-6 max-w-6xl">
-
-      {/* ── Greeting ────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">{greeting} 👋</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{dateStr}</p>
-        </div>
-        <button onClick={handlePlanDay} disabled={planLoading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-semibold shadow-sm hover:shadow-md transition-all hover:from-orange-600 hover:to-amber-600 disabled:opacity-60">
-          {planLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {planLoading ? "Planning your day…" : "✨ Plan My Day"}
-        </button>
-      </div>
-
-      {/* ── AI Plan ─────────────────────────────────────────────────────── */}
-      {(plan || planError) && (
-        <div className={cn("rounded-2xl border p-5", plan ? "border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-amber-500/5" : "border-red-500/30 bg-red-500/5")}>
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4 text-orange-500" />
-            <p className="text-sm font-bold text-foreground">Your AI Plan for Today</p>
-            <button onClick={() => { setPlan(null); setPlanError(null); }} className="ml-auto text-muted-foreground hover:text-foreground transition-colors"><X className="w-4 h-4" /></button>
-          </div>
-          {plan && <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{plan}</div>}
-          {planError && <p className="text-sm text-red-500">{planError}</p>}
-        </div>
-      )}
-
-      {/* ── OS Status bar ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Business Health */}
-        <button onClick={() => onTabChange("agents")}
-          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-green-500/30 hover:bg-green-500/5 transition-all text-left group">
-          <div className="flex items-center gap-1.5">
-            <Shield className="w-3 h-3 text-muted-foreground/50" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Business Health</p>
-          </div>
-          <p className={cn("text-3xl font-black tabular-nums", healthColor)}>
-            {healthScore !== null ? `${healthScore}%` : "—"}
-          </p>
-          <p className="text-[10px] text-muted-foreground/40">
-            {healthGrade ? `Grade ${healthGrade} · Agent Team →` : "Run agents to score →"}
-          </p>
-        </button>
-
-        {/* Active Tasks */}
-        <button onClick={() => onTabChange("todos")}
-          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-blue-500/30 hover:bg-blue-500/5 transition-all text-left group">
-          <div className="flex items-center gap-1.5">
-            <ListTodo className="w-3 h-3 text-muted-foreground/50" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Active Tasks</p>
-          </div>
-          <p className="text-3xl font-black text-blue-500 tabular-nums">{activeTodos.length}</p>
-          <p className="text-[10px] text-muted-foreground/40">
-            {completedToday > 0 ? `${completedToday}/${totalToday} done today →` : "To-Do List →"}
-          </p>
-        </button>
-
-        {/* Agent Discoveries */}
-        <button onClick={() => onTabChange("agents")}
-          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-purple-500/30 hover:bg-purple-500/5 transition-all text-left group">
-          <div className="flex items-center gap-1.5">
-            <Bot className="w-3 h-3 text-muted-foreground/50" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Discoveries</p>
-          </div>
-          <p className="text-3xl font-black text-purple-500 tabular-nums">{discoveries.length}</p>
-          <p className="text-[10px] text-muted-foreground/40">Last 14 days · Agent Team →</p>
-        </button>
-
-        {/* Notes */}
-        <button onClick={() => onTabChange("notes")}
-          className="flex flex-col gap-1.5 p-4 rounded-2xl border border-border bg-card hover:border-amber-500/30 hover:bg-amber-500/5 transition-all text-left group">
-          <div className="flex items-center gap-1.5">
-            <StickyNote className="w-3 h-3 text-muted-foreground/50" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Notes</p>
-          </div>
-          <p className="text-3xl font-black text-amber-500 tabular-nums">{notes.length}</p>
-          <p className="text-[10px] text-muted-foreground/40">Ideas captured · Notes →</p>
-        </button>
-      </div>
-
-      {/* ── AI Daily Brief ───────────────────────────────────────────────── */}
-      {topDecisions.length > 0 && (
-        <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-5">
-          <button onClick={() => setBriefExpanded(v => !v)} className="flex items-center gap-2 w-full text-left">
-            <Sparkles className="w-4 h-4 text-orange-500 shrink-0" />
-            <p className="text-sm font-bold text-foreground flex-1">AI Daily Brief</p>
-            <span className="text-[10px] text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full font-semibold">
-              {topDecisions.length} priorities
-            </span>
-            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform ml-1", briefExpanded && "rotate-180")} />
-          </button>
-          {!briefExpanded && (
-            <p className="mt-2 text-xs text-muted-foreground leading-relaxed line-clamp-1">
-              {topDecisions[0]?.title}
-              {topDecisions.length > 1 ? ` and ${topDecisions.length - 1} more priorities` : ""}
-            </p>
-          )}
-          {briefExpanded && (
-            <div className="mt-4 space-y-2">
-              {topDecisions.map((d, i) => (
-                <div key={d.id} className="flex items-start gap-3 p-3.5 rounded-xl bg-background/80 border border-orange-500/10">
-                  <span className="w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground">{d.title}</p>
-                    {d.description && <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{d.description}</p>}
-                  </div>
-                </div>
-              ))}
-              <button onClick={() => onTabChange("agents")} className="text-xs text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1 pt-1">
-                Full report in Agent Team <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Main 2-col grid ──────────────────────────────────────────────── */}
-      <div className="grid lg:grid-cols-5 gap-6">
-
-        {/* LEFT: Today's Focus */}
-        <div className="lg:col-span-3 space-y-6">
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <ListTodo className="w-4 h-4 text-orange-500" />
-                <p className="text-sm font-bold text-foreground">Today&apos;s Focus</p>
-                {overdueCount > 0 && (
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
-                    <AlertCircle className="w-2.5 h-2.5" />{overdueCount} overdue
-                  </span>
-                )}
-              </div>
-              <button onClick={() => onTabChange("todos")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-                All tasks <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-            {totalToday > 0 && (
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
-                </div>
-                <span className="text-[11px] text-muted-foreground font-medium whitespace-nowrap">{completedToday}/{totalToday} done</span>
-              </div>
-            )}
-            {highPriorityTodos.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-sm text-muted-foreground mb-3">No tasks yet — what will you tackle today?</p>
-                <button onClick={() => onTabChange("todos")} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 mx-auto">
-                  <Plus className="w-3.5 h-3.5" />Add your first task
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {highPriorityTodos.map(todo => {
-                  const cat = CATEGORIES.find(c => c.id === todo.category);
-                  const overdue = todo.dueDate && todo.dueDate < today;
-                  return (
-                    <div key={todo.id} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-background transition-colors",
-                      overdue ? "border-red-500/20 bg-red-500/5" : "border-border/60 hover:border-border")}>
-                      <span className={cn("w-2 h-2 rounded-full shrink-0", PRIORITY[todo.priority].dot)} />
-                      <span className="flex-1 text-sm text-foreground truncate">{todo.text}</span>
-                      {cat && <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full shrink-0", cat.color)}>{cat.name}</span>}
-                      {todo.dueDate && <span className={cn("text-[10px] font-medium shrink-0", overdue ? "text-red-400" : "text-muted-foreground")}>{fmtDate(todo.dueDate)}</span>}
-                    </div>
-                  );
-                })}
-                {activeTodos.length > 5 && (
-                  <button onClick={() => onTabChange("todos")} className="text-xs text-muted-foreground hover:text-orange-500 transition-colors pt-1">
-                    +{activeTodos.length - 5} more tasks →
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Goals */}
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-orange-500" />
-                <p className="text-sm font-bold text-foreground">Goals</p>
-              </div>
-              <button onClick={() => onTabChange("goals")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-                Manage <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              {goals.map(goal => {
-                const pct = Math.min(100, goal.target > 0 ? Math.round((goal.current / goal.target) * 100) : 0);
-                const done = pct >= 100;
-                return (
-                  <div key={goal.id} className="flex items-center gap-3">
-                    <div className="relative shrink-0">
-                      <RingProgress pct={pct} color={done ? "#22c55e" : goal.color} size={48} />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-[10px] font-black" style={{ color: done ? "#22c55e" : goal.color }}>{pct}%</span>
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">{goal.label}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <div className="flex-1 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: done ? "#22c55e" : goal.color }} />
-                        </div>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{goal.unit}{goal.current.toLocaleString()} / {goal.unit}{goal.target.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    {done && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT: Active Project + Quick Actions */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Active Project */}
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-orange-500" />
-                <p className="text-sm font-bold text-foreground">Active Project</p>
-              </div>
-              <button onClick={() => router.push("/dashboard/library")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-                Library <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-            {productLoading ? (
-              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading…</div>
-            ) : activeProduct ? (
-              <div className="p-4 rounded-xl border border-border bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/digital-products/${activeProduct.id}/edit`)}>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <p className="text-sm font-semibold text-foreground leading-snug">{activeProduct.title}</p>
-                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0",
-                    activeProduct.status === "complete" ? "bg-green-500/10 text-green-600 dark:text-green-400" :
-                    activeProduct.status === "draft" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground")}>
-                    {activeProduct.status}
-                  </span>
-                </div>
-                {activeProduct.format && <p className="text-[11px] text-muted-foreground capitalize">{activeProduct.format}</p>}
-                <div className="mt-3">
-                  {activeProduct.status === "draft" ? (
-                    <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/digital-products/${activeProduct.id}/edit`); }}
-                      className="w-full text-xs font-semibold py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors">
-                      Continue editing →
-                    </button>
-                  ) : (
-                    <button onClick={e => { e.stopPropagation(); router.push(`/dashboard/design-studio`); }}
-                      className="w-full text-xs font-semibold py-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors">
-                      Create visuals →
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-6">
-                <div className="w-12 h-12 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-3">
-                  <Package className="w-5 h-5 text-muted-foreground/40" />
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">No active product yet</p>
-                <button onClick={() => router.push("/dashboard/digital-products/create-from-research")}
-                  className="text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors">
-                  Create your first product →
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Quick Actions</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "AI Research", emoji: "🔍", onClick: () => onTabChange("research") },
-                { label: "New Note", emoji: "📝", onClick: () => onTabChange("notes") },
-                { label: "Create Product", emoji: "📦", onClick: () => router.push("/dashboard/digital-products/create-from-research") },
-                { label: "Design Studio", emoji: "🎨", onClick: () => router.push("/dashboard/design-studio") },
-                { label: "Add Task", emoji: "✅", onClick: () => onTabChange("todos") },
-                { label: "Calendar", emoji: "📅", onClick: () => onTabChange("calendar") },
-              ].map(a => (
-                <button key={a.label} onClick={a.onClick}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border/60 bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
-                  <span className="text-base">{a.emoji}</span>
-                  <p className="text-xs font-semibold text-foreground group-hover:text-orange-500 transition-colors">{a.label}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Agent Discoveries + AI Recommendations ───────────────────────── */}
-      <div className="grid lg:grid-cols-2 gap-6">
-
-        {/* Agent Discoveries */}
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Bot className="w-4 h-4 text-purple-500" />
-              <p className="text-sm font-bold text-foreground">Agent Discoveries</p>
-              {discoveries.length > 0 && (
-                <span className="text-[10px] font-semibold text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-full">
-                  {discoveries.length} new
-                </span>
-              )}
-            </div>
-            <button onClick={() => onTabChange("agents")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-              Agent Team <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-          {discoveries.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">
-                <Bot className="w-5 h-5 text-purple-400" />
-              </div>
-              <p className="text-xs text-muted-foreground mb-3">No discoveries yet</p>
-              <button onClick={() => onTabChange("agents")} className="text-xs font-semibold text-purple-500 hover:text-purple-600 flex items-center gap-1 mx-auto">
-                Run your agents <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {discoveries.slice(0, 5).map(d => {
-                const agentStyle = AGENT_COLORS_DASH[d.agentType] ?? AGENT_COLORS_DASH.research;
-                return (
-                  <div key={d.id} className="flex items-start gap-3 p-3 rounded-xl border border-border/60 bg-background hover:border-purple-500/20 transition-colors">
-                    <span className="text-base leading-none mt-0.5 shrink-0">{DISCOVERY_ICONS[d.discoveryType] ?? "💡"}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-xs font-semibold text-foreground truncate flex-1">{d.title}</p>
-                        <span className={cn("text-[9px] font-bold px-1.5 py-px rounded-full shrink-0 capitalize", agentStyle.bg, agentStyle.text)}>
-                          {d.agentType}
-                        </span>
-                      </div>
-                      {d.description && <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{d.description}</p>}
-                    </div>
-                  </div>
-                );
-              })}
-              {discoveries.length > 5 && (
-                <button onClick={() => onTabChange("agents")} className="text-xs text-muted-foreground hover:text-purple-500 transition-colors pt-1">
-                  +{discoveries.length - 5} more in Agent Team →
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* AI Recommendations */}
-        <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-amber-500/5 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="w-4 h-4 text-orange-500" />
-            <p className="text-sm font-bold text-foreground">AI Recommendations</p>
-            <span className="text-[10px] font-medium text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full ml-auto">
-              {brainRecs.length > 0 ? "From Business Brain" : "From your activity"}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {(brainRecs.length > 0
-              ? brainRecs.slice(0, 4).map(r => ({ icon: "⚡", text: r.title, sub: r.description, tab: undefined as WorkspaceTab | undefined, href: undefined as string | undefined }))
-              : localFallbackRecs.slice(0, 4).map(r => ({ icon: r.icon, text: r.text, sub: undefined, tab: r.tab, href: r.href }))
-            ).map((rec, i) => (
-              <button key={i}
-                onClick={() => {
-                  if (rec.href) router.push(rec.href);
-                  else if (rec.tab) onTabChange(rec.tab);
-                  else onTabChange("memory");
-                }}
-                className="w-full flex items-start gap-3 p-3 rounded-xl border border-orange-500/10 bg-background/80 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
-                <span className="text-base shrink-0 leading-none mt-0.5">{rec.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-foreground group-hover:text-orange-500 transition-colors leading-snug">{rec.text}</p>
-                  {rec.sub && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{rec.sub}</p>}
-                </div>
-                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-orange-500 shrink-0 mt-0.5 transition-colors" />
-              </button>
-            ))}
-            {brainRecs.length === 0 && (
-              <button onClick={() => onTabChange("memory")} className="w-full text-xs text-center text-muted-foreground hover:text-orange-500 transition-colors pt-1 flex items-center justify-center gap-1">
-                <Brain className="w-3 h-3" />Open Business Brain for deeper insights
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Recent Notes ─────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <StickyNote className="w-4 h-4 text-orange-500" />
-            <p className="text-sm font-bold text-foreground">Recent Notes</p>
-          </div>
-          <button onClick={() => onTabChange("notes")} className="text-[11px] text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-            All notes <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-        {recentNotes.length === 0 ? (
-          <div className="flex items-center gap-4">
-            <p className="text-xs text-muted-foreground">No notes yet — capture your first idea.</p>
-            <button onClick={() => onTabChange("notes")} className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 whitespace-nowrap">
-              <Plus className="w-3.5 h-3.5" />New note
-            </button>
-          </div>
-        ) : (
-          <div className="grid sm:grid-cols-3 gap-3">
-            {recentNotes.map(note => {
-              const preview = cleanPreview(note.body).slice(0, 90);
-              return (
-                <button key={note.id}
-                  onClick={() => { try { sessionStorage.setItem("cf_open_note", note.id); } catch {} onTabChange("notes"); }}
-                  className="text-left p-3 rounded-xl border border-border/60 bg-background hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors group">
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="text-xs font-semibold text-foreground truncate group-hover:text-orange-500 transition-colors">{note.title || "Untitled"}</p>
-                    {note.tag && <span className={cn("text-[9px] font-bold px-1.5 py-px rounded-full border shrink-0", NOTE_TAGS[note.tag as NoteTag]?.pill)}>{NOTE_TAGS[note.tag as NoteTag]?.label}</span>}
-                  </div>
-                  {preview && <p className="text-[11px] text-muted-foreground line-clamp-2">{preview}</p>}
-                  <p className="text-[10px] text-muted-foreground/40 mt-1.5">{formatRelativeTime(note.updatedAt)}</p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TO-DO TAB
@@ -848,8 +121,6 @@ function TodoTab() {
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [subInput, setSubInput] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const priorityRef = useRef<HTMLDivElement>(null);
   const categoryRef = useRef<HTMLDivElement>(null);
@@ -884,39 +155,14 @@ function TodoTab() {
   const toggle = (id: string) => {
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
-    if (!todo.completed) {
-      setCompletingIds(prev => new Set(prev).add(id));
-      setTimeout(() => setCompletingIds(prev => { const s = new Set(prev); s.delete(id); return s; }), 500);
-      // Recurring: auto-create next instance
-      if (todo.recurring && todo.dueDate) {
-        const nextDate = getNextRecurringDate(todo.dueDate, todo.recurring);
-        setTodos(prev => [...prev, { ...todo, id: uid(), completed: false, dueDate: nextDate, subtasks: todo.subtasks?.map(s => ({ ...s, completed: false })), createdAt: Date.now() }]);
-      }
-    }
+    if (!todo.completed) { setCompletingIds(prev => new Set(prev).add(id)); setTimeout(() => setCompletingIds(prev => { const s = new Set(prev); s.delete(id); return s; }), 500); }
     setTodos(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
   };
-  const remove = (id: string) => { setTodos(prev => prev.filter(t => t.id !== id)); if (expandedId === id) setExpandedId(null); };
-  const updateTodo = (id: string, patch: Partial<Todo>) => setTodos(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+  const remove = (id: string) => setTodos(prev => prev.filter(t => t.id !== id));
   const toggleSaved = (todo: Todo) => {
     const isSaved = saved.some(s => s.text === todo.text);
     if (isSaved) setSaved(prev => prev.filter(s => s.text !== todo.text));
     else setSaved(prev => [...prev, { id: uid(), text: todo.text, priority: todo.priority, category: todo.category }]);
-  };
-  const addSubtask = (todoId: string, text: string) => {
-    if (!text.trim()) return;
-    const todo = todos.find(t => t.id === todoId);
-    updateTodo(todoId, { subtasks: [...(todo?.subtasks ?? []), { id: uid(), text: text.trim(), completed: false }] });
-    setSubInput(prev => ({ ...prev, [todoId]: "" }));
-  };
-  const toggleSubtask = (todoId: string, subId: string) => {
-    const todo = todos.find(t => t.id === todoId);
-    if (!todo?.subtasks) return;
-    updateTodo(todoId, { subtasks: todo.subtasks.map(s => s.id === subId ? { ...s, completed: !s.completed } : s) });
-  };
-  const removeSubtask = (todoId: string, subId: string) => {
-    const todo = todos.find(t => t.id === todoId);
-    if (!todo?.subtasks) return;
-    updateTodo(todoId, { subtasks: todo.subtasks.filter(s => s.id !== subId) });
   };
   const handleDrop = (targetId: string) => {
     if (!dragId || dragId === targetId) { setDragId(null); setDragOverId(null); return; }
@@ -983,7 +229,7 @@ function TodoTab() {
             {priorityOpen && (
               <div className="absolute top-full mt-1 left-0 z-20 bg-popover border border-border rounded-xl shadow-lg min-w-[110px] py-1">
                 {(["high","medium","low"] as Priority[]).map(p => (
-                  <button key={p} onClick={() => { setPriority(p); setPriorityOpen(false); }} className={cn("flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent", priority === p && "font-semibold")}>
+                  <button key={p} onClick={() => { setPriority(p); setPriorityOpen(false); }} className={cn("flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent rounded-md mx-1 w-[calc(100%-8px)]", priority === p && "font-semibold")}>
                     <span className={cn("w-2 h-2 rounded-full", PRIORITY[p].dot)} /><span className={PRIORITY[p].color}>{PRIORITY[p].label}</span>
                   </button>
                 ))}
@@ -1055,7 +301,7 @@ function TodoTab() {
         </div>
       </div>
 
-      {/* Filter tabs */}
+      {/* Filter tabs — single row */}
       <div className="mb-4 flex items-center gap-1 flex-wrap">
         {(["all","active","completed"] as TodoFilter[]).map(f => (
           <button key={f} onClick={() => setFilter(f)} className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all", filter === f ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900" : "text-muted-foreground hover:text-foreground hover:bg-accent")}>
@@ -1071,7 +317,7 @@ function TodoTab() {
       </div>
 
       {/* Task list */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {filtered.length === 0 && todos.length === 0 && (
           <div>
             <div className="mb-4 p-4 rounded-2xl bg-gradient-to-br from-orange-500/8 to-amber-500/8 border border-orange-500/15">
@@ -1107,171 +353,35 @@ function TodoTab() {
           const overdue = isOverdue(todo.dueDate) && !todo.completed;
           const isCompleting = completingIds.has(todo.id);
           const isSaved = saved.some(s => s.text === todo.text);
-          const isExpanded = expandedId === todo.id;
-          const subDone = todo.subtasks?.filter(s => s.completed).length ?? 0;
-          const subTotal = todo.subtasks?.length ?? 0;
-
           return (
-            <div key={todo.id}>
-              {/* Task row */}
-              <div
-                draggable
-                onDragStart={() => setDragId(todo.id)}
-                onDragOver={e => { e.preventDefault(); setDragOverId(todo.id); }}
-                onDrop={() => handleDrop(todo.id)}
-                onDragEnd={() => { setDragId(null); setDragOverId(null); }}
-                className={cn("group flex items-center gap-2.5 px-3 py-2.5 bg-card border transition-all duration-150",
-                  isExpanded ? "rounded-t-xl border-b-0" : "rounded-xl",
-                  dragOverId === todo.id && dragId !== todo.id ? "border-orange-500/40 bg-orange-500/5" : "border-border",
-                  dragId === todo.id && "opacity-40 scale-[0.98]",
-                  todo.completed && "opacity-50",
-                  overdue && !todo.completed && "border-red-500/30 bg-red-500/5")}
-              >
-                <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                {/* Checkbox */}
-                <button onClick={() => toggle(todo.id)} className={cn("shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200",
-                  todo.completed ? "border-green-500 bg-green-500 text-white" : "border-muted-foreground/30 hover:border-orange-500",
-                  isCompleting && "scale-125")}>
-                  {todo.completed && <Check className="w-3 h-3" strokeWidth={3} />}
-                </button>
-
-                {/* Main content — click to expand */}
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : todo.id)}>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={cn("text-sm font-medium leading-snug", todo.completed ? "line-through text-muted-foreground" : "text-foreground")}>{todo.text}</span>
-                    {todo.recurring && (
-                      <span className="text-[10px] bg-blue-500/10 text-blue-500 dark:text-blue-400 px-1.5 py-px rounded-full font-medium">🔁 {todo.recurring}</span>
-                    )}
-                    {todo.duration && (
-                      <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-px rounded-full font-medium">⏱ {fmtDuration(todo.duration)}</span>
-                    )}
+            <div key={todo.id} draggable onDragStart={() => setDragId(todo.id)} onDragOver={e => { e.preventDefault(); setDragOverId(todo.id); }} onDrop={() => handleDrop(todo.id)} onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+              className={cn("group flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-card transition-all duration-150",
+                dragOverId === todo.id && dragId !== todo.id ? "border-orange-500/40 bg-orange-500/5" : "border-border",
+                dragId === todo.id && "opacity-40 scale-[0.98]",
+                todo.completed && "opacity-50",
+                overdue && !todo.completed && "border-red-500/30 bg-red-500/5")}>
+              <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <button onClick={() => toggle(todo.id)} className={cn("shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200",
+                todo.completed ? "border-green-500 bg-green-500 text-white" : "border-muted-foreground/30 hover:border-orange-500",
+                isCompleting && "scale-125")}>
+                {todo.completed && <Check className="w-3 h-3" strokeWidth={3} />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <span className={cn("text-sm font-medium", todo.completed ? "line-through text-muted-foreground" : "text-foreground")}>{todo.text}</span>
+                {(todo.dueDate || cat) && (
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {todo.dueDate && <span className={cn("text-xs flex items-center gap-0.5 font-medium", overdue ? "text-red-400" : "text-muted-foreground")}>{overdue && "⚠ "}{fmtDate(todo.dueDate)}</span>}
+                    {cat && <span className={cn("text-xs px-1.5 py-0.5 rounded-full", cat.color)}>{cat.name}</span>}
                   </div>
-                  {(todo.dueDate || cat || subTotal > 0) && (
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {todo.dueDate && <span className={cn("text-[11px] flex items-center gap-0.5 font-medium", overdue ? "text-red-400" : "text-muted-foreground")}>{overdue && "⚠ "}{fmtDate(todo.dueDate)}</span>}
-                      {cat && <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", cat.color)}>{cat.name}</span>}
-                      {subTotal > 0 && <span className="text-[10px] text-muted-foreground font-medium">{subDone}/{subTotal} subtasks</span>}
-                    </div>
-                  )}
-                  {subTotal > 0 && (
-                    <div className="mt-1 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden max-w-[160px]">
-                      <div className="h-full bg-orange-500 rounded-full transition-all duration-300" style={{ width: `${Math.round(subDone / subTotal * 100)}%` }} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Priority dot */}
-                <span className={cn("w-2 h-2 rounded-full shrink-0", PRIORITY[todo.priority].dot)} />
-
-                {/* Expand chevron */}
-                <button onClick={() => setExpandedId(isExpanded ? null : todo.id)}
-                  className={cn("shrink-0 transition-all text-muted-foreground/40 hover:text-muted-foreground opacity-0 group-hover:opacity-100", isExpanded && "opacity-100 rotate-90")}>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                {/* Bookmark */}
-                <button onClick={() => toggleSaved(todo)} className={cn("shrink-0 transition-all", isSaved ? "opacity-100 text-orange-500" : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-orange-500")}>
-                  {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-                </button>
-
-                {/* Delete */}
-                <button onClick={() => remove(todo.id)} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500">
-                  <X className="w-4 h-4" />
-                </button>
+                )}
               </div>
-
-              {/* ── Expanded detail panel ─────────────────────────────────────── */}
-              {isExpanded && (
-                <div className="border border-t-0 border-border rounded-b-xl bg-card px-4 pb-4 pt-3 space-y-3">
-
-                  {/* Editable title */}
-                  <input
-                    value={todo.text}
-                    onChange={e => updateTodo(todo.id, { text: e.target.value })}
-                    className="w-full text-sm font-semibold text-foreground bg-transparent border-b border-border focus:outline-none focus:border-orange-500 pb-1 transition-colors"
-                  />
-
-                  {/* Meta selects row */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Priority */}
-                    <select value={todo.priority} onChange={e => updateTodo(todo.id, { priority: e.target.value as Priority })}
-                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
-                      <option value="high">🔴 High</option>
-                      <option value="medium">🟡 Medium</option>
-                      <option value="low">🟢 Low</option>
-                    </select>
-                    {/* Due date */}
-                    <input type="date" value={todo.dueDate ?? ""} onChange={e => updateTodo(todo.id, { dueDate: e.target.value || undefined })}
-                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer" />
-                    {/* Duration */}
-                    <select value={todo.duration ?? ""} onChange={e => updateTodo(todo.id, { duration: e.target.value ? Number(e.target.value) : undefined })}
-                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
-                      <option value="">⏱ Duration</option>
-                      {DURATION_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                    </select>
-                    {/* Recurring */}
-                    <select value={todo.recurring ?? ""} onChange={e => updateTodo(todo.id, { recurring: (e.target.value as "daily" | "weekly" | "monthly") || undefined })}
-                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
-                      <option value="">🔁 Repeat</option>
-                      <option value="daily">Daily</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                    </select>
-                    {/* Category */}
-                    <select value={todo.category ?? ""} onChange={e => updateTodo(todo.id, { category: e.target.value || undefined })}
-                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
-                      <option value="">🏷 Label</option>
-                      {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Notes */}
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5 font-semibold">Notes / Link</p>
-                    <textarea
-                      value={todo.notes ?? ""}
-                      onChange={e => updateTodo(todo.id, { notes: e.target.value || undefined })}
-                      placeholder="Add notes, a link, or context…"
-                      rows={2}
-                      className="w-full text-xs text-foreground bg-background border border-border rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-ring resize-none placeholder:text-muted-foreground/50"
-                    />
-                  </div>
-
-                  {/* Subtasks */}
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2 font-semibold">Subtasks</p>
-                    <div className="space-y-1 mb-2">
-                      {(todo.subtasks ?? []).map(sub => (
-                        <div key={sub.id} className="flex items-center gap-2 group/sub py-0.5">
-                          <button onClick={() => toggleSubtask(todo.id, sub.id)}
-                            className={cn("w-4 h-4 rounded border-2 flex items-center justify-center transition-all shrink-0",
-                              sub.completed ? "bg-green-500 border-green-500 text-white" : "border-muted-foreground/30 hover:border-orange-500")}>
-                            {sub.completed && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
-                          </button>
-                          <span className={cn("flex-1 text-xs", sub.completed ? "line-through text-muted-foreground" : "text-foreground")}>{sub.text}</span>
-                          <button onClick={() => removeSubtask(todo.id, sub.id)}
-                            className="opacity-0 group-hover/sub:opacity-100 text-muted-foreground hover:text-red-500 transition-all shrink-0">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={subInput[todo.id] ?? ""}
-                        onChange={e => setSubInput(prev => ({ ...prev, [todo.id]: e.target.value }))}
-                        onKeyDown={e => { if (e.key === "Enter") addSubtask(todo.id, subInput[todo.id] ?? ""); }}
-                        placeholder="Add subtask… press Enter"
-                        className="flex-1 text-xs bg-background border border-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                      />
-                      <button onClick={() => addSubtask(todo.id, subInput[todo.id] ?? "")}
-                        className="shrink-0 w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center hover:bg-orange-600 transition-colors">
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <span className={cn("text-xs shrink-0 flex items-center gap-1 font-medium", PRIORITY[todo.priority].color)}>
+                <span className={cn("w-1.5 h-1.5 rounded-full", PRIORITY[todo.priority].dot)} />
+              </span>
+              <button onClick={() => toggleSaved(todo)} className={cn("shrink-0 transition-all", isSaved ? "opacity-100 text-orange-500" : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-orange-500")}>
+                {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+              </button>
+              <button onClick={() => remove(todo.id)} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500"><X className="w-4 h-4" /></button>
             </div>
           );
         })}
@@ -1289,32 +399,150 @@ function TodoTab() {
 // NOTES TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type FontSize = "sm" | "base" | "lg";
-type FontFamily = "sans" | "mono";
+function NotesTab() {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [search, setSearch] = useState("");
+  const editorRef = useRef<HTMLTextAreaElement>(null);
 
-function formatRelativeTime(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
+  useEffect(() => {
+    try {
+      const n = localStorage.getItem("cf_notes");
+      if (n) { const parsed = JSON.parse(n); setNotes(parsed); if (parsed.length > 0) setActiveId(parsed[0].id); }
+    } catch {}
+  }, []);
+  useEffect(() => { try { localStorage.setItem("cf_notes", JSON.stringify(notes)); } catch {} }, [notes]);
 
-function cleanPreview(body: string): string {
-  return body
-    .replace(/^#+\s/gm, "")
-    .replace(/\*\*/g, "")
-    .replace(/_/g, "")
-    .replace(/^>\s/gm, "")
-    .replace(/^-\s/gm, "")
-    .replace(/`/g, "")
-    .replace(/\n+/g, " ")
-    .trim();
+  const createNote = () => {
+    const title = newTitle.trim() || "Untitled note";
+    const note: Note = { id: uid(), title, body: "", updatedAt: Date.now() };
+    setNotes(prev => [note, ...prev]);
+    setActiveId(note.id);
+    setNewTitle("");
+    setTimeout(() => editorRef.current?.focus(), 50);
+  };
+  const updateNote = (id: string, patch: Partial<Note>) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n));
+  };
+  const deleteNote = (id: string) => {
+    setNotes(prev => { const next = prev.filter(n => n.id !== id); setActiveId(next[0]?.id ?? null); return next; });
+  };
+
+  // Format shortcuts
+  const insertFormat = (prefix: string, suffix = "") => {
+    const el = editorRef.current;
+    if (!el || !activeId) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const body = active?.body ?? "";
+    const selected = body.slice(start, end);
+    const before = start === 0 || body[start - 1] === "\n" ? "" : "\n";
+    const after = end === body.length || body[end] === "\n" ? "" : "\n";
+    const insertion = suffix
+      ? `${prefix}${selected || "text"}${suffix}`
+      : `${before}${prefix}${selected || "text"}${after}`;
+    const newBody = body.slice(0, start) + insertion + body.slice(end);
+    updateNote(activeId, { body: newBody });
+    setTimeout(() => {
+      el.focus();
+      const pos = start + insertion.length;
+      el.setSelectionRange(pos, pos);
+    }, 10);
+  };
+
+  const active = notes.find(n => n.id === activeId);
+  const wordCount = active?.body.trim() ? active.body.trim().split(/\s+/).length : 0;
+
+  const filteredNotes = search.trim()
+    ? notes.filter(n => n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase()))
+    : notes;
+
+  return (
+    <div className="flex gap-0 h-[calc(100vh-220px)] min-h-[460px] rounded-xl border border-border overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-64 shrink-0 flex flex-col bg-muted/30 border-r border-border">
+        {/* Header */}
+        <div className="p-3 border-b border-border space-y-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring" />
+          </div>
+          <div className="flex gap-1.5">
+            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === "Enter" && createNote()} placeholder="New note…" className="flex-1 h-8 text-xs" />
+            <Button size="icon" className="h-8 w-8 shrink-0 bg-orange-500 hover:bg-orange-600 text-white" onClick={createNote}><Plus className="w-3.5 h-3.5" /></Button>
+          </div>
+        </div>
+
+        {/* Note list */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {filteredNotes.length === 0 && (
+            <div className="py-8 text-center">
+              <StickyNote className="w-6 h-6 mx-auto mb-2 text-muted-foreground/30" />
+              <p className="text-xs text-muted-foreground">{search ? "No matches" : "No notes yet"}</p>
+            </div>
+          )}
+          {filteredNotes.map(note => (
+            <button key={note.id} onClick={() => setActiveId(note.id)} className={cn("w-full text-left px-3 py-2.5 rounded-lg border transition-all group relative", activeId === note.id ? "bg-white dark:bg-[#1A1A1A] border-orange-500/30 shadow-sm" : "bg-transparent border-transparent hover:bg-white/60 dark:hover:bg-white/5 hover:border-border")}>
+              <div className="flex items-start gap-2">
+                <div className={cn("w-1 h-full min-h-[32px] rounded-full shrink-0 mt-0.5", activeId === note.id ? "bg-orange-500" : "bg-transparent group-hover:bg-border")} />
+                <div className="flex-1 min-w-0 pr-5">
+                  <p className="text-xs font-semibold truncate text-foreground">{note.title || "Untitled"}</p>
+                  {note.body && <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{note.body.slice(0, 55)}</p>}
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">{new Date(note.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+                </div>
+              </div>
+              <button onClick={e => { e.stopPropagation(); deleteNote(note.id); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all p-0.5 rounded">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Editor */}
+      <div className="flex-1 flex flex-col min-w-0 bg-card">
+        {!active ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 p-8">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <StickyNote className="w-5 h-5 text-muted-foreground/40" />
+            </div>
+            <p className="text-sm text-muted-foreground">Select a note or create one to get started</p>
+          </div>
+        ) : (
+          <>
+            {/* Note header */}
+            <div className="px-5 pt-4 pb-3 border-b border-border flex items-center gap-3">
+              <input value={active.title} onChange={e => updateNote(active.id, { title: e.target.value })}
+                className="flex-1 text-lg font-bold bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground" placeholder="Note title" />
+              <span className="text-xs text-muted-foreground/60 shrink-0">{wordCount}w · auto-saved</span>
+            </div>
+
+            {/* Format toolbar */}
+            <div className="px-4 py-1.5 border-b border-border/50 flex items-center gap-0.5">
+              {[
+                { icon: <Heading2 className="w-3.5 h-3.5" />, title: "Heading", action: () => insertFormat("## ") },
+                { icon: <Bold className="w-3.5 h-3.5" />, title: "Bold", action: () => insertFormat("**", "**") },
+                { icon: <List className="w-3.5 h-3.5" />, title: "List", action: () => insertFormat("- ") },
+                { icon: <Quote className="w-3.5 h-3.5" />, title: "Quote", action: () => insertFormat("> ") },
+              ].map((btn, i) => (
+                <button key={i} onClick={btn.action} title={btn.title}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  {btn.icon}
+                </button>
+              ))}
+              <div className="ml-auto text-[10px] text-muted-foreground/40 font-mono">markdown supported</div>
+            </div>
+
+            {/* Textarea */}
+            <textarea ref={editorRef} value={active.body} onChange={e => updateNote(active.id, { body: e.target.value })}
+              className="flex-1 resize-none bg-transparent p-5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none leading-relaxed"
+              placeholder="Start writing… Use ## for headings, **bold**, - for lists" />
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1680,2054 +908,42 @@ function GoalsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FOUNDER OS — SHARED TYPES & REUSABLE COMPONENTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-interface FounderEntry {
-  id: string;
-  category: string;
-  type: string;
-  title: string;
-  content: string;
-  metadata: Record<string, unknown> | null;
-  aiSummary?: string | null;
-  usageCount?: number | null;
-  source?: string | null;
-  confidenceScore?: number | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface TypeOption { value: string; label: string }
-
-interface EntryFormProps {
-  types: TypeOption[];
-  onSave: (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => void;
-  onCancel: () => void;
-  initial?: Partial<FounderEntry>;
-  titlePlaceholder?: string;
-  contentPlaceholder?: string;
-  extraFields?: (
-    type: string,
-    metadata: Record<string, unknown>,
-    setMeta: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
-  ) => React.ReactNode;
-}
-
-function FounderWorkspaceEntryForm({
-  types, onSave, onCancel, initial, titlePlaceholder, contentPlaceholder, extraFields,
-}: EntryFormProps) {
-  const [type, setType] = useState(initial?.type ?? types[0]?.value ?? "");
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [content, setContent] = useState(initial?.content ?? "");
-  const [meta, setMeta] = useState<Record<string, unknown>>((initial?.metadata ?? {}) as Record<string, unknown>);
-
-  const handleSave = () => {
-    if (!title.trim()) return;
-    onSave({ type, title: title.trim(), content: content.trim(), metadata: meta });
-  };
-
-  return (
-    <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 space-y-3">
-      {/* Type selector */}
-      {types.length > 1 && (
-        <div className="flex gap-1.5 flex-wrap">
-          {types.map(t => (
-            <button key={t.value} onClick={() => setType(t.value)}
-              className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
-                type === t.value
-                  ? "bg-orange-500 text-white border-orange-500"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-orange-400")}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-      <Input
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        placeholder={titlePlaceholder ?? "Title…"}
-        className="h-9"
-        autoFocus
-        onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSave()}
-      />
-      <textarea
-        value={content}
-        onChange={e => setContent(e.target.value)}
-        placeholder={contentPlaceholder ?? "Notes, details, or context…"}
-        rows={3}
-        className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-      />
-      {extraFields?.(type, meta, setMeta)}
-      <div className="flex gap-2">
-        <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white font-semibold flex-1" onClick={handleSave}>
-          {initial?.id ? "Save changes" : "Add entry"}
-        </Button>
-        <Button size="sm" variant="outline" className="h-8" onClick={onCancel}>Cancel</Button>
-      </div>
-    </div>
-  );
-}
-
-interface EntryCardProps {
-  entry: FounderEntry;
-  onDelete: (id: string) => void;
-  onEdit: (entry: FounderEntry) => void;
-  onPin: (entry: FounderEntry, pinned: boolean) => void;
-  onTagsChange: (entry: FounderEntry, tags: string[]) => void;
-  onDuplicate: (entry: FounderEntry) => void;
-  typeLabel?: string;
-  renderMeta?: (meta: Record<string, unknown> | null) => React.ReactNode;
-  isRecentlySaved?: boolean;
-  category: string;
-  allEntries?: FounderEntry[];
-}
-
-function FounderWorkspaceEntryCard({
-  entry, onDelete, onEdit, onPin, onTagsChange, onDuplicate,
-  typeLabel, renderMeta, isRecentlySaved, category, allEntries = [],
-}: EntryCardProps) {
-  const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
-  const [showAISuggestions, setShowAISuggestions] = useState(!!isRecentlySaved);
-  const [showRelated, setShowRelated] = useState(false);
-  const [addingTag, setAddingTag] = useState(false);
-  const [tagInput, setTagInput] = useState("");
-  const tagInputRef = useRef<HTMLInputElement>(null);
-
-  const meta = entry.metadata ?? {};
-  const tags = (meta.tags as string[] | undefined) ?? [];
-  const pinned = (meta.pinned as boolean | undefined) ?? false;
-  const suggestions = KB_AI_SUGGESTIONS[category] ?? [];
-
-  // Related: other entries with ≥1 shared tag (cross-section, same loaded pool)
-  const relatedEntries = tags.length > 0
-    ? allEntries.filter(e => {
-        if (e.id === entry.id) return false;
-        const eTags = (e.metadata?.tags as string[] | undefined) ?? [];
-        return eTags.some(t => tags.includes(t));
-      }).slice(0, 3)
-    : [];
-
-  const addTag = () => {
-    const t = tagInput.trim().toLowerCase().replace(/\s+/g, "-");
-    if (t && !tags.includes(t)) onTagsChange(entry, [...tags, t]);
-    setTagInput("");
-    setAddingTag(false);
-  };
-  const removeTag = (tag: string) => onTagsChange(entry, tags.filter(t => t !== tag));
-
-  useEffect(() => { if (addingTag) tagInputRef.current?.focus(); }, [addingTag]);
-
-  const wasEdited = entry.updatedAt && entry.createdAt && entry.updatedAt !== entry.createdAt;
-
-  return (
-    <div className={cn(
-      "rounded-xl border bg-card p-4 space-y-3 transition-all",
-      pinned
-        ? "border-orange-500/40 bg-orange-500/[0.02]"
-        : "border-border hover:border-orange-500/30",
-    )}>
-      {/* ── Header ── */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            {pinned && (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 uppercase tracking-wide">
-                <Pin className="w-2.5 h-2.5 fill-current" />Pinned
-              </span>
-            )}
-            {typeLabel && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/10 text-orange-500 border border-orange-500/20 uppercase tracking-wide">
-                {typeLabel}
-              </span>
-            )}
-            <p className="text-sm font-semibold text-foreground">{entry.title}</p>
-          </div>
-          {entry.content && (
-            <p className={cn("text-sm text-muted-foreground mt-1 whitespace-pre-wrap", !expanded && "line-clamp-2")}>
-              {entry.content}
-            </p>
-          )}
-          {entry.content && entry.content.length > 120 && (
-            <button onClick={() => setExpanded(v => !v)} className="mt-0.5 text-[11px] text-orange-500 hover:underline flex items-center gap-0.5">
-              {expanded ? <><ChevronUp className="w-3 h-3" />Less</> : <><ChevronDown className="w-3 h-3" />More</>}
-            </button>
-          )}
-          {renderMeta?.(entry.metadata)}
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-0.5 shrink-0">
-          <button
-            onClick={() => onPin(entry, !pinned)}
-            title={pinned ? "Unpin" : "Pin to top"}
-            className={cn(
-              "p-1.5 rounded-lg transition-colors",
-              pinned ? "text-orange-500 hover:bg-orange-500/10" : "text-muted-foreground hover:bg-accent hover:text-orange-500",
-            )}
-          >
-            <Pin className={cn("w-3.5 h-3.5", pinned && "fill-current")} />
-          </button>
-          <button onClick={() => onDuplicate(entry)} title="Duplicate" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => onEdit(entry)} title="Edit" className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => onDelete(entry.id)} title="Delete" className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Tags ── */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {tags.map(tag => (
-          <span key={tag} className={cn("flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border", tagColor(tag))}>
-            {tag}
-            <button onClick={() => removeTag(tag)} className="ml-0.5 hover:opacity-60 leading-none">
-              <X className="w-2.5 h-2.5" />
-            </button>
-          </span>
-        ))}
-        {addingTag ? (
-          <input
-            ref={tagInputRef}
-            value={tagInput}
-            onChange={e => setTagInput(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === "Enter") { e.preventDefault(); addTag(); }
-              if (e.key === "Escape") { setAddingTag(false); setTagInput(""); }
-            }}
-            onBlur={addTag}
-            placeholder="tag name…"
-            className="h-5 w-24 px-2 rounded-full border border-orange-500/40 bg-orange-500/5 text-[10px] font-medium focus:outline-none text-orange-600"
-          />
-        ) : (
-          <button
-            onClick={() => setAddingTag(true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border border-dashed border-border text-muted-foreground hover:border-orange-500/40 hover:text-orange-500 transition-colors"
-          >
-            <Tag className="w-2.5 h-2.5" />tag
-          </button>
-        )}
-      </div>
-
-      {/* ── Footer: dates + toggles ── */}
-      <div className="flex items-center justify-between border-t border-border pt-2 text-[10px] text-muted-foreground">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            Created {fmtRelative(entry.createdAt)}
-          </span>
-          {wasEdited && <span>Edited {fmtRelative(entry.updatedAt)}</span>}
-        </div>
-        <div className="flex items-center gap-3">
-          {relatedEntries.length > 0 && (
-            <button onClick={() => setShowRelated(v => !v)} className="flex items-center gap-1 hover:text-foreground transition-colors">
-              {relatedEntries.length} related
-              <ChevronDown className={cn("w-3 h-3 transition-transform", showRelated && "rotate-180")} />
-            </button>
-          )}
-          {suggestions.length > 0 && (
-            <button
-              onClick={() => setShowAISuggestions(v => !v)}
-              className={cn("flex items-center gap-1 transition-colors", showAISuggestions ? "text-orange-500" : "hover:text-foreground")}
-            >
-              <Zap className="w-3 h-3" />AI actions
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Related Entries ── */}
-      {showRelated && relatedEntries.length > 0 && (
-        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Related Entries</p>
-          {relatedEntries.map(rel => {
-            const relTags = (rel.metadata?.tags as string[] | undefined) ?? [];
-            const shared = relTags.filter(t => tags.includes(t));
-            return (
-              <div key={rel.id} className="flex items-center gap-2">
-                <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-muted text-muted-foreground uppercase">
-                  {(CATEGORY_LABELS[rel.category]?.label ?? rel.category).replace("-", " ")}
-                </span>
-                <span className="text-xs text-foreground flex-1 truncate">{rel.title}</span>
-                {shared.length > 0 && (
-                  <span className="shrink-0 text-[9px] text-muted-foreground">#{shared[0]}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── AI Suggestions ── */}
-      {showAISuggestions && suggestions.length > 0 && (
-        <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-3 space-y-2">
-          <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wide flex items-center gap-1">
-            <Zap className="w-3 h-3" />What to do with this
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {suggestions.map(s => (
-              <button
-                key={s.href + s.label}
-                onClick={() => router.push(s.href)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-medium text-foreground hover:border-orange-500/40 hover:bg-orange-500/5 transition-all"
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface SectionProps {
-  category: string;
-  types: TypeOption[];
-  heading: string;
-  description: string;
-  titlePlaceholder?: string;
-  contentPlaceholder?: string;
-  extraFields?: EntryFormProps["extraFields"];
-  renderMeta?: EntryCardProps["renderMeta"];
-}
-
-function FounderWorkspaceSection({
-  category, types, heading, description, titlePlaceholder, contentPlaceholder, extraFields, renderMeta,
-}: SectionProps) {
-  const [entries, setEntries] = useState<FounderEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<FounderEntry | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [searchQ, setSearchQ] = useState("");
-
-  const fetchEntries = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/founder-workspace?category=${encodeURIComponent(category)}`);
-      if (!res.ok) throw new Error("Failed to load");
-      const data = await res.json() as FounderEntry[];
-      setEntries(data);
-    } catch {
-      setError("Could not load entries");
-    } finally {
-      setLoading(false);
-    }
-  }, [category]);
-
-  useEffect(() => { fetchEntries(); }, [fetchEntries]);
-
-  const handleSave = async (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => {
-    try {
-      if (editingEntry) {
-        const res = await fetch("/api/founder-workspace", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingEntry.id, ...data }),
-        });
-        if (!res.ok) throw new Error("Failed to update");
-        const updated = await res.json() as FounderEntry;
-        setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-        setEditingEntry(null);
-      } else {
-        const res = await fetch("/api/founder-workspace", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ category, ...data }),
-        });
-        if (!res.ok) throw new Error("Failed to create");
-        const created = await res.json() as FounderEntry;
-        setEntries(prev => [created, ...prev]);
-        setShowForm(false);
-        setRecentlySavedId(created.id);
-        setTimeout(() => setRecentlySavedId(null), 30000);
-      }
-    } catch {
-      setError("Failed to save entry");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this entry?")) return;
-    try {
-      await fetch(`/api/founder-workspace?id=${id}`, { method: "DELETE" });
-      setEntries(prev => prev.filter(e => e.id !== id));
-    } catch {
-      setError("Failed to delete");
-    }
-  };
-
-  const handleEdit = (entry: FounderEntry) => { setEditingEntry(entry); setShowForm(false); };
-
-  const handlePin = async (entry: FounderEntry, pinned: boolean) => {
-    const newMeta = { ...(entry.metadata ?? {}), pinned };
-    try {
-      const res = await fetch("/api/founder-workspace", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: entry.id, metadata: newMeta }),
-      });
-      if (!res.ok) throw new Error();
-      const updated = await res.json() as FounderEntry;
-      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-    } catch { setError("Failed to update pin"); }
-  };
-
-  const handleTagsChange = async (entry: FounderEntry, tags: string[]) => {
-    const newMeta = { ...(entry.metadata ?? {}), tags };
-    try {
-      const res = await fetch("/api/founder-workspace", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: entry.id, metadata: newMeta }),
-      });
-      if (!res.ok) throw new Error();
-      const updated = await res.json() as FounderEntry;
-      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-    } catch { setError("Failed to update tags"); }
-  };
-
-  const handleDuplicate = async (entry: FounderEntry) => {
-    try {
-      const res = await fetch("/api/founder-workspace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category,
-          type: entry.type,
-          title: `${entry.title} (copy)`,
-          content: entry.content,
-          metadata: { ...(entry.metadata ?? {}), pinned: false },
-        }),
-      });
-      if (!res.ok) throw new Error();
-      const created = await res.json() as FounderEntry;
-      setEntries(prev => [created, ...prev]);
-    } catch { setError("Failed to duplicate"); }
-  };
-
-  const typeLabel = (type: string) => types.find(t => t.value === type)?.label;
-
-  // Sort: pinned first, then newest first
-  const sorted = [...entries].sort((a, b) => {
-    const ap = (a.metadata?.pinned as boolean) ?? false;
-    const bp = (b.metadata?.pinned as boolean) ?? false;
-    if (ap && !bp) return -1;
-    if (!ap && bp) return 1;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
-  const filtered = sorted
-    .filter(e => typeFilter === "all" || e.type === typeFilter)
-    .filter(e => !searchQ || e.title.toLowerCase().includes(searchQ.toLowerCase()) || e.content.toLowerCase().includes(searchQ.toLowerCase()));
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-base font-bold text-foreground">{heading}</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Inline search */}
-          {entries.length > 2 && !showForm && !editingEntry && (
-            <div className="relative">
-              <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-              <input
-                value={searchQ}
-                onChange={e => setSearchQ(e.target.value)}
-                placeholder="Search…"
-                className="pl-7 pr-2 h-8 text-xs rounded-xl border border-border bg-background focus:outline-none focus:border-orange-400 transition-colors w-36"
-              />
-            </div>
-          )}
-          {!showForm && !editingEntry && (
-            <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white" onClick={() => setShowForm(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" />Add
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Type filter chips */}
-      {types.length > 1 && entries.length > 1 && (
-        <div className="flex gap-1.5 flex-wrap">
-          <button
-            onClick={() => setTypeFilter("all")}
-            className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
-              typeFilter === "all" ? "bg-orange-500 text-white border-orange-500" : "border-border text-muted-foreground hover:border-orange-400 hover:text-foreground")}
-          >
-            All
-          </button>
-          {types.map(t => (
-            <button key={t.value} onClick={() => setTypeFilter(t.value)}
-              className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
-                typeFilter === t.value ? "bg-orange-500 text-white border-orange-500" : "border-border text-muted-foreground hover:border-orange-400 hover:text-foreground")}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" />{error}
-          <button className="ml-auto underline" onClick={() => setError(null)}>Dismiss</button>
-        </div>
-      )}
-
-      {showForm && !editingEntry && (
-        <FounderWorkspaceEntryForm
-          types={types}
-          onSave={handleSave}
-          onCancel={() => setShowForm(false)}
-          titlePlaceholder={titlePlaceholder}
-          contentPlaceholder={contentPlaceholder}
-          extraFields={extraFields}
-        />
-      )}
-
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="w-4 h-4 animate-spin" />Loading…
-        </div>
-      ) : filtered.length === 0 && !showForm ? (
-        <button onClick={() => setShowForm(true)}
-          className="w-full py-8 rounded-2xl border border-dashed border-border text-sm text-muted-foreground hover:text-orange-500 hover:border-orange-500/40 hover:bg-orange-500/5 transition-all flex flex-col items-center gap-2">
-          <Plus className="w-5 h-5" />
-          <span>Add your first entry</span>
-        </button>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(entry => (
-            editingEntry?.id === entry.id ? (
-              <FounderWorkspaceEntryForm
-                key={entry.id}
-                types={types}
-                onSave={handleSave}
-                onCancel={() => setEditingEntry(null)}
-                initial={entry}
-                titlePlaceholder={titlePlaceholder}
-                contentPlaceholder={contentPlaceholder}
-                extraFields={extraFields}
-              />
-            ) : (
-              <FounderWorkspaceEntryCard
-                key={entry.id}
-                entry={entry}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-                onPin={handlePin}
-                onTagsChange={handleTagsChange}
-                onDuplicate={handleDuplicate}
-                typeLabel={typeLabel(entry.type)}
-                renderMeta={renderMeta}
-                isRecentlySaved={entry.id === recentlySavedId}
-                category={category}
-                allEntries={entries}
-              />
-            )
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// FOUNDER OS — OVERVIEW HUB + REDESIGNED TABS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── Founder OS Overview ─────────────────────────────────────────────────────
-
-function FounderOSOverview({ onTabChange }: { onTabChange: (tab: WorkspaceTab) => void }) {
-  const [allEntries, setAllEntries] = useState<FounderEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/founder-workspace")
-      .then(r => r.ok ? r.json() : [])
-      .then((data: FounderEntry[]) => setAllEntries(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const CATS = Object.entries(CATEGORY_LABELS) as [string, { label: string; icon: React.ComponentType<{ className?: string }> }][];
-  const countByCategory = CATS.reduce<Record<string, number>>((acc, [id]) => {
-    acc[id] = allEntries.filter(e => e.category === id).length;
-    return acc;
-  }, {});
-  const totalEntries = allEntries.length;
-  const recentEntries = [...allEntries]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 6);
-  const runningExperiments = allEntries.filter(
-    e => e.category === "experiments" && (e.metadata?.status as string) === "running"
-  );
-  const inFlightIdeas = allEntries.filter(
-    e => e.category === "content-ideas" &&
-      !["posted", "performed-well"].includes((e.metadata?.status as string) ?? "idea")
-  );
-
-  return (
-    <div className="space-y-8 max-w-6xl">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-black text-foreground flex items-center gap-2">
-            <Brain className="w-5 h-5 text-orange-500" />
-            Founder OS
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            The brain of Content Flywheel — knowledge, experiments, and systems in one place
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted/60 border border-border text-sm">
-          <span className="font-black text-foreground tabular-nums">{loading ? "…" : totalEntries}</span>
-          <span className="text-muted-foreground text-xs">knowledge items</span>
-        </div>
-      </div>
-
-      {/* Knowledge Base stats — one tile per section */}
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Knowledge Base</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {CATS.map(([id, meta]) => {
-            const CatIcon = meta.icon;
-            const count = countByCategory[id] ?? 0;
-            return (
-              <button key={id} onClick={() => onTabChange(id as WorkspaceTab)}
-                className="flex flex-col gap-3 p-4 rounded-2xl border border-border bg-card hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-left group">
-                <div className="flex items-start justify-between">
-                  <div className="w-8 h-8 rounded-xl bg-muted/60 flex items-center justify-center group-hover:bg-orange-500/10 transition-colors">
-                    <CatIcon className="w-4 h-4 text-muted-foreground group-hover:text-orange-500 transition-colors" />
-                  </div>
-                  <span className="text-xl font-black text-foreground tabular-nums">{loading ? "…" : count}</span>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-foreground/80 group-hover:text-foreground transition-colors leading-tight">{meta.label}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{count === 0 ? "Empty — add first" : `${count} item${count !== 1 ? "s" : ""}`}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Knowledge Pipeline */}
-      {(() => {
-        const withSummary = allEntries.filter(e => !!e.aiSummary).length;
-        const withUsage   = allEntries.filter(e => (e.usageCount ?? 0) > 0).length;
-        const highValue   = allEntries.filter(e => (e.usageCount ?? 0) >= 3).length;
-        const pipelineStages = [
-          { label: "Captured",      count: totalEntries,  Icon: BookOpen,   bg: "bg-slate-500/10",  color: "text-slate-500"  },
-          { label: "AI Summarised", count: withSummary,   Icon: Sparkles,   bg: "bg-purple-500/10", color: "text-purple-500" },
-          { label: "Searchable",    count: withSummary,   Icon: Search,     bg: "bg-blue-500/10",   color: "text-blue-500"   },
-          { label: "Coach Uses",    count: withUsage,     Icon: Brain,      bg: "bg-orange-500/10", color: "text-orange-500" },
-          { label: "High-Value",    count: highValue,     Icon: TrendingUp, bg: "bg-green-500/10",  color: "text-green-500"  },
-        ] as const;
-
-        const SOURCE_META: Record<string, { label: string; bar: string }> = {
-          manual:     { label: "Manual",   bar: "bg-slate-400"  },
-          research:   { label: "Research", bar: "bg-purple-500" },
-          coach:      { label: "Coach",    bar: "bg-blue-500"   },
-          analytics:  { label: "Analytics",bar: "bg-green-500"  },
-          experiment: { label: "Experiment",bar:"bg-orange-500" },
-        };
-        const sourceCounts = Object.entries(SOURCE_META).map(([src, meta]) => ({
-          ...meta,
-          src,
-          count: allEntries.filter(e => (e.source ?? "manual") === src).length,
-        }));
-        const maxSrc = Math.max(...sourceCounts.map(s => s.count), 1);
-        const topReferenced = [...allEntries]
-          .filter(e => (e.usageCount ?? 0) > 0)
-          .sort((a, b) => (b.usageCount ?? 0) - (a.usageCount ?? 0))
-          .slice(0, 5);
-
-        return (
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Knowledge Pipeline</p>
-            <div className="rounded-2xl border border-border bg-card p-5">
-              {/* Pipeline flow */}
-              <div className="flex items-start overflow-x-auto pb-2 gap-0">
-                {pipelineStages.map((stage, idx) => (
-                  <div key={stage.label} className="flex items-start shrink-0">
-                    <div className="flex flex-col items-center min-w-[90px] px-2">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${stage.bg}`}>
-                        <stage.Icon className={`w-4 h-4 ${stage.color}`} />
-                      </div>
-                      <span className="text-base font-black tabular-nums text-foreground">
-                        {loading ? "…" : stage.count}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground text-center leading-tight mt-0.5">{stage.label}</span>
-                    </div>
-                    {idx < pipelineStages.length - 1 && (
-                      <div className="flex items-center pt-4 shrink-0">
-                        <div className="w-5 h-px bg-border" />
-                        <ChevronRight className="w-3 h-3 text-muted-foreground/40 -ml-1" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Source breakdown + most referenced */}
-              <div className="mt-4 pt-4 border-t border-border grid sm:grid-cols-2 gap-6">
-                {/* Source breakdown */}
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">By Source</p>
-                  <div className="space-y-2">
-                    {sourceCounts.map(s => (
-                      <div key={s.src} className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground w-16 truncate">{s.label}</span>
-                        <div className="flex-1 h-1.5 bg-muted/60 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${s.bar}`}
-                            style={{ width: `${Math.round((s.count / maxSrc) * 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-semibold text-foreground tabular-nums w-3 text-right">{s.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Most referenced by AI */}
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Most Referenced by AI</p>
-                  {loading ? (
-                    <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
-                  ) : topReferenced.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      No entries referenced yet — the Coach will populate this as it uses your knowledge.
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {topReferenced.map(e => (
-                        <div key={e.id} className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
-                          <span className="text-xs text-foreground/80 flex-1 truncate">{e.title}</span>
-                          <span className="text-[10px] font-bold text-orange-500 tabular-nums">
-                            {e.usageCount}×
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Status snapshot — 3 panels */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        {/* Running Experiments */}
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            {runningExperiments.length > 0 && <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />}
-            <FlaskConical className="w-4 h-4 text-blue-500" />
-            <p className="text-sm font-bold text-foreground">Running Experiments</p>
-            <span className="ml-auto text-sm font-black text-blue-500 tabular-nums">{loading ? "…" : runningExperiments.length}</span>
-          </div>
-          {loading ? (
-            <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
-          ) : runningExperiments.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-xs text-muted-foreground">No experiments running.</p>
-              <button onClick={() => onTabChange("experiments")} className="mt-2 text-xs text-orange-500 font-semibold">Start an experiment →</button>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {runningExperiments.slice(0, 5).map(e => (
-                <button key={e.id} onClick={() => onTabChange("experiments")}
-                  className="w-full text-left text-xs text-foreground/80 py-1.5 px-2 rounded-lg hover:bg-accent transition-colors truncate block">
-                  {e.title}
-                </button>
-              ))}
-              {runningExperiments.length > 5 && (
-                <button onClick={() => onTabChange("experiments")} className="text-xs text-orange-500 font-semibold pt-1 block">
-                  +{runningExperiments.length - 5} more →
-                </button>
-              )}
-            </div>
-          )}
-          <button onClick={() => onTabChange("experiments")} className="mt-4 text-xs text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-            Open lab <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        {/* Ideas in Pipeline */}
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Lightbulb className="w-4 h-4 text-amber-500" />
-            <p className="text-sm font-bold text-foreground">Ideas in Pipeline</p>
-            <span className="ml-auto text-sm font-black text-amber-500 tabular-nums">{loading ? "…" : inFlightIdeas.length}</span>
-          </div>
-          {loading ? (
-            <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
-          ) : inFlightIdeas.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-xs text-muted-foreground">No ideas in progress.</p>
-              <button onClick={() => onTabChange("content-ideas")} className="mt-2 text-xs text-orange-500 font-semibold">Open idea board →</button>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {inFlightIdeas.slice(0, 5).map(e => (
-                <button key={e.id} onClick={() => onTabChange("content-ideas")}
-                  className="w-full flex items-center gap-2 text-left py-1.5 px-2 rounded-lg hover:bg-accent transition-colors">
-                  <span className="text-xs text-foreground/80 flex-1 truncate">{e.title}</span>
-                  {!!e.metadata?.status && (
-                    <span className="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full capitalize shrink-0">
-                      {String(e.metadata.status).replace("-", " ")}
-                    </span>
-                  )}
-                </button>
-              ))}
-              {inFlightIdeas.length > 5 && (
-                <button onClick={() => onTabChange("content-ideas")} className="text-xs text-orange-500 font-semibold pt-1 block">
-                  +{inFlightIdeas.length - 5} more →
-                </button>
-              )}
-            </div>
-          )}
-          <button onClick={() => onTabChange("content-ideas")} className="mt-4 text-xs text-orange-500 hover:text-orange-600 font-semibold flex items-center gap-1">
-            Open board <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        {/* Recently Added */}
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <p className="text-sm font-bold text-foreground">Recently Added</p>
-          </div>
-          {loading ? (
-            <div className="text-xs text-muted-foreground animate-pulse">Loading…</div>
-          ) : recentEntries.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-xs text-muted-foreground">Start capturing knowledge to Founder OS</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {recentEntries.map(e => {
-                const catMeta = CATEGORY_LABELS[e.category];
-                const CatIcon = catMeta?.icon ?? BookOpen;
-                return (
-                  <button key={e.id} onClick={() => onTabChange(e.category as WorkspaceTab)}
-                    className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-accent transition-colors text-left group">
-                    <CatIcon className="w-3 h-3 text-muted-foreground/50 group-hover:text-orange-500 shrink-0 transition-colors" />
-                    <span className="text-xs text-foreground/80 flex-1 truncate group-hover:text-foreground transition-colors">{e.title}</span>
-                    <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums">{fmtRelative(e.createdAt)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Content Ideas Kanban ─────────────────────────────────────────────────────
-
-const CONTENT_IDEA_STAGES = [
-  { status: "idea",           label: "💡 Idea",           color: "text-slate-500",                        bg: "bg-slate-500/10",  dot: "bg-slate-400" },
-  { status: "researching",    label: "🔬 Researching",    color: "text-purple-600 dark:text-purple-400",  bg: "bg-purple-500/10", dot: "bg-purple-400" },
-  { status: "writing",        label: "✍️ Writing",         color: "text-blue-600 dark:text-blue-400",      bg: "bg-blue-500/10",   dot: "bg-blue-400" },
-  { status: "recording",      label: "🎬 Recording",      color: "text-orange-600 dark:text-orange-400",  bg: "bg-orange-500/10", dot: "bg-orange-400" },
-  { status: "posted",         label: "📤 Posted",         color: "text-green-600 dark:text-green-400",    bg: "bg-green-500/10",  dot: "bg-green-400" },
-  { status: "performed-well", label: "🏆 Performed Well", color: "text-amber-600 dark:text-amber-400",    bg: "bg-amber-500/10",  dot: "bg-amber-400" },
-] as const;
-
-const CONTENT_IDEA_TYPES = [
-  { value: "hook",         label: "Hook" },
-  { value: "angle",        label: "Angle" },
-  { value: "script",       label: "Script" },
-  { value: "viral-format", label: "Viral Format" },
-  { value: "series",       label: "Series Idea" },
-];
-
-function ContentIdeasKanbanTab() {
-  const [entries, setEntries] = useState<FounderEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<FounderEntry | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQ, setSearchQ] = useState("");
-  const [activeStage, setActiveStage] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/founder-workspace?category=content-ideas")
-      .then(r => r.ok ? r.json() : [])
-      .then((data: FounderEntry[]) => setEntries(data))
-      .catch(() => setError("Could not load ideas"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const moveStage = async (entry: FounderEntry, newStatus: string) => {
-    const newMeta = { ...(entry.metadata ?? {}), status: newStatus };
-    try {
-      const res = await fetch("/api/founder-workspace", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: entry.id, metadata: newMeta }),
-      });
-      const updated = await res.json() as FounderEntry;
-      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-    } catch { setError("Failed to update status"); }
-  };
-
-  const handleSave = async (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => {
-    try {
-      if (editingEntry) {
-        const res = await fetch("/api/founder-workspace", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingEntry.id, ...data }),
-        });
-        const updated = await res.json() as FounderEntry;
-        setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-        setEditingEntry(null);
-      } else {
-        const res = await fetch("/api/founder-workspace", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ category: "content-ideas", ...data }),
-        });
-        const created = await res.json() as FounderEntry;
-        setEntries(prev => [created, ...prev]);
-        setShowForm(false);
-      }
-    } catch { setError("Failed to save idea"); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this idea?")) return;
-    try {
-      await fetch(`/api/founder-workspace?id=${id}`, { method: "DELETE" });
-      setEntries(prev => prev.filter(e => e.id !== id));
-    } catch { setError("Failed to delete"); }
-  };
-
-  const filtered = entries.filter(e =>
-    !searchQ || e.title.toLowerCase().includes(searchQ.toLowerCase()) || e.content.toLowerCase().includes(searchQ.toLowerCase())
-  );
-  const stagesToShow = activeStage ? CONTENT_IDEA_STAGES.filter(s => s.status === activeStage) : CONTENT_IDEA_STAGES;
-
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-            <Lightbulb className="w-4 h-4 text-amber-500" />
-            Content Ideas Board
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Move ideas from concept to published — click arrows to advance stage</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search ideas…"
-              className="pl-7 pr-3 h-8 text-xs rounded-xl border border-border bg-background focus:outline-none focus:border-orange-400 w-40" />
-          </div>
-          <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white shrink-0" onClick={() => setShowForm(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" />New Idea
-          </Button>
-        </div>
-      </div>
-
-      {/* Stage filter chips */}
-      <div className="flex gap-1.5 flex-wrap">
-        <button onClick={() => setActiveStage(null)}
-          className={cn("px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
-            !activeStage ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:text-foreground hover:border-foreground")}>
-          All · {filtered.length}
-        </button>
-        {CONTENT_IDEA_STAGES.map(stage => {
-          const count = filtered.filter(e => (e.metadata?.status ?? "idea") === stage.status).length;
-          return (
-            <button key={stage.status} onClick={() => setActiveStage(activeStage === stage.status ? null : stage.status)}
-              className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
-                activeStage === stage.status
-                  ? `${stage.bg} ${stage.color} border-current`
-                  : "border-border text-muted-foreground hover:text-foreground")}>
-              <span className={cn("w-1.5 h-1.5 rounded-full", stage.dot)} />
-              {stage.label.split(" ").slice(1).join(" ")} · {count}
-            </button>
-          );
-        })}
-      </div>
-
-      {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5" />{error}
-          <button className="ml-auto underline" onClick={() => setError(null)}>Dismiss</button>
-        </div>
-      )}
-
-      {showForm && (
-        <FounderWorkspaceEntryForm
-          types={CONTENT_IDEA_TYPES}
-          onSave={handleSave}
-          onCancel={() => setShowForm(false)}
-          titlePlaceholder="e.g. 'The reason your meal prep fails has nothing to do with motivation'"
-          contentPlaceholder="Full idea, script outline, or angle description…"
-          extraFields={(_type, meta, setMeta) => (
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Platform (optional)</label>
-              <Input
-                value={typeof meta.platform === "string" ? meta.platform : ""}
-                onChange={e => setMeta({ ...meta, platform: e.target.value })}
-                placeholder="e.g. TikTok, Instagram, Pinterest"
-                className="h-8 text-xs"
-              />
-            </div>
-          )}
-        />
-      )}
-
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="w-4 h-4 animate-spin" />Loading ideas…
-        </div>
-      ) : (
-        <div className={cn("grid gap-3", activeStage ? "grid-cols-1 max-w-sm" : "grid-cols-2 lg:grid-cols-3 xl:grid-cols-6")}>
-          {stagesToShow.map(stage => {
-            const stageEntries = filtered.filter(e => (e.metadata?.status ?? "idea") === stage.status);
-            const stageIdx = CONTENT_IDEA_STAGES.findIndex(s => s.status === stage.status);
-            return (
-              <div key={stage.status} className="rounded-2xl border border-border bg-muted/20 p-3 min-h-[140px]">
-                <div className="flex items-center justify-between mb-3">
-                  <p className={cn("text-[10px] font-black uppercase tracking-widest", stage.color)}>{stage.label}</p>
-                  {stageEntries.length > 0 && (
-                    <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full tabular-nums", stage.bg, stage.color)}>
-                      {stageEntries.length}
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {stageEntries.map(entry => (
-                    editingEntry?.id === entry.id ? (
-                      <FounderWorkspaceEntryForm
-                        key={entry.id}
-                        types={CONTENT_IDEA_TYPES}
-                        onSave={handleSave}
-                        onCancel={() => setEditingEntry(null)}
-                        initial={entry}
-                        titlePlaceholder="Idea title…"
-                        contentPlaceholder="Details…"
-                      />
-                    ) : (
-                      <div key={entry.id}
-                        className="bg-background border border-border/60 rounded-xl p-3 group hover:border-orange-500/30 hover:shadow-sm transition-all">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <span className="text-[9px] font-bold bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                            {CONTENT_IDEA_TYPES.find(t => t.value === entry.type)?.label ?? entry.type}
-                          </span>
-                          {(entry.metadata?.pinned as boolean) && <Pin className="w-2.5 h-2.5 text-orange-500 fill-current ml-auto" />}
-                        </div>
-                        <p className="text-xs font-semibold text-foreground leading-snug line-clamp-3">{entry.title}</p>
-                        {!!entry.metadata?.platform && (
-                          <span className="mt-1.5 inline-block text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                            {String(entry.metadata.platform)}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-0.5 mt-2 pt-2 border-t border-border/40">
-                          {stageIdx > 0 && (
-                            <button onClick={() => moveStage(entry, CONTENT_IDEA_STAGES[stageIdx - 1].status)}
-                              title={`Move to ${CONTENT_IDEA_STAGES[stageIdx - 1].label}`}
-                              className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-                              <ChevronLeft className="w-3 h-3" />
-                            </button>
-                          )}
-                          <div className="flex-1" />
-                          <button onClick={() => setEditingEntry(entry)}
-                            className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100">
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          <button onClick={() => handleDelete(entry.id)}
-                            className="p-1 rounded-md hover:bg-red-500/10 transition-colors text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                          {stageIdx < CONTENT_IDEA_STAGES.length - 1 && (
-                            <button onClick={() => moveStage(entry, CONTENT_IDEA_STAGES[stageIdx + 1].status)}
-                              title={`Move to ${CONTENT_IDEA_STAGES[stageIdx + 1].label}`}
-                              className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-orange-500">
-                              <ChevronRight className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  ))}
-                </div>
-                {stageEntries.length === 0 && (
-                  <div className="py-4 text-center">
-                    <p className="text-[10px] text-muted-foreground/30">Empty</p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Experiments Business Lab ─────────────────────────────────────────────────
-
-const EXPERIMENT_LAB_STAGES = [
-  { status: "running",  label: "🔬 Running",    color: "text-blue-600 dark:text-blue-400",   bg: "bg-blue-500/10",  border: "border-blue-500/30" },
-  { status: "won",      label: "🏆 Won",         color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10", border: "border-green-500/30" },
-  { status: "failed",   label: "❌ Failed",      color: "text-red-500",                        bg: "bg-red-500/10",   border: "border-red-500/30" },
-  { status: "archived", label: "📦 Archived",    color: "text-muted-foreground",               bg: "bg-muted",        border: "border-border" },
-] as const;
-
-function ExperimentsLabTab() {
-  const [entries, setEntries] = useState<FounderEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<FounderEntry | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQ, setSearchQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-
-  useEffect(() => {
-    fetch("/api/founder-workspace?category=experiments")
-      .then(r => r.ok ? r.json() : [])
-      .then((data: FounderEntry[]) => setEntries(data))
-      .catch(() => setError("Could not load experiments"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const EXP_TYPES = [{ value: "experiment", label: "Experiment" }];
-
-  const handleSave = async (data: { type: string; title: string; content: string; metadata?: Record<string, unknown> }) => {
-    try {
-      if (editingEntry) {
-        const res = await fetch("/api/founder-workspace", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingEntry.id, ...data }),
-        });
-        const updated = await res.json() as FounderEntry;
-        setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-        setEditingEntry(null);
-      } else {
-        const res = await fetch("/api/founder-workspace", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ category: "experiments", ...data }),
-        });
-        const created = await res.json() as FounderEntry;
-        setEntries(prev => [created, ...prev]);
-        setShowForm(false);
-      }
-    } catch { setError("Failed to save"); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this experiment?")) return;
-    try {
-      await fetch(`/api/founder-workspace?id=${id}`, { method: "DELETE" });
-      setEntries(prev => prev.filter(e => e.id !== id));
-    } catch { setError("Failed to delete"); }
-  };
-
-  const filtered = entries.filter(e => {
-    const q = searchQ.toLowerCase();
-    const matchQ = !q || e.title.toLowerCase().includes(q) || e.content.toLowerCase().includes(q);
-    const matchS = statusFilter === "all" || (e.metadata?.status ?? "running") === statusFilter;
-    return matchQ && matchS;
-  });
-
-  const counts = EXPERIMENT_LAB_STAGES.reduce<Record<string, number>>((acc, s) => {
-    acc[s.status] = entries.filter(e => (e.metadata?.status ?? "running") === s.status).length;
-    return acc;
-  }, {});
-
-  return (
-    <div className="space-y-5 max-w-4xl">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-            <FlaskConical className="w-4 h-4 text-blue-500" />
-            Business Lab
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Treat the business like a lab — every hypothesis is a chance to learn</p>
-        </div>
-        <Button size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white shrink-0" onClick={() => setShowForm(true)}>
-          <Plus className="w-3.5 h-3.5 mr-1" />New Experiment
-        </Button>
-      </div>
-
-      {/* Status stat tiles */}
-      <div className="grid grid-cols-4 gap-3">
-        {EXPERIMENT_LAB_STAGES.map(stage => (
-          <button key={stage.status}
-            onClick={() => setStatusFilter(statusFilter === stage.status ? "all" : stage.status)}
-            className={cn("flex flex-col gap-1 p-3.5 rounded-2xl border transition-all text-left",
-              statusFilter === stage.status
-                ? `${stage.bg} ${stage.border} ${stage.color}`
-                : "border-border bg-card hover:border-orange-500/20 hover:bg-orange-500/5")}>
-            <span className={cn("text-2xl font-black tabular-nums", statusFilter === stage.status ? stage.color : "text-foreground")}>
-              {counts[stage.status] ?? 0}
-            </span>
-            <span className={cn("text-[10px] font-semibold", statusFilter === stage.status ? stage.color : "text-muted-foreground")}>
-              {stage.label}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-        <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search experiments…"
-          className="pl-8 pr-3 h-8 w-full text-xs rounded-xl border border-border bg-background focus:outline-none focus:border-orange-400 transition-colors" />
-      </div>
-
-      {error && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-500 flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5" />{error}
-          <button className="ml-auto underline" onClick={() => setError(null)}>Dismiss</button>
-        </div>
-      )}
-
-      {showForm && (
-        <FounderWorkspaceEntryForm
-          types={EXP_TYPES}
-          onSave={handleSave}
-          onCancel={() => setShowForm(false)}
-          titlePlaceholder="Hypothesis: e.g. Adding urgency to the CTA will lift conversions by 20%"
-          contentPlaceholder="What you're testing, how you're measuring it, what you expect…"
-          extraFields={(_type, meta, setMeta) => (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Goal / Success metric</label>
-                  <Input
-                    value={typeof meta.goal === "string" ? meta.goal : ""}
-                    onChange={e => setMeta({ ...meta, goal: e.target.value })}
-                    placeholder="e.g. +20% CTR on bio link"
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Status</label>
-                  <div className="flex gap-1">
-                    {EXPERIMENT_LAB_STAGES.slice(0, 3).map(s => (
-                      <button key={s.status} onClick={() => setMeta({ ...meta, status: s.status })}
-                        className={cn("flex-1 py-1 rounded-lg text-[10px] font-bold border capitalize transition-all",
-                          meta.status === s.status
-                            ? `${s.bg} ${s.border} ${s.color}`
-                            : "border-border text-muted-foreground hover:border-orange-400")}>
-                        {s.status}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Result (fill in when done)</label>
-                <Input
-                  value={typeof meta.result === "string" ? meta.result : ""}
-                  onChange={e => setMeta({ ...meta, result: e.target.value })}
-                  placeholder="e.g. CTR went from 1.2% to 3.8% — rolling out"
-                  className="h-8 text-xs"
-                />
-              </div>
-            </div>
-          )}
-        />
-      )}
-
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="w-4 h-4 animate-spin" />Loading experiments…
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="py-12 text-center">
-          <FlaskConical className="w-8 h-8 text-muted-foreground/20 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground mb-3">
-            {searchQ || statusFilter !== "all"
-              ? "No experiments match your filter"
-              : "No experiments yet — start treating the business like a lab"}
-          </p>
-          {!showForm && (
-            <Button size="sm" onClick={() => setShowForm(true)} className="bg-orange-500 hover:bg-orange-600 text-white">
-              + Run First Experiment
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {EXPERIMENT_LAB_STAGES
-            .filter(s => filtered.some(e => (e.metadata?.status ?? "running") === s.status))
-            .map(stage => {
-              const stageEntries = filtered.filter(e => (e.metadata?.status ?? "running") === stage.status);
-              return (
-                <div key={stage.status}>
-                  <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl mb-2", stage.bg)}>
-                    <span className={cn("text-xs font-black", stage.color)}>{stage.label}</span>
-                    <span className={cn("text-xs font-black ml-auto tabular-nums", stage.color)}>{stageEntries.length}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {stageEntries.map(entry => (
-                      editingEntry?.id === entry.id ? (
-                        <FounderWorkspaceEntryForm
-                          key={entry.id}
-                          types={EXP_TYPES}
-                          onSave={handleSave}
-                          onCancel={() => setEditingEntry(null)}
-                          initial={entry}
-                          titlePlaceholder="Hypothesis…"
-                          contentPlaceholder="Details…"
-                        />
-                      ) : (
-                        <div key={entry.id}
-                          className={cn("rounded-2xl border p-4 group hover:shadow-sm transition-all bg-card", stage.border)}>
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm font-semibold text-foreground leading-snug flex-1">{entry.title}</p>
-                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => setEditingEntry(entry)}
-                                className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => handleDelete(entry.id)}
-                                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-muted-foreground hover:text-red-500">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                          {entry.content && (
-                            <p className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-2">{entry.content}</p>
-                          )}
-                          <div className="flex items-center gap-3 mt-3 flex-wrap">
-                            {!!entry.metadata?.goal && (
-                              <span className="text-[11px] text-muted-foreground">🎯 {String(entry.metadata.goal)}</span>
-                            )}
-                            {!!entry.metadata?.result && (
-                              <span className={cn("text-[11px] font-semibold", stage.color)}>
-                                📊 {String(entry.metadata.result)}
-                              </span>
-                            )}
-                            <span className="ml-auto text-[10px] text-muted-foreground/40 tabular-nums">{fmtRelative(entry.createdAt)}</span>
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// FOUNDER OS — REMAINING ADMIN TAB COMPONENTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ResearchTab is now imported from @/components/workspace/ResearchTab
-// — it renders the AI Research Assistant experience
-
-function MarketingPsychologyTab() {
-  return (
-    <div className="max-w-2xl space-y-8">
-      <FounderWorkspaceSection
-        category="marketing-psychology"
-        types={[
-          { value: "trigger", label: "Trigger" },
-          { value: "principle", label: "Principle" },
-          { value: "behavior", label: "Buyer Behavior" },
-          { value: "framework", label: "Framework" },
-        ]}
-        heading="Marketing Psychology"
-        description="Psychological triggers, buyer behaviors, and conversion principles that inform your strategy."
-        titlePlaceholder="e.g. Loss aversion — fear of losing beats desire to gain"
-        contentPlaceholder="How this applies to your product or audience…"
-        extraFields={(_type, meta, setMeta) => (
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Real-world example (optional)</label>
-            <Input
-              value={typeof meta.example === "string" ? meta.example : ""}
-              onChange={e => setMeta({ ...meta, example: e.target.value })}
-              placeholder="e.g. 'Only 3 left' on the product page increased conversions"
-              className="h-8 text-xs"
-            />
-          </div>
-        )}
-        renderMeta={meta => meta?.example ? (
-          <p className="mt-1 text-[11px] text-muted-foreground italic">Example: {String(meta.example)}</p>
-        ) : null}
-      />
-    </div>
-  );
-}
-
-function CopywritingTab() {
-  return (
-    <div className="max-w-2xl space-y-8">
-      <FounderWorkspaceSection
-        category="copywriting"
-        types={[
-          { value: "headline", label: "Headline" },
-          { value: "formula", label: "Formula" },
-          { value: "power-word", label: "Power Words" },
-          { value: "template", label: "Template" },
-          { value: "framework", label: "Framework" },
-        ]}
-        heading="Copywriting Bank"
-        description="Headline formulas, frameworks, power words, and reusable copy templates."
-        titlePlaceholder="e.g. PAS — Problem / Agitate / Solve"
-        contentPlaceholder="The formula, template, or word list with notes on when to use it…"
-      />
-    </div>
-  );
-}
-
-// ContentIdeasTab is replaced by ContentIdeasKanbanTab above
-
-function AnalyticsTab() {
-  return (
-    <div className="max-w-2xl space-y-8">
-      <FounderWorkspaceSection
-        category="analytics"
-        types={[
-          { value: "win", label: "Win" },
-          { value: "miss", label: "Miss" },
-          { value: "insight", label: "Insight" },
-          { value: "ab-result", label: "A/B Result" },
-        ]}
-        heading="Analytics & Learnings"
-        description="What's working, what's not, key metrics, and A/B test results."
-        titlePlaceholder="e.g. TikTok hook style A doubled watch time vs. style B"
-        contentPlaceholder="What happened, what you measured, what you'll do differently…"
-        extraFields={(_type, meta, setMeta) => (
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Metric (optional)</label>
-              <Input
-                value={typeof meta.metric === "string" ? meta.metric : ""}
-                onChange={e => setMeta({ ...meta, metric: e.target.value })}
-                placeholder="e.g. CTR, Revenue, Views"
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground mb-1 block">Value (optional)</label>
-              <Input
-                value={typeof meta.value === "string" ? meta.value : ""}
-                onChange={e => setMeta({ ...meta, value: e.target.value })}
-                placeholder="e.g. 4.2%, £340, 18k"
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
-        )}
-        renderMeta={meta => (meta?.metric || meta?.value) ? (
-          <div className="mt-1 flex gap-2 flex-wrap">
-            {meta.metric ? <span className="text-[11px] text-muted-foreground">{String(meta.metric)}</span> : null}
-            {meta.value ? <span className="text-[11px] font-semibold text-foreground">{String(meta.value)}</span> : null}
-          </div>
-        ) : null}
-      />
-    </div>
-  );
-}
-
-const DISTRIBUTION_STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-  testing: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
-  paused: "bg-gray-500/10 text-muted-foreground border-border",
-};
-
-function DistributionTab() {
-  return (
-    <div className="max-w-2xl space-y-8">
-      <FounderWorkspaceSection
-        category="distribution"
-        types={[
-          { value: "channel", label: "Channel" },
-          { value: "partnership", label: "Partnership" },
-          { value: "traffic-source", label: "Traffic Source" },
-          { value: "strategy", label: "Strategy" },
-        ]}
-        heading="Distribution"
-        description="Channels, partnerships, traffic sources, and distribution strategies."
-        titlePlaceholder="e.g. TikTok → link in bio → Gumroad funnel"
-        contentPlaceholder="How this distribution channel works, what content drives it, results so far…"
-        extraFields={(_type, meta, setMeta) => (
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Status</label>
-            <div className="flex gap-1.5">
-              {(["active", "testing", "paused"] as const).map(s => (
-                <button key={s} onClick={() => setMeta({ ...meta, status: s })}
-                  className={cn("px-2.5 py-1 rounded-full text-xs font-medium border capitalize transition-all",
-                    meta.status === s ? DISTRIBUTION_STATUS_COLORS[s] : "border-border text-muted-foreground hover:border-orange-400")}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        renderMeta={meta => meta?.status ? (
-          <span className={cn("mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize",
-            DISTRIBUTION_STATUS_COLORS[String(meta.status)] ?? "bg-muted text-muted-foreground border-border")}>
-            {String(meta.status)}
-          </span>
-        ) : null}
-      />
-    </div>
-  );
-}
-
-// ExperimentsTab is replaced by ExperimentsLabTab above
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GLOBAL KNOWLEDGE BASE SEARCH
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── GlobalWorkspaceSearch ───────────────────────────────────────────────────
-
-interface WorkspaceSearchResult {
-  id: string;
-  type: "note" | "task" | "goal" | "product";
-  title: string;
-  preview?: string;
-  badge?: string;
-  onClick: () => void;
-}
-
-const SEARCH_TYPE_META: Record<
-  WorkspaceSearchResult["type"],
-  { label: string; icon: React.ComponentType<{ className?: string }>; color: string }
-> = {
-  note:    { label: "Notes",    icon: StickyNote, color: "text-amber-500" },
-  task:    { label: "Tasks",    icon: ListTodo,   color: "text-blue-500" },
-  goal:    { label: "Goals",    icon: Target,     color: "text-green-500" },
-  product: { label: "Products", icon: Package,    color: "text-purple-500" },
-};
-
-function GlobalWorkspaceSearch({
-  onClose,
-  onTabChange,
-}: {
-  onClose: () => void;
-  onTabChange: (tab: WorkspaceTab) => void;
-}) {
-  const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState("");
-  const [products, setProducts] = useState<{ id: string; title: string; status: string }[]>([]);
-
-  // Load local data once on mount (component mounts fresh each time modal opens)
-  const [localNotes] = useState<Note[]>(() => {
-    try { return JSON.parse(localStorage.getItem("cf_notes") ?? "[]") as Note[]; } catch { return []; }
-  });
-  const [localTodos] = useState<Todo[]>(() => {
-    try { return JSON.parse(localStorage.getItem("cf_todos") ?? "[]") as Todo[]; } catch { return []; }
-  });
-  const [localGoals] = useState<Goal[]>(() => {
-    try { return JSON.parse(localStorage.getItem("cf_goals") ?? "[]") as Goal[]; } catch { return []; }
-  });
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    fetch("/api/products")
-      .then(r => r.ok ? r.json() : { products: [] })
-      .then((data: { products?: { id: string; title: string; status: string }[] }) =>
-        setProducts(data.products ?? []))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  const q = query.trim().toLowerCase();
-
-  const results: WorkspaceSearchResult[] = useMemo(() => {
-    const res: WorkspaceSearchResult[] = [];
-
-    // Notes — search title + body
-    localNotes
-      .filter(n => !q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
-      .slice(0, 5)
-      .forEach(n => {
-        const bodyPreview = n.body.replace(/[#*`>\[\]_]/g, "").trim().slice(0, 80);
-        res.push({
-          id: n.id, type: "note",
-          title: n.title || "Untitled Note",
-          preview: bodyPreview || undefined,
-          badge: n.tag,
-          onClick: () => {
-            try { sessionStorage.setItem("cf_open_note", n.id); } catch {}
-            onTabChange("notes");
-            onClose();
-          },
-        });
-      });
-
-    // Tasks — active only, search text
-    localTodos
-      .filter(t => !t.completed && (!q || t.text.toLowerCase().includes(q)))
-      .slice(0, 5)
-      .forEach(t => res.push({
-        id: t.id, type: "task",
-        title: t.text,
-        badge: t.priority,
-        onClick: () => { onTabChange("todos"); onClose(); },
-      }));
-
-    // Goals
-    localGoals
-      .filter(g => !q || g.label.toLowerCase().includes(q))
-      .slice(0, 3)
-      .forEach(g => res.push({
-        id: g.id, type: "goal",
-        title: g.label,
-        preview: `${g.current} / ${g.target} ${g.unit}`,
-        onClick: () => { onTabChange("goals"); onClose(); },
-      }));
-
-    // Products
-    products
-      .filter(p => !q || p.title.toLowerCase().includes(q))
-      .slice(0, 4)
-      .forEach(p => res.push({
-        id: p.id, type: "product",
-        title: p.title,
-        badge: p.status,
-        onClick: () => { router.push("/dashboard/library"); onClose(); },
-      }));
-
-    return res;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, localNotes, localTodos, localGoals, products]);
-
-  // Group by type in a fixed display order
-  const typeOrder: WorkspaceSearchResult["type"][] = ["note", "task", "goal", "product"];
-  const groups = results.reduce<Partial<Record<WorkspaceSearchResult["type"], WorkspaceSearchResult[]>>>(
-    (acc, r) => { (acc[r.type] ??= []).push(r); return acc; },
-    {}
-  );
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl bg-background border border-border rounded-2xl shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Search bar */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
-          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search notes, tasks, goals, products…"
-            className="flex-1 text-sm bg-transparent focus:outline-none text-foreground placeholder:text-muted-foreground"
-          />
-          <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground">Esc</kbd>
-        </div>
-
-        {/* Results */}
-        <div className="max-h-[62vh] overflow-y-auto">
-          {results.length === 0 ? (
-            <div className="py-12 text-center">
-              <Search className="w-8 h-8 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">
-                {q ? `No results for "${query}"` : "Start typing to search your workspace…"}
-              </p>
-              {!q && (localNotes.length + localTodos.length + localGoals.length === 0) && (
-                <p className="text-xs text-muted-foreground/60 mt-1">Add notes, tasks, and goals to get started</p>
-              )}
-            </div>
-          ) : (
-            <div className="p-2 space-y-2">
-              {typeOrder
-                .filter(type => groups[type] && groups[type]!.length > 0)
-                .map(type => {
-                  const meta = SEARCH_TYPE_META[type];
-                  const Icon = meta.icon;
-                  const items = groups[type]!;
-                  return (
-                    <div key={type}>
-                      {/* Section header */}
-                      <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5">
-                        <Icon className={cn("w-3 h-3", meta.color)} />
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                          {meta.label}
-                        </span>
-                        <span className="ml-auto text-[10px] text-muted-foreground">{items.length}</span>
-                      </div>
-
-                      {/* Items */}
-                      <div className="space-y-0.5">
-                        {items.map(result => (
-                          <button
-                            key={result.id}
-                            onClick={result.onClick}
-                            className="w-full flex items-start gap-3 px-3 py-2.5 rounded-xl hover:bg-accent transition-colors text-left group"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-foreground group-hover:text-orange-500 transition-colors truncate">
-                                {result.title}
-                              </p>
-                              {result.preview && (
-                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                                  {result.preview}
-                                </p>
-                              )}
-                            </div>
-                            {result.badge && (
-                              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0 capitalize mt-0.5">
-                                {result.badge}
-                              </span>
-                            )}
-                            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-orange-400 shrink-0 mt-0.5 transition-colors" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-border px-4 py-2 flex items-center gap-4 text-[10px] text-muted-foreground/50">
-          <span>↵ Open</span>
-          <span>Esc Close</span>
-          <span className="ml-auto">{results.length} result{results.length !== 1 ? "s" : ""}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── GlobalKBSearch ───────────────────────────────────────────────────────────
-
-interface GlobalKBSearchProps {
-  onClose: () => void;
-  onTabChange: (tab: WorkspaceTab) => void;
-}
-
-function GlobalKBSearch({ onClose, onTabChange }: GlobalKBSearchProps) {
-  const [query, setQuery] = useState("");
-  const [allEntries, setAllEntries] = useState<FounderEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    fetch("/api/founder-workspace")
-      .then(r => r.ok ? r.json() : [])
-      .then((data: FounderEntry[]) => setAllEntries(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Keyboard: Escape to close
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  const q = query.trim().toLowerCase();
-  const results = q.length < 1
-    ? allEntries
-    : allEntries.filter(e => {
-        const tags = ((e.metadata?.tags as string[] | undefined) ?? []).join(" ");
-        return (
-          e.title.toLowerCase().includes(q) ||
-          e.content.toLowerCase().includes(q) ||
-          tags.includes(q)
-        );
-      });
-
-  // Group by category
-  const grouped = results.reduce<Record<string, FounderEntry[]>>((acc, e) => {
-    (acc[e.category] ??= []).push(e);
-    return acc;
-  }, {});
-  const cats = Object.keys(grouped);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl bg-background border border-border rounded-2xl shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Search bar */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search your knowledge base…"
-            className="flex-1 text-sm bg-transparent focus:outline-none text-foreground placeholder:text-muted-foreground"
-          />
-          <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground">Esc</kbd>
-        </div>
-
-        {/* Results */}
-        <div className="max-h-[62vh] overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />Loading knowledge base…
-            </div>
-          ) : cats.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              {q.length >= 1 ? `No entries matching "${query}"` : "Your knowledge base is empty — add entries in any tab"}
-            </div>
-          ) : (
-            <div className="p-2 space-y-1">
-              {cats.map(cat => {
-                const info = CATEGORY_LABELS[cat];
-                const CatIcon = info?.icon ?? BookOpen;
-                const catEntries = grouped[cat];
-                return (
-                  <div key={cat}>
-                    {/* Section header */}
-                    <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5">
-                      <CatIcon className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                        {info?.label ?? cat}
-                      </span>
-                      <span className="ml-auto text-[10px] text-muted-foreground">{catEntries.length}</span>
-                    </div>
-
-                    {/* Entries */}
-                    {catEntries.slice(0, 5).map(entry => {
-                      const entryTags = (entry.metadata?.tags as string[] | undefined) ?? [];
-                      const isPinned = (entry.metadata?.pinned as boolean) ?? false;
-                      return (
-                        <button
-                          key={entry.id}
-                          onClick={() => { onTabChange(cat as WorkspaceTab); onClose(); }}
-                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            {isPinned && <Pin className="w-2.5 h-2.5 text-orange-500 fill-current shrink-0" />}
-                            <span className="text-sm font-medium text-foreground truncate">{entry.title}</span>
-                            {entryTags.length > 0 && (
-                              <div className="flex items-center gap-1 ml-auto shrink-0">
-                                {entryTags.slice(0, 2).map(t => (
-                                  <span key={t} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-muted text-muted-foreground">{t}</span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          {entry.content && (
-                            <p className="text-[11px] text-muted-foreground truncate mt-0.5">{entry.content}</p>
-                          )}
-                        </button>
-                      );
-                    })}
-
-                    {catEntries.length > 5 && (
-                      <button
-                        onClick={() => { onTabChange(cat as WorkspaceTab); onClose(); }}
-                        className="w-full px-3 py-1 text-[11px] text-orange-500 hover:underline text-left"
-                      >
-                        +{catEntries.length - 5} more in {info?.label ?? cat} →
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-border px-4 py-2 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">{results.length} {results.length === 1 ? "entry" : "entries"} across all sections</span>
-          <span className="text-[10px] text-muted-foreground">Click to jump to section</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function WorkspacePage() {
-  const isAdmin = useWorkspaceAdmin();
-  const [tab, setTab] = useState<WorkspaceTab>("dashboard");
-  const [searchOpen, setSearchOpen] = useState(false);    // Global workspace search (all users)
-  const [kbSearchOpen, setKbSearchOpen] = useState(false); // KB search (admins only)
-  const [todoCount, setTodoCount] = useState(0);
-
-  // Keep tab badge count fresh whenever the user switches tabs
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("cf_todos");
-      const arr = raw ? (JSON.parse(raw) as { completed: boolean }[]) : [];
-      setTodoCount(arr.filter(t => !t.completed).length);
-    } catch {}
-  }, [tab]);
+  const [tab, setTab] = useState<WorkspaceTab>("todos");
 
   const tabDesc: Record<WorkspaceTab, string> = {
-    dashboard:              "Your operating system — everything happening in your business, today",
-    todos:                  "Stay on top of your daily content tasks",
-    notes:                  "Capture ideas, scripts, and notes",
-    calendar:               "Plan and schedule your content drops",
-    goals:                  "Track revenue, growth, and product targets",
-    "research":             "Search and report library — AI-powered market and niche research",
-    "memory":               "Business Brain — learned patterns, strategic insights, and your knowledge library",
-    "agents":               "Agent Team — 6 AI specialists monitoring, discovering, and improving your business",
-    "founder-os":           "Your internal OS — the memory and intelligence layer for Content Flywheel",
-    "marketing-psychology": "Psychological triggers and buyer behavior principles",
-    "copywriting":          "Headline formulas, frameworks, and reusable copy templates",
-    "content-ideas":        "Hooks, angles, scripts, and viral content formats",
-    "analytics":            "What's working, what's not, and key metric learnings",
-    "distribution":         "Channels, partnerships, and traffic source strategies",
-    "experiments":          "Hypotheses, active tests, and documented results",
+    todos:    "Stay on top of your daily content tasks",
+    notes:    "Capture ideas, scripts, and notes",
+    calendar: "Plan and schedule your content drops",
+    goals:    "Track revenue, growth, and product targets",
   };
-
-  // Cmd+K / Ctrl+K — global workspace search for all users
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(v => !v); }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, []);
 
   return (
     <div className="p-6 max-w-none">
-      {/* Global Workspace Search — all users */}
-      {searchOpen && (
-        <GlobalWorkspaceSearch
-          onClose={() => setSearchOpen(false)}
-          onTabChange={t => { setTab(t); setSearchOpen(false); }}
-        />
-      )}
-      {/* Knowledge Base Search — admins only */}
-      {kbSearchOpen && isAdmin && (
-        <GlobalKBSearch
-          onClose={() => setKbSearchOpen(false)}
-          onTabChange={t => { setTab(t); setKbSearchOpen(false); }}
-        />
-      )}
-
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {isAdmin ? "Founder OS" : "Workspace"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[tab]}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-all bg-background"
-          >
-            <Search className="w-3.5 h-3.5" />
-            Search workspace
-            <kbd className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-muted">⌘K</kbd>
-          </button>
-          {isAdmin && (
-            <button
-              onClick={() => setKbSearchOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-all bg-background"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              Knowledge Base
-            </button>
-          )}
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-foreground">Workspace</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[tab]}</p>
       </div>
 
       {/* Tab nav */}
-      <div className="border-b border-border mb-6 overflow-x-auto">
-        <div className="flex gap-1">
-          {/* Standard tabs */}
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px",
-                tab === t.id ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")}>
-              {t.icon}
-              {t.label}
-              {t.id === "todos" && todoCount > 0 && (
-                <span className={cn(
-                  "text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none tabular-nums",
-                  tab === "todos" ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground"
-                )}>
-                  {todoCount > 99 ? "99+" : todoCount}
-                </span>
-              )}
-            </button>
-          ))}
-
-          {/* Admin-only divider + tabs */}
-          {isAdmin && (
-            <>
-              <div className="w-px bg-border mx-2 self-stretch my-1.5" />
-              {ADMIN_TABS.map(t => (
-                <button key={t.id} onClick={() => setTab(t.id)}
-                  className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px",
-                    tab === t.id ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")}>
-                  {t.icon}{t.label}
-                </button>
-              ))}
-            </>
-          )}
-        </div>
+      <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto">
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all whitespace-nowrap -mb-px",
+              tab === t.id ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")}>
+            {t.icon}{t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Standard tab content */}
-      {tab === "dashboard" && <WorkspaceDashboard onTabChange={setTab} />}
       {tab === "todos"    && <TodoTab />}
-      {tab === "notes"    && <NotesTab onTabChange={setTab} />}
+      {tab === "notes"    && <NotesTab />}
       {tab === "calendar" && <CalendarTab />}
       {tab === "goals"    && <GoalsTab />}
-
-      {tab === "research" && <ResearchTab onTabChange={(t: string) => setTab(t as WorkspaceTab)} />}
-      {tab === "memory"   && <BusinessBrainTab />}
-      {tab === "agents"   && <AgentCentreTab />}
-
-      {/* Admin-only tab content */}
-      {isAdmin && tab === "founder-os"             && <FounderOSOverview onTabChange={setTab} />}
-      {isAdmin && tab === "marketing-psychology"  && <MarketingPsychologyTab />}
-      {isAdmin && tab === "copywriting"           && <CopywritingTab />}
-      {isAdmin && tab === "content-ideas"         && <ContentIdeasKanbanTab />}
-      {isAdmin && tab === "analytics"             && <AnalyticsTab />}
-      {isAdmin && tab === "distribution"          && <DistributionTab />}
-      {isAdmin && tab === "experiments"           && <ExperimentsLabTab />}
     </div>
   );
 }

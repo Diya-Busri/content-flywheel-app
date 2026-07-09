@@ -361,7 +361,7 @@ export default function DigitalProductsLanding() {
                 Digital Products
               </h1>
               <p className="text-gray-500 dark:text-[#A0A0A0] text-sm">
-                Create a product or use the full AI launch pipeline
+                Choose how you&apos;d like to get started
               </p>
             </div>
             <Link
@@ -377,7 +377,7 @@ export default function DigitalProductsLanding() {
         {/* ── Start creating ── */}
         <div className="mb-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* I Know What I Want — marketing content for existing product */}
+            {/* I Know What I Want */}
             <Link
               href="/dashboard/digital-products/create"
               className="group flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-6 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
@@ -390,14 +390,15 @@ export default function DigitalProductsLanding() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="font-semibold text-gray-900 dark:text-white">Create Marketing Content</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">I Know What I Want</p>
+                  <span className="text-[10px] font-bold uppercase tracking-wide bg-orange-500 text-white px-1.5 py-0.5 rounded-full shrink-0">Recommended</span>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Already have a product file? Upload it and AI generates video scripts, captions, and marketing copy for it.
+                  You have a topic in mind. Type it and AI builds your product in minutes — no design skills needed.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["Has a file ready", "Wants marketing assets"].map((tag) => (
+                {["Has an idea", "Knows their niche"].map((tag) => (
                   <span key={tag} className="text-[11px] font-medium bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2.5 py-1 rounded-full">
                     {tag}
                   </span>
@@ -405,29 +406,26 @@ export default function DigitalProductsLanding() {
               </div>
             </Link>
 
-            {/* Launch with AI — full pipeline */}
+            {/* Help Me Discover */}
             <Link
-              href="/dashboard/launch"
-              className="group flex flex-col gap-4 rounded-2xl border border-orange-500/30 dark:border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/8 p-6 hover:border-orange-500/60 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-200"
+              href="/dashboard/digital-products/discover"
+              className="group flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] dark:border-[#232323] bg-white dark:bg-[#161616] p-6 hover:border-orange-400/50 dark:hover:border-orange-500/30 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200"
             >
               <div className="flex items-start justify-between">
-                <div className="w-11 h-11 rounded-xl bg-orange-500/15 flex items-center justify-center">
+                <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-orange-500" />
                 </div>
-                <ArrowRight className="w-4 h-4 text-orange-400/60 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
               </div>
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="font-semibold text-gray-900 dark:text-white">Launch with AI</p>
-                  <span className="text-[10px] font-bold uppercase tracking-wide bg-orange-500/15 text-orange-500 px-1.5 py-0.5 rounded-full shrink-0">Full pipeline</span>
-                </div>
+                <p className="font-semibold text-gray-900 dark:text-white mb-1">Help Me Discover</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Not sure what to make? AI researches your market, creates the product, designs assets, and writes your marketing — end to end.
+                  Not sure what to create yet. AI guides you through finding a profitable niche and product.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["Idea → product → launch", "Hands-free"].map((tag) => (
-                  <span key={tag} className="text-[11px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 px-2.5 py-1 rounded-full">
+                {["New to products", "Exploring ideas"].map((tag) => (
+                  <span key={tag} className="text-[11px] font-medium bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 px-2.5 py-1 rounded-full">
                     {tag}
                   </span>
                 ))}

@@ -137,31 +137,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-/**
- * DELETE: Delete all YouTube scheduled posts for the current user.
- * Called from Library → YouTube tab "Delete All".
- */
-export async function DELETE() {
-  try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    try {
-      await db.execute(sql`
-        delete from scheduled_posts
-        where user_id = ${userId} and platform = 'youtube'
-      `);
-    } catch {
-      await db.execute(sql`
-        delete from scheduled_posts
-        where "userId" = ${userId} and platform = 'youtube'
-      `);
-    }
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error("[scheduled-posts] DELETE error:", e);
-    return NextResponse.json({ error: "Failed to delete posts" }, { status: 500 });
-  }
-}

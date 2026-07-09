@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getSettingsForPage } from "@/actions/settings-actions";
 import SettingsContent from "./SettingsContent";
+import { SyncOnboardingStepsOnMount } from "@/components/onboarding/sync-onboarding-steps";
 
 export const metadata: Metadata = {
   title: "Settings | Content Flywheel",
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
 
   return (
     <main className="p-6 md:p-10">
+      <SyncOnboardingStepsOnMount steps={{ brandProfile: true }} />
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         Settings
       </h1>
@@ -44,22 +46,33 @@ export default async function SettingsPage() {
 }
 
 function SettingsTableMissingBanner() {
-  // Show a clean user-facing message — never expose DB schema or SQL to end users.
+  const sql = `CREATE TABLE IF NOT EXISTS "user_settings" (
+  "user_id" text PRIMARY KEY REFERENCES "profiles"("user_id") ON DELETE CASCADE,
+  "display_name" text,
+  "openai_api_key" text,
+  "shotstack_api_key" text,
+  "default_product_type" text NOT NULL DEFAULT 'digital_product',
+  "default_video_style" text NOT NULL DEFAULT 'professional',
+  "created_at" timestamp DEFAULT now() NOT NULL,
+  "updated_at" timestamp DEFAULT now() NOT NULL
+);`;
   return (
-    <div className="mb-8 p-4 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 flex items-start gap-3">
-      <span className="text-amber-500 text-xl shrink-0 mt-0.5">⚠️</span>
-      <div>
-        <p className="font-semibold text-amber-800 dark:text-amber-300 text-sm mb-1">
-          Settings are temporarily unavailable
-        </p>
-        <p className="text-sm text-amber-700 dark:text-amber-400">
-          We{"'"}re having trouble loading your preferences. This is usually resolved quickly — please refresh the page or try again in a moment. If the issue persists, contact{" "}
-          <a href="mailto:support@contentflywheel.com" className="underline hover:no-underline">
-            support@contentflywheel.com
-          </a>
-          .
-        </p>
-      </div>
+    <div className="mb-8 p-4 rounded-lg bg-amber-950/40 border border-amber-800">
+      <p className="font-semibold text-amber-200 mb-2">
+        Database setup required
+      </p>
+      <p className="text-sm text-amber-300 mb-3">
+        The <code className="bg-amber-900/50 px-1 rounded">user_settings</code> table is missing. Create it in the same database your app uses (check <code className="bg-amber-900/50 px-1 rounded">DATABASE_URL</code> in .env.local).
+      </p>
+      <p className="text-sm text-amber-300 mb-2">
+        <strong>Option 1:</strong> From project root run: <code className="bg-amber-900/50 px-1 rounded">npm run db:settings</code>
+      </p>
+      <p className="text-sm text-amber-300 mb-2">
+        <strong>Option 2 (Supabase):</strong> In Supabase Dashboard → SQL Editor, run:
+      </p>
+      <pre className="text-xs p-3 bg-gray-100 dark:bg-[#0F0F0F] text-gray-800 dark:text-gray-300 rounded overflow-x-auto">
+        {sql}
+      </pre>
     </div>
   );
 }

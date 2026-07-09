@@ -3,15 +3,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import OpenAI from "openai";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
-import { checkAiRateLimitAsync } from "@/lib/rate-limit-ai";
+import { checkAiRateLimit } from "@/lib/rate-limit-ai";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { coachSettingsTable } from "@/db/schema/coach-settings-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { logEvent } from "@/lib/log-event";
-import { searchFounderKnowledge } from "@/lib/founder-knowledge";
-import { getUserMemoryContext } from "@/lib/user-memory";
 
 export const runtime = "nodejs";
 
@@ -193,87 +191,6 @@ const PLATFORM_TOOLS_NOTE = `PLATFORM TOOLS — what Content Flywheel can do rig
 - Video editing / timeline: still being improved. Be honest — say CF has a Video Timeline in development but for now CapCut (free, mobile) or DaVinci Resolve (free, desktop) are solid options if they need full video editing.
 Never hard-sell a CF feature that isn't ready. Be honest about what's available.`;
 
-// Structured response guide — injected for business/finance/content modes
-const STRUCTURED_RESPONSE_GUIDE = `STRUCTURED RESPONSE FORMAT — CRITICAL:
-
-For strategic questions about products, business ideas, niches, monetisation, pricing, content strategy, marketing plans, or any opportunity analysis — respond ONLY with the following JSON object. No markdown, no prose, no text outside the JSON.
-
-For casual, conversational, or simple follow-up messages (e.g. "thanks", "tell me more", "what do you mean?", "hi", "how do I sign up?") — respond normally as plain text.
-
-DECISION RULE: If answering the question would produce a structured recommendation, analysis, or plan → use JSON. Quick conversational exchange → plain text.
-
-JSON format for strategic responses:
-{
-  "isStructured": true,
-  "summary": {
-    "paragraph": "2-3 sentences: the core opportunity or insight — specific and bold, not generic",
-    "overallRecommendation": "One precise sentence: exactly what to do next",
-    "opportunityScore": 7
-  },
-  "opportunity": {
-    "productName": "Specific, marketable product or opportunity name",
-    "targetAudience": "Exact target persona (e.g. 'NHS nurses who want to earn extra income')",
-    "estimatedPrice": "£X",
-    "difficulty": "Easy|Medium|Hard",
-    "profitPotential": "Low|Medium|High|Very High",
-    "demand": "Low|Medium|High|Very High",
-    "competition": "Low|Medium|High|Very High"
-  },
-  "whyThisWorks": [
-    "Specific reason backed by market logic — never generic",
-    "..."
-  ],
-  "actionPlan": [
-    {
-      "week": 1,
-      "title": "Validate & Launch",
-      "tasks": ["Specific task 1", "Specific task 2", "Specific task 3"],
-      "actions": ["Create Product", "Generate Carousel"]
-    }
-  ],
-  "contentOpportunities": [
-    {
-      "platform": "YouTube|TikTok|Instagram|Twitter|LinkedIn",
-      "hook": "Exact hook line for this piece of content",
-      "contentType": "Short-form|Long-form|Carousel|Tutorial|Story",
-      "difficulty": "Easy|Medium|Hard"
-    }
-  ],
-  "pricingStrategy": {
-    "recommended": "£X",
-    "reasoning": "Why this price is optimal for this audience and product",
-    "alternatives": ["£Y for bundle", "£Z for early access"],
-    "expectedConversion": "X–Y%"
-  },
-  "commonMistakes": [
-    "Specific common mistake in this space — not generic",
-    "..."
-  ],
-  "followUpQuestions": [
-    "Can you make this cheaper?",
-    "Give me competitors for this idea",
-    "Validate this idea for me",
-    "Show me content ideas for this"
-  ],
-  "nextActions": [
-    { "label": "Create Product", "action": "create-product", "primary": true },
-    { "label": "Generate Carousel", "action": "generate-carousel" },
-    { "label": "Research Competitors", "action": "research-competitors" }
-  ]
-}
-
-RULES:
-- opportunityScore is 1–10 (10 = exceptional)
-- All prices in GBP (£)
-- actionPlan: 2–4 weeks, 3–4 tasks each
-- contentOpportunities: 3–5 items
-- commonMistakes: 3–5 items specific to this opportunity
-- followUpQuestions: always include exactly 4
-- nextActions: always include 3–5; mark the most important one as primary: true
-- actions in actionPlan only uses: Create Product | Generate Carousel | Generate Video Guide | Turn into Note | Research Competitors | Create Marketing Plan | Open Design Studio
-- nextActions.action only uses: create-product | generate-carousel | generate-video-guide | turn-into-note | research-competitors | create-marketing-plan | open-design-studio
-- Every field must be SPECIFIC — no filler or generic advice`;
-
 // Universal action bias — coach must DO the thing, not describe doing it
 const ACTION_BIAS_NOTE = `CRITICAL BEHAVIOUR — ALWAYS DO, NEVER DEFLECT:
 When a user asks "show me how", "give me that", "write it", "what prompts", "create it for me", "how do I do that" — DO IT IMMEDIATELY. Write the actual prompts, the actual script, the actual steps. Never say "I can't show you directly", "I can guide you", "here's how you would", or "you could try". Just do the thing. If they ask for prompts — write the prompts. If they ask for a script — write the script. If they ask for a plan — write the plan with real specifics. Be the person who does the work, not the person who explains how work is done.`;
@@ -380,7 +297,7 @@ export async function POST(req: Request) {
 
     if (apiRl) return apiRl;
 
-    const rl = await checkAiRateLimitAsync(userId ?? null);
+    const rl = checkAiRateLimit(userId ?? null);
     if (rl) return rl;
     const body = await req.json().catch(() => ({}));
     const {
@@ -533,92 +450,7 @@ export async function POST(req: Request) {
       ].filter(Boolean).join("\n");
     }
 
-    // ── Personal User Memory injection (all authenticated users) ──────────
-    // Search the user's personal memory for relevant context before generating.
-    // This is completely isolated per user — no cross-contamination.
-    let userMemoryBlock = "";
-    if (userId) {
-      try {
-        const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
-        const searchQuery = typeof lastUserMsg?.content === "string" && lastUserMsg.content.trim()
-          ? lastUserMsg.content.trim().slice(0, 500)
-          : "";
-
-        if (searchQuery) {
-          userMemoryBlock = await getUserMemoryContext(userId, searchQuery, 5);
-        }
-      } catch (err) {
-        console.warn("[chat/coach] user memory lookup failed:", err);
-      }
-    }
-
-    // ── Founder OS Knowledge injection (admin only) ────────────────────────
-    // Before generating, search the knowledge base with the user's last message.
-    // Top relevant entries are injected as context so the coach references real
-    // insights instead of generic advice.
-    let founderKBBlock = "";
-    const isAdmin = userId
-      ? (process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "") !== "" &&
-        (() => {
-          // We already have the user's email from the currentUser() we fetched
-          // above for the brand voice block — re-use it.
-          try {
-            // Use the ADMIN_EMAIL env var; the actual Clerk email was already
-            // verified by the rate-limit path. We do a lightweight check here.
-            return true; // resolved below
-          } catch { return false; }
-        })()
-      : false;
-
-    if (userId && isAdmin) {
-      try {
-        const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
-        // Quick check: fetch the current user's primary email
-        const { clerkClient } = await import("@clerk/nextjs/server");
-        const clerkUser = await clerkClient().users.getUser(userId);
-        const userEmail = clerkUser.emailAddresses?.[0]?.emailAddress?.trim().toLowerCase() ?? "";
-
-        if (userEmail === adminEmail && adminEmail) {
-          // Get the most recent user message to use as the search query
-          const lastUserMsg = [...messages]
-            .reverse()
-            .find(m => m.role === "user");
-          const searchQuery = typeof lastUserMsg?.content === "string" && lastUserMsg.content.trim()
-            ? lastUserMsg.content.trim().slice(0, 500)
-            : "";
-
-          if (searchQuery) {
-            const kbResults = await searchFounderKnowledge(userId, searchQuery, {
-              limit: 5,
-              minRelevance: 0.3,
-            });
-
-            if (kbResults.length > 0) {
-              const kbLines = kbResults.map((r, i) => {
-                const e = r.entry;
-                const summary = e.aiSummary ? ` — ${e.aiSummary}` : "";
-                const cat = e.category.replace(/-/g, " ");
-                return `${i + 1}. [${cat}] ${e.title}${summary}`;
-              });
-
-              founderKBBlock = `FOUNDER OS KNOWLEDGE BASE — RELEVANT INSIGHTS:
-The following entries from your personal knowledge base are relevant to this conversation. Reference them naturally when applicable. If a past finding directly answers the question, lead with it.
-
-${kbLines.join("\n")}
-
-When you reference one of these insights, you can say something like: "Based on what you've found before..." or "Your research on X showed..." — make it feel like memory, not a database lookup.`;
-            }
-          }
-        }
-      } catch (err) {
-        // Non-blocking — never let KB lookup break the coach
-        console.warn("[chat/coach] founder KB lookup failed:", err);
-      }
-    }
-
-    // Inject structured response guide for modes where strategic questions are common
-    const supportsStructured = ["business", "finance", "content", "goals"].includes(coachMode);
-    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, supportsStructured ? STRUCTURED_RESPONSE_GUIDE : "", personalisation, brandVoiceBlock, whatNextBlock, userMemoryBlock, founderKBBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
+    const systemParts = [systemPrompt, IMAGE_GENERATION_NOTE, PLATFORM_TOOLS_NOTE, ACTION_BIAS_NOTE, personalisation, brandVoiceBlock, whatNextBlock, pageNote, memoryBlock, productContext, taskContextBlock].filter(Boolean);
     const openai = new OpenAI({ apiKey });
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
@@ -632,7 +464,7 @@ When you reference one of these insights, you can say something like: "Based on 
       model,
       messages: openaiMessages,
       stream: true,
-      max_tokens: supportsStructured ? 2500 : 1024,
+      max_tokens: 1024,
     });
 
     const encoder = new TextEncoder();

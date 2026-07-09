@@ -1,29 +1,24 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import Stripe from "stripe";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { productOrdersTable } from "@/db/schema/product-orders-schema";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
-import { emailCampaignsTable } from "@/db/schema/email-marketing-schema";
+import { emailSequencesTable } from "@/db/schema/email-sequences-schema";
 import { eq, and, isNull, count } from "drizzle-orm";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export const dynamic = "force-dynamic";
 
 export type OnboardingStatus = {
   hasProduct: boolean;
-  hasThumbnail: boolean;
   hasPublishedProduct: boolean;
   hasStripeConnect: boolean;
-  hasMarketingContent: boolean;
-  hasSale: boolean;
-  // legacy fields kept for backwards compat
   hasBrandVoice: boolean;
   hasPromoCode: boolean;
+  hasEmailSequence: boolean;
+  hasSale: boolean;
   complete: boolean;
   percentComplete: number;
 };
@@ -32,15 +27,11 @@ export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [products, profile, brandVoice, orders, promoCodes, campaigns] = await Promise.all([
+  const [products, profile, brandVoice, orders, promoCodes, sequences] = await Promise.all([
     db.select({ id: productsTable.id, marketingAssets: productsTable.marketingAssets })
       .from(productsTable)
       .where(and(eq(productsTable.userId, userId), isNull(productsTable.deletedAt))),
-    db.select({
-        stripeConnectAccountId:       profilesTable.stripeConnectAccountId,
-        stripeConnectChargesEnabled:  profilesTable.stripeConnectChargesEnabled,
-        stripeConnectPayoutsEnabled:  profilesTable.stripeConnectPayoutsEnabled,
-      })
+    db.select({ stripeConnectChargesEnabled: profilesTable.stripeConnectChargesEnabled })
       .from(profilesTable)
       .where(eq(profilesTable.userId, userId))
       .limit(1),
@@ -55,80 +46,34 @@ export async function GET() {
       .from(creatorPromoCodesTable)
       .where(and(eq(creatorPromoCodesTable.creatorUserId, userId), eq(creatorPromoCodesTable.active, true))),
     db.select({ count: count() })
-      .from(emailCampaignsTable)
-      .where(and(eq(emailCampaignsTable.userId, userId), eq(emailCampaignsTable.status, "sent"))),
+      .from(emailSequencesTable)
+      .where(eq(emailSequencesTable.userId, userId)),
   ]);
 
   const hasProduct = products.length > 0;
-
-  const hasThumbnail = products.some((p) => {
-    const ma = (p.marketingAssets ?? {}) as Record<string, unknown>;
-    return !!(ma.thumbnailUrl || ma.coverThumbnailUrl);
-  });
-
   const hasPublishedProduct = products.some((p) => {
     const ma = (p.marketingAssets ?? {}) as { isNativePublished?: boolean };
     return ma.isNativePublished === true;
   });
-
-  // chargesEnabled is the authoritative signal for the checklist.
-  // DB-first fast path; if DB is stale (account exists but chargesEnabled=false),
-  // fall back to a live Stripe check and sync the DB so subsequent requests are fast.
-  const accountId    = profile[0]?.stripeConnectAccountId ?? null;
-  let stripeCharges  = profile[0]?.stripeConnectChargesEnabled ?? false;
-  let stripePayouts  = profile[0]?.stripeConnectPayoutsEnabled ?? false;
-
-  if (!stripeCharges && accountId) {
-    try {
-      const account = await stripe.accounts.retrieve(accountId);
-      stripeCharges = account.charges_enabled ?? false;
-      stripePayouts = account.payouts_enabled ?? false;
-      // Sync back to DB so the next call is instant
-      if (stripeCharges) {
-        await db.update(profilesTable)
-          .set({
-            stripeConnectChargesEnabled: stripeCharges,
-            stripeConnectPayoutsEnabled: stripePayouts,
-          })
-          .where(eq(profilesTable.userId, userId));
-      }
-    } catch (err) {
-      console.error("[onboarding-status] Stripe live-check failed:", err);
-    }
-  }
-
-  const hasStripeConnect = !!stripeCharges;
-
-  console.log("[onboarding-status] Stripe state:", {
-    accountId:      !!accountId,
-    chargesEnabled: stripeCharges,
-    payoutsEnabled: stripePayouts,
-    hasStripeConnect,
-    liveCheck:      !!(profile[0]?.stripeConnectChargesEnabled === false && accountId),
-  });
+  const hasStripeConnect = !!(profile[0]?.stripeConnectChargesEnabled);
   const hasBrandVoice = !!(brandVoice[0]?.brandName?.trim());
   const hasPromoCode = Number(promoCodes[0]?.count ?? 0) > 0;
-  const campaignsSent = Number(campaigns[0]?.count ?? 0) > 0;
-  const hasMarketingContent = hasPromoCode || campaignsSent;
+  const hasEmailSequence = Number(sequences[0]?.count ?? 0) > 0;
   const hasSale = Number(orders[0]?.count ?? 0) > 0;
 
-  // 6 DB-tracked steps (research step is localStorage-only, handled client-side)
-  const dbSteps = [hasProduct, hasThumbnail, hasPublishedProduct, hasStripeConnect, hasMarketingContent, hasSale];
-  const dbDone = dbSteps.filter(Boolean).length;
-  // complete = all 7 steps (including research which client tracks)
-  const complete = dbDone === dbSteps.length;
-  // percentComplete is over 6 DB steps; client will add the research step
-  const percentComplete = Math.round((dbDone / dbSteps.length) * 100);
+  const steps = [hasProduct, hasPublishedProduct, hasStripeConnect, hasBrandVoice, hasPromoCode, hasEmailSequence, hasSale];
+  const done = steps.filter(Boolean).length;
+  const complete = done === steps.length;
+  const percentComplete = Math.round((done / steps.length) * 100);
 
   return NextResponse.json({
     hasProduct,
-    hasThumbnail,
     hasPublishedProduct,
     hasStripeConnect,
-    hasMarketingContent,
-    hasSale,
     hasBrandVoice,
     hasPromoCode,
+    hasEmailSequence,
+    hasSale,
     complete,
     percentComplete,
   } satisfies OnboardingStatus);

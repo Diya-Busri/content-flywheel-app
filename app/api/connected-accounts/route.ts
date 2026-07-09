@@ -8,7 +8,7 @@ import type { ConnectedPlatform } from "@/db/schema/connected-accounts-schema";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook", "linkedin", "x"];
+const PLATFORMS: ConnectedPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
 
 function isDbOrConfigError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);

@@ -99,10 +99,10 @@ export default function CreatorMarketplaceClient({ creatorName, bio, profileImag
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 32px rgba(0,0,0,0.12)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
                   >
-                    <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#0f0f12 0%,#1a1a2e 100%)", position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ aspectRatio: "4/3", background: "linear-gradient(135deg,#f97316 0%,#ea580c 100%)", position: "relative", overflow: "hidden" }}>
                       {item.thumbnailUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.thumbnailUrl} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+                        <img src={item.thumbnailUrl} alt={item.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
                           <span style={{ fontSize: "48px" }}>📦</span>

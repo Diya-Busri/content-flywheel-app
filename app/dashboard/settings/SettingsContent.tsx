@@ -23,9 +23,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users, CreditCard, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, AlertTriangle, Link2, ChevronRight, Youtube, Tv, Copy, Check, Users, Sliders } from "lucide-react";
+import { USE_CASES } from "@/lib/use-cases";
 import { useToast } from "@/components/ui/use-toast";
-import { useOnboarding } from "@/components/onboarding/onboarding-provider";
 import {
   saveProfileAction,
   deleteAccountAction,
@@ -52,7 +52,6 @@ export default function SettingsContent({
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const { refetch: refetchOnboarding } = useOnboarding();
   const [displayName, setDisplayName] = useState(settings?.displayName ?? "");
   const [profileSaving, setProfileSaving] = useState(false);
 
@@ -98,127 +97,43 @@ export default function SettingsContent({
     });
   };
 
+  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null);
+  const [featuresSaving, setFeaturesSaving] = useState(false);
+  useEffect(() => {
+    fetch("/api/user-features")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setEnabledFeatures(d.enabledFeatures ?? []); })
+      .catch(() => {});
+  }, []);
+
+  const toggleFeature = (id: string) => {
+    setEnabledFeatures((prev) => {
+      const current = prev ?? [];
+      return current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    });
+  };
+
+  const handleSaveFeatures = async () => {
+    setFeaturesSaving(true);
+    try {
+      const res = await fetch("/api/user-features", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabledFeatures: enabledFeatures ?? [] }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      toast({ title: "Saved", description: "Sidebar updated." });
+      router.refresh();
+    } catch {
+      toast({ title: "Error", description: "Could not save features.", variant: "destructive" });
+    } finally {
+      setFeaturesSaving(false);
+    }
+  };
+
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [dangerLoading, setDangerLoading] = useState<"delete" | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
-
-  /* ── Stripe Connect state ── */
-  type StripeStatus = {
-    connected: boolean;
-    accountId?: string;
-    email?: string | null;
-    chargesEnabled?: boolean;
-    payoutsEnabled?: boolean;
-    onboardingComplete?: boolean;
-  };
-  const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null);
-  const [stripeLoading, setStripeLoading] = useState(true);
-  const [stripeConnecting, setStripeConnecting] = useState(false);
-  const [stripeManaging, setStripeManaging] = useState(false);
-  const [stripeDisconnecting, setStripeDisconnecting] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const isReturn = typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("stripe") === "connected";
-
-    fetch("/api/stripe/connect/status")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data: StripeStatus | null) => {
-        if (cancelled) return;
-        if (data) setStripeStatus(data);
-
-        // Returning from Stripe OAuth — DB has been synced by the return route.
-        // Show a success toast, then navigate back to the dashboard so the
-        // Getting Started checklist remounts and re-fetches fresh onboarding status.
-        if (isReturn && data?.connected) {
-          const chargesOk = data.chargesEnabled ?? false;
-          const payoutsOk = data.payoutsEnabled ?? false;
-
-          console.log("[settings] Stripe OAuth return detected", {
-            connected:      true,
-            chargesEnabled: chargesOk,
-            payoutsEnabled: payoutsOk,
-            action:         "navigating to dashboard to refresh checklist",
-          });
-
-          if (chargesOk) {
-            toast({
-              title:       "Stripe connected ✓",
-              description: "You can now accept payments. Your checklist is updating…",
-            });
-            // Small delay so the toast is visible before navigating
-            setTimeout(() => { router.push("/dashboard"); }, 1800);
-          } else {
-            // Connected but not fully enabled — show in-page so user can complete setup
-            setTimeout(() => {
-              document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }, 400);
-          }
-        } else if (isReturn) {
-          // Status fetch failed or not connected — scroll to payments section
-          setTimeout(() => {
-            document.getElementById("payments")?.scrollIntoView({ behavior: "smooth", block: "center" });
-          }, 400);
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setStripeLoading(false); });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleConnectStripe = async () => {
-    setStripeConnecting(true);
-    try {
-      const res = await fetch("/api/stripe/connect/onboard", { method: "POST" });
-      const data = await res.json() as { url?: string; error?: string };
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        toast({ title: "Error", description: data.error ?? "Could not start Stripe setup", variant: "destructive" });
-        setStripeConnecting(false);
-      }
-    } catch {
-      toast({ title: "Error", description: "Network error — please try again", variant: "destructive" });
-      setStripeConnecting(false);
-    }
-  };
-
-  const handleManageStripe = async () => {
-    setStripeManaging(true);
-    try {
-      const res = await fetch("/api/stripe/connect/login", { method: "POST" });
-      const data = await res.json() as { url?: string; error?: string };
-      if (data.url) {
-        window.open(data.url, "_blank", "noopener,noreferrer");
-      } else {
-        toast({ title: "Error", description: data.error ?? "Could not open Stripe dashboard", variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "Error", description: "Network error — please try again", variant: "destructive" });
-    } finally {
-      setStripeManaging(false);
-    }
-  };
-
-  const handleDisconnectStripe = async () => {
-    if (!confirm("Disconnect Stripe? You won't be able to receive payments until you reconnect.")) return;
-    setStripeDisconnecting(true);
-    try {
-      const res = await fetch("/api/stripe/connect/disconnect", { method: "DELETE" });
-      if (res.ok) {
-        setStripeStatus({ connected: false });
-        toast({ title: "Disconnected", description: "Stripe account removed." });
-      } else {
-        throw new Error("Failed");
-      }
-    } catch {
-      toast({ title: "Error", description: "Could not disconnect — please try again", variant: "destructive" });
-    } finally {
-      setStripeDisconnecting(false);
-    }
-  };
 
   const [contentSettings, setContentSettings] = useState<{
     selected_niche: string | null;
@@ -295,14 +210,6 @@ export default function SettingsContent({
         throw new Error("Failed to save");
       }
       toast({ title: "Saved", description: "Brand profile updated." });
-      // Mark the onboarding step as done and refresh the checklist immediately
-      fetch("/api/onboarding", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ steps: { brandProfile: true } }),
-      })
-        .then(() => refetchOnboarding())
-        .catch(() => {});
     } catch (e) {
       toast({
         title: "Error",
@@ -377,7 +284,7 @@ export default function SettingsContent({
             Save
           </Button>
           {settingsTableMissing && (
-            <p className="text-sm text-amber-400">Profile settings are temporarily unavailable. Please try again later or contact support.</p>
+            <p className="text-sm text-amber-400">Create the database table above to save.</p>
           )}
         </CardContent>
       </Card>
@@ -476,126 +383,7 @@ export default function SettingsContent({
         </CardContent>
       </Card>
 
-      {/* 3. PAYMENTS */}
-      <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]" id="payments">
-        <CardHeader>
-          <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center gap-2">
-            <CreditCard className="w-5 h-5" />
-            Payments
-          </CardTitle>
-          <CardDescription className="text-gray-600 dark:text-gray-400">
-            Accept payments for your digital products. Connect Stripe to receive payouts directly to your bank account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {stripeLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Checking Stripe status…
-            </div>
-          ) : stripeStatus?.connected ? (
-            /* ── Connected state ── */
-            <div className="space-y-4">
-              {/* Status badge */}
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-green-500/20" />
-                <span className="text-sm font-semibold text-green-700 dark:text-green-400">Connected</span>
-              </div>
-
-              {/* Account info */}
-              {stripeStatus.email && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">Account</p>
-                  <p className="text-sm text-gray-900 dark:text-white">{stripeStatus.email}</p>
-                </div>
-              )}
-
-              {/* Capability indicators */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2 text-sm">
-                  {stripeStatus.chargesEnabled
-                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    : <XCircle className="w-4 h-4 text-amber-500" />}
-                  <span className={stripeStatus.chargesEnabled ? "text-gray-700 dark:text-gray-300" : "text-amber-600 dark:text-amber-400"}>
-                    Charges {stripeStatus.chargesEnabled ? "enabled" : "not yet enabled"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  {stripeStatus.payoutsEnabled
-                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    : <XCircle className="w-4 h-4 text-amber-500" />}
-                  <span className={stripeStatus.payoutsEnabled ? "text-gray-700 dark:text-gray-300" : "text-amber-600 dark:text-amber-400"}>
-                    Payouts {stripeStatus.payoutsEnabled ? "enabled" : "not yet enabled"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Incomplete onboarding warning */}
-              {(!stripeStatus.chargesEnabled || !stripeStatus.payoutsEnabled) && (
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 px-3 py-2.5">
-                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-snug">
-                    Your Stripe account setup is incomplete. Click <strong>Complete setup</strong> to finish and enable payments.
-                  </p>
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="flex flex-wrap gap-2">
-                {(!stripeStatus.chargesEnabled || !stripeStatus.payoutsEnabled) ? (
-                  <Button
-                    onClick={handleConnectStripe}
-                    disabled={stripeConnecting}
-                    className="bg-orange-500 hover:bg-orange-600 text-white"
-                  >
-                    {stripeConnecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    Complete setup
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleManageStripe}
-                    disabled={stripeManaging}
-                    variant="outline"
-                    className="border-[#E5E7EB] dark:border-[#2A2A2A]"
-                  >
-                    {stripeManaging ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    Manage Stripe
-                  </Button>
-                )}
-                <Button
-                  onClick={handleDisconnectStripe}
-                  disabled={stripeDisconnecting}
-                  variant="outline"
-                  className="border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                >
-                  {stripeDisconnecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            /* ── Not connected state ── */
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600" />
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Not connected</span>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Connect your Stripe account to accept payments and receive payouts. Takes about 2 minutes.
-              </p>
-              <Button
-                onClick={handleConnectStripe}
-                disabled={stripeConnecting}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                {stripeConnecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Connect Stripe
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 4. PLAN & BILLING */}
+      {/* 3. PLAN & BILLING */}
       <Card className="border-[#E5E7EB] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
         <CardHeader>
           <CardTitle className="text-lg text-gray-900 dark:text-white">
@@ -843,6 +631,88 @@ export default function SettingsContent({
           </CardContent>
         </Card>
       )}
+
+      {/* FEATURES */}
+      <Card className="border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">
+        <CardHeader>
+          <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-orange-500" />
+            Features
+          </CardTitle>
+          <CardDescription className="text-gray-600 dark:text-gray-400">
+            Choose what you use — your sidebar will only show the relevant sections.
+            {(!enabledFeatures || enabledFeatures.length === 0) && (
+              <span className="block mt-1 text-amber-600 dark:text-amber-400 text-xs">Currently showing everything. Select use cases to filter your sidebar.</span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {USE_CASES.map((uc) => {
+            const active = (enabledFeatures ?? []).includes(uc.id);
+            return (
+              <button
+                key={uc.id}
+                type="button"
+                onClick={() => toggleFeature(uc.id)}
+                className={`w-full flex items-center gap-4 p-3 rounded-xl border-2 text-left transition-all ${
+                  active
+                    ? "border-orange-500 bg-orange-50 dark:bg-orange-950/20"
+                    : "border-gray-200 dark:border-[#2A2A2A] hover:border-orange-300"
+                }`}
+              >
+                <span className="text-xl shrink-0">{uc.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <p className={`font-semibold text-sm ${active ? "text-orange-700 dark:text-orange-400" : "text-gray-900 dark:text-white"}`}>
+                    {uc.label}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{uc.description}</p>
+                </div>
+                <div className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                  active ? "border-orange-500 bg-orange-500" : "border-gray-300 dark:border-gray-600"
+                }`}>
+                  {active && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+              </button>
+            );
+          })}
+          <div className="pt-2 flex gap-3">
+            <Button
+              onClick={handleSaveFeatures}
+              disabled={featuresSaving}
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              {featuresSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save features"}
+            </Button>
+            {enabledFeatures && enabledFeatures.length > 0 && (
+              <Button
+                variant="ghost"
+                disabled={featuresSaving}
+                onClick={async () => {
+                  setEnabledFeatures([]);
+                  setFeaturesSaving(true);
+                  try {
+                    const res = await fetch("/api/user-features", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ enabledFeatures: [] }),
+                    });
+                    if (!res.ok) throw new Error();
+                    toast({ title: "Showing everything", description: "All sidebar items are now visible." });
+                    router.refresh();
+                  } catch {
+                    toast({ title: "Error", description: "Could not save.", variant: "destructive" });
+                  } finally {
+                    setFeaturesSaving(false);
+                  }
+                }}
+                className="text-gray-500"
+              >
+                Show everything
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* DANGER ZONE */}
       <Card className="border-red-200 dark:border-red-900/50 bg-white dark:bg-[#1A1A1A]">

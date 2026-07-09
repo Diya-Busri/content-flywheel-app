@@ -104,6 +104,12 @@ export interface ExecutionContext {
    * Agents call this once when they finish their stage.
    */
   saveProgress: (patch: SaveProgressPatch) => Promise<void>;
+  /**
+   * Project memory — arbitrary key/value store persisted in DB.
+   * Business Brain auto-fix writes fixInstruction + fixStage here so
+   * agents can pick up the targeted improvement context on re-run.
+   */
+  memory?: Record<string, unknown>;
 }
 
 /* ─── Agent status (used by the execution page per-card) ─────────────────────── */

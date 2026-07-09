@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square, Video, MoreHorizontal, DatabaseZap, Check } from "lucide-react";
+import { Send, Loader2, Volume2, VolumeX, ImagePlus, Plus, Search, Trash2, Mic, Phone, PhoneOff, Paperclip, FileText, X, ChevronDown, ChevronLeft, ChevronRight, Package, Copy, BookOpen, Sparkles, Save, Pencil, Download, Pin, AudioLines, Play, Square, Video, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,7 +47,6 @@ import { useChatCoach } from "@/hooks/useChatCoach";
 import type { CoachMessage } from "@/hooks/useChatCoach";
 import { cn } from "@/lib/utils";
 import { YouTubeScriptActionPanel } from "./YouTubeScriptActionPanel";
-import { CoachResponseRenderer } from "@/components/coach/CoachResponseRenderer";
 
 const SESSIONS_KEY = "ai-coach-sessions";
 const SIDEBAR_COLLAPSED_KEY = "ai_coach_sidebar_collapsed";
@@ -1209,9 +1208,6 @@ function ChatPanel({
   const [isRecording, setIsRecording] = useState(false);
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [saveResponseModal, setSaveResponseModal] = useState<{ content: string; index: number } | null>(null);
-  // Founder OS KB save state: Set of message indices already saved
-  const [savedToKB, setSavedToKB] = useState<Set<number>>(new Set());
-  const [savingToKBIndex, setSavingToKBIndex] = useState<number | null>(null);
   const [saveResponseTitle, setSaveResponseTitle] = useState("");
   const [savingToLibrary, setSavingToLibrary] = useState(false);
 
@@ -2185,15 +2181,13 @@ ${videoLines}`;
                     <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">CF Coach</span>
                   </div>
                 )}
-                <div className={cn("flex flex-col gap-1 min-w-0", msg.role === "user" ? "items-end" : "items-start", msg.structuredResponse ? "flex-1" : "")}>
+                <div className={cn("flex flex-col gap-1 min-w-0", msg.role === "user" ? "items-end" : "items-start")}>
                   <div
                     className={cn(
-                      "rounded-2xl shadow-sm",
+                      "rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap shadow-sm max-w-[90%] sm:max-w-[32rem]",
                       msg.role === "user"
-                        ? "px-4 py-3 text-sm whitespace-pre-wrap bg-orange-500 text-white dark:bg-orange-500 max-w-[90%] sm:max-w-[32rem]"
-                        : msg.structuredResponse
-                        ? "p-4 bg-card text-foreground border border-border w-full"
-                        : "px-4 py-3 text-sm whitespace-pre-wrap bg-card text-foreground border border-border max-w-[90%] sm:max-w-[32rem]"
+                        ? "bg-orange-500 text-white dark:bg-orange-500"
+                        : "bg-card text-foreground border border-border"
                     )}
                   >
                     {msg.role === "user" && msg.imageUrls && msg.imageUrls.length > 0 && (
@@ -2245,81 +2239,20 @@ ${videoLines}`;
                         ))}
                       </div>
                     )}
-                    {/* User message text */}
-                    {msg.role === "user" && msg.content && msg.content !== "(no text)" && (
+                    {(msg.role === "user" && msg.content && msg.content !== "(no text)" && (
                       <span className={(msg.imageUrls?.length || msg.attachedFiles?.length || msg.attachedVideos?.length) ? "block mt-2" : ""}>
                         {stripMarkdown(msg.content)}
                       </span>
-                    )}
-                    {/* Assistant: always show dots while streaming the last message */}
-                    {msg.role === "assistant" && isLoading && i === messages.length - 1 && (
-                      <span className="inline-flex gap-1 items-center py-1">
+                    )) ||
+                      (msg.role === "assistant" && (msg.content || (isLoading && i === messages.length - 1)) && (
+                        <span>{stripMarkdown(msg.content || "")}</span>
+                      ))}
+                    {msg.role === "assistant" && isLoading && i === messages.length - 1 && !msg.content && (
+                      <span className="inline-flex gap-1 items-center">
                         <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce [animation-delay:-0.3s]" />
                         <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce [animation-delay:-0.15s]" />
                         <span className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" />
                       </span>
-                    )}
-                    {/* Assistant: render structured cards or plain text once streaming ends */}
-                    {msg.role === "assistant" && !(isLoading && i === messages.length - 1) && (
-                      msg.structuredResponse
-                        ? <CoachResponseRenderer response={msg.structuredResponse} onSendMessage={sendMessage} />
-                        : msg.content
-                        ? <span>{stripMarkdown(msg.content)}</span>
-                        : null
-                    )}
-                    {/* Save to Founder OS — shown on completed assistant messages with real content */}
-                    {msg.role === "assistant" &&
-                      !(isLoading && i === messages.length - 1) &&
-                      msg.content &&
-                      msg.content.length > 40 &&
-                      !msg.structuredResponse && (
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/30">
-                        {savedToKB.has(i) ? (
-                          <span className="flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400 font-medium">
-                            <Check className="w-3 h-3" />Saved to Memory
-                          </span>
-                        ) : (
-                          <button
-                            onClick={async () => {
-                              setSavingToKBIndex(i);
-                              try {
-                                const text = msg.content ?? "";
-                                const firstSentence = text.split(/[.!?]/)[0]?.trim() ?? text;
-                                const title = firstSentence.slice(0, 120) || "Coach insight";
-                                const payload = {
-                                  category: "coaching",
-                                  type: "insight",
-                                  title,
-                                  content: text.slice(0, 3000),
-                                  source: "coach",
-                                  tags: [coachMode],
-                                };
-                                // Save to personal user memory (all users)
-                                await fetch("/api/user-memory/save", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify(payload),
-                                });
-                                // Also try Founder OS (admin only — 403 for non-admins, silently ignored)
-                                void fetch("/api/founder-knowledge/save", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ ...payload, category: "research" }),
-                                }).catch(() => {});
-                                setSavedToKB(prev => new Set([...Array.from(prev), i]));
-                              } catch { /* non-blocking */ }
-                              finally { setSavingToKBIndex(null); }
-                            }}
-                            disabled={savingToKBIndex === i}
-                            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400 font-medium transition-colors disabled:opacity-50"
-                          >
-                            {savingToKBIndex === i
-                              ? <Loader2 className="w-3 h-3 animate-spin" />
-                              : <DatabaseZap className="w-3 h-3" />}
-                            {savingToKBIndex === i ? "Saving…" : "Save to Memory"}
-                          </button>
-                        )}
-                      </div>
                     )}
                     {msg.role === "assistant" && msg.voiceOverUrl && (
                       <div className="mt-2 flex flex-col gap-2">

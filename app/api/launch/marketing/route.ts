@@ -49,6 +49,12 @@ interface MarketingInput {
   competitorInsights?:  Array<{ name: string; strength: string; gap: string }>;
   productOpportunities?: Array<{ title: string; description: string; type: string; priceRange: string }>;
   actionPlan?:          Array<{ step: number; action: string; detail: string }>;
+  /**
+   * Extra instruction injected by Business Brain auto-fix.
+   * Tells the agent exactly what to improve in this re-run.
+   * e.g. "Add international student marketing strategies across all social channels"
+   */
+  additionalContext?:   string;
 }
 
 /* ─── GPT helper ─────────────────────────────────────────────────────────────── */
@@ -106,6 +112,10 @@ function buildContext(input: MarketingInput): string {
   }
   if (input.competitorInsights?.length) {
     parts.push(`Competitor Gaps: ${input.competitorInsights.slice(0, 3).map(c => `${c.name}: ${c.gap}`).join(" | ")}`);
+  }
+  // Business Brain improvement instruction — takes priority over defaults
+  if (input.additionalContext) {
+    parts.push(`\nIMPORTANT — APPLY THIS IMPROVEMENT: ${input.additionalContext}`);
   }
 
   return parts.join("\n");
@@ -468,6 +478,7 @@ export async function POST(request: NextRequest) {
       competitorInsights:   Array.isArray(body.competitorInsights)        ? body.competitorInsights    : [],
       productOpportunities: Array.isArray(body.productOpportunities)      ? body.productOpportunities  : [],
       actionPlan:           Array.isArray(body.actionPlan)                ? body.actionPlan            : [],
+      additionalContext:    typeof body.additionalContext === "string"     ? body.additionalContext     : undefined,
     };
 
     return streamMarketingGeneration(userId, input, apiKey);
