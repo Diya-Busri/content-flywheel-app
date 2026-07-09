@@ -78,12 +78,6 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
 
   const navGroups: NavGroup[] = [
     {
-      label: "AI",
-      items: [
-        { href: "/dashboard/launch",   icon: <Rocket size={18} />,     label: "Launch with AI", activeWhenStartsWith: true },
-      ],
-    },
-    {
       label: "Create",
       items: [
         { href: "/dashboard/academy", icon: <GraduationCap size={18} />, label: "Academy", activeWhenStartsWith: true },
