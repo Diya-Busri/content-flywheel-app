@@ -128,7 +128,7 @@ export default async function CreatorProfilePage({
   // Banner background
   let bannerBg: string;
   if (bannerImageUrl) {
-    bannerBg = `url(${bannerImageUrl}) center/cover no-repeat`;
+    bannerBg = `url(${bannerImageUrl}) center top/cover no-repeat`;
   } else if (bannerGradient) {
     bannerBg = `linear-gradient(${bannerGradient})`;
   } else {
