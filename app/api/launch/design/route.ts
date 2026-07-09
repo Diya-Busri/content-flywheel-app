@@ -559,11 +559,12 @@ function streamDesignGeneration(
         (generatedUrls.social    ? 1 : 0);
 
       await send({
-        type:            "done",
-        assets:          generatedUrls,
+        type:             "done",
+        assets:           generatedUrls,
         assetsCount,
-        concepts:        successfulConcepts,
+        concepts:         successfulConcepts,
         carouselBundleId: carouselBundleId ?? null,
+        thumbnailDesignId: thumbnailDesignId ?? null,
       });
 
     } catch (err) {

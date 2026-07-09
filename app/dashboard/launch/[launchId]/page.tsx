@@ -910,18 +910,25 @@ export default function LaunchExecutionPage() {
     const finalStatus: LaunchStatus = hasNeedsAttention ? "awaiting_approval" : "completed";
     setOverallStatus(finalStatus);
 
-    // Sync overall progress to the store readiness score when there are issues.
-    // This prevents the "100% vs 96%" inconsistency where the bar says complete
-    // but the readiness panel shows a lower number.
+    // Always write the final status to DB reliably — do NOT rely solely on the store agent's
+    // saveProgress call (that PATCH can fail silently). Without this, a page refresh would
+    // find status="running" and re-run the entire pipeline from scratch.
     if (hasNeedsAttention) {
+      // Sync progress bar to store readiness to fix "100% vs 96%" inconsistency.
       const storeScore = (allResults.store as Record<string, unknown> | undefined)?.readinessScore as number | undefined;
       const syncedPct = storeScore ? Math.min(storeScore, 97) : 97;
       setOverallPct(syncedPct);
-
       await fetch(`/api/launch/${launchId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ status: "awaiting_approval", progress: syncedPct }),
+      }).catch(() => {});
+    } else {
+      // Clean completion — explicitly write completed + 100 so refresh restores correctly.
+      await fetch(`/api/launch/${launchId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ status: "completed", progress: 100 }),
       }).catch(() => {});
     }
   }, [buildSaveProgress, demoMode, launchId]);

@@ -141,20 +141,32 @@ function streamStoreAssembly(
         await sleep(120);
       };
 
-      // 1. Cover image
-      await addCheck(assetPatch.coverThumbnailUrl
-        ? { id: "cover",      label: "Cover Image",         status: "ok",      detail: "Product cover attached" }
-        : { id: "cover",      label: "Cover Image",         status: "warning", detail: "No cover — design agent may have failed" });
+      // 1. Cover image — accept either a DALL-E URL or a Design Studio record (designId)
+      const hasCoverDesign =
+        Array.isArray(design.concepts) &&
+        (design.concepts as Array<{ designId?: string }>).some(c => !!c.designId);
+      await addCheck(
+        assetPatch.coverThumbnailUrl
+          ? { id: "cover", label: "Cover Image", status: "ok",      detail: "Product cover attached" }
+          : hasCoverDesign
+            ? { id: "cover", label: "Cover Image", status: "ok",    detail: "Cover design ready — open in Design Studio to export" }
+            : { id: "cover", label: "Cover Image", status: "warning", detail: "No cover — retry the Design Agent" },
+      );
 
       // 2. 3D Mockup
       await addCheck(assetPatch.bookMockupUrl
         ? { id: "mockup",     label: "3D Mockup",           status: "ok",      detail: "Mockup image attached" }
         : { id: "mockup",     label: "3D Mockup",           status: "warning", detail: "No mockup — optional but recommended" });
 
-      // 3. Marketplace thumbnail
-      await addCheck(assetPatch.thumbnailUrl
-        ? { id: "thumbnail",  label: "Store Thumbnail",     status: "ok",      detail: "Square thumbnail ready" }
-        : { id: "thumbnail",  label: "Store Thumbnail",     status: "warning", detail: "No thumbnail — generate one in Design Studio" });
+      // 3. Marketplace thumbnail — accept DALL-E URL or dedicated thumbnail design record
+      const hasThumbnailDesign = !!(design.thumbnailDesignId as string | undefined);
+      await addCheck(
+        assetPatch.thumbnailUrl
+          ? { id: "thumbnail", label: "Store Thumbnail", status: "ok",      detail: "Square thumbnail ready" }
+          : hasThumbnailDesign
+            ? { id: "thumbnail", label: "Store Thumbnail", status: "ok",    detail: "Thumbnail design ready — open in Design Studio to export" }
+            : { id: "thumbnail", label: "Store Thumbnail", status: "warning", detail: "No thumbnail — generate one in Design Studio" },
+      );
 
       // 4. Social preview
       await addCheck(assetPatch.socialPreviewUrl

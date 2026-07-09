@@ -378,11 +378,11 @@ export default function ExecutionWorkspacePage() {
   }, [loadProject]);
 
   useEffect(() => {
-    if (project?.status !== "completed" || !readDemoMode()) return;
+    if (!isComplete || !readDemoMode()) return;
     setShowDemoReveal(true);
     const timeout = setTimeout(() => setShowDemoReveal(false), 2000);
     return () => clearTimeout(timeout);
-  }, [project?.status]);
+  }, [isComplete]);
 
   /* ── Regenerate handler ── */
   const handleRegenerate = useCallback(async (stageId: string) => {
@@ -483,7 +483,9 @@ export default function ExecutionWorkspacePage() {
   const results    = project.stageResults ?? {} as LaunchStageResults;
   const productId  = results.product?.productId ?? "";
   const storeUrl   = results.store?.storeUrl ?? "";
-  const isComplete = project.status === "completed";
+  // Both "completed" and "awaiting_approval" mean the pipeline finished and the workspace is ready.
+  // "awaiting_approval" = pipeline ran successfully but some optional assets need attention.
+  const isComplete = project.status === "completed" || project.status === "awaiting_approval";
 
   /* Derive overall progress display */
   const completedCount = STAGE_CONFIGS.filter(s => results[s.id]).length;

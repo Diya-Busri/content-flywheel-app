@@ -111,9 +111,13 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
   let buf = "";
 
   const generatedAssets: Record<string, string> = {};
-  const concepts: Array<{ style: string; label: string; url: string }> = [];
-  let assetsCount     = 0;
+  // Concepts include designId (DB record) and optionally url (DALL-E image).
+  // Template covers have designId but no url; that's fine — they're editable in Design Studio.
+  const concepts: Array<{ style: string; label: string; url?: string; designId?: string }> = [];
+  let assetsCount       = 0;
   let carouselBundleId: string | undefined;
+  // Dedicated store thumbnail design record (800×800, editable in Design Studio)
+  let thumbnailDesignId: string | undefined;
 
   /** Map cover concept imageUrl to the "concepts" step, using last received URL */
   let latestConceptUrl: string | undefined;
@@ -171,30 +175,34 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
 
         /* ── Asset ready ── */
         case "asset-done": {
-          const assetId     = event.assetId as string;
-          const url         = event.url as string;
+          const assetId  = event.assetId  as string;
+          const url      = event.url      as string | undefined;
+          const designId = event.designId as string | undefined;
 
           if (assetId.startsWith("cover:")) {
-            // Accumulate concepts; update the concepts step with latest image
-            latestConceptUrl = url;
-            concepts.push({
-              style: (event.conceptStyle as string) ?? assetId.split(":")[1],
-              label: event.label as string,
-              url,
-            });
-            generatedAssets[assetId] = url;
-            // Update concepts step image with the first concept that arrives
-            if (concepts.length === 1) {
-              setStep("concepts", "running", { imageUrl: url, label: "Product Cover — 3 styles" });
+            // "cover:thumbnail" is the dedicated store-thumbnail design — keep it separate.
+            if (assetId === "cover:thumbnail" && designId) {
+              thumbnailDesignId = designId;
+              // Not pushed into main concepts array — it's saved via thumbnailDesignId
             } else {
-              // Update imageUrl to latest
-              setStep("concepts", "running", { imageUrl: url });
+              // Regular cover concept (Minimal, Bold, Dark, Modern, etc.)
+              const style = (event.conceptStyle as string) ?? assetId.split(":")[1];
+              const label = event.label as string;
+              concepts.push({ style, label, url, designId });
+              if (url) latestConceptUrl = url;
+              // Update UI step
+              if (concepts.length === 1) {
+                setStep("concepts", "running", { imageUrl: url ?? undefined, label: "Product Cover — 3 styles" });
+              } else if (url) {
+                setStep("concepts", "running", { imageUrl: url });
+              }
             }
+            if (url) generatedAssets[assetId] = url;
           } else {
-            generatedAssets[assetId] = url;
+            if (url) generatedAssets[assetId] = url;
             setStep(`asset:${assetId}`, "done", {
               label:    event.label as string,
-              imageUrl: url,
+              imageUrl: url ?? undefined,
             });
           }
           break;
@@ -217,35 +225,39 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
         case "done": {
           assetsCount      = (event.assetsCount as number) ?? Object.keys(generatedAssets).length;
           carouselBundleId = carouselBundleId ?? (event.carouselBundleId as string | undefined);
+          // Server sends the authoritative thumbnailDesignId in the done event
+          thumbnailDesignId = thumbnailDesignId ?? (event.thumbnailDesignId as string | undefined);
 
-          const eventConcepts = event.concepts as Array<{ style: string; label: string; url: string }> | undefined;
-          if (Array.isArray(eventConcepts)) {
-            // Use the server's authoritative list
+          // Use server's authoritative concepts list (includes designId for Design Studio links)
+          const eventConcepts = event.concepts as Array<{ style: string; label: string; url?: string; designId?: string }> | undefined;
+          if (Array.isArray(eventConcepts) && eventConcepts.length > 0) {
             concepts.length = 0;
             concepts.push(...eventConcepts);
           }
 
-          // Mark concepts step done with last concept image
-          if (latestConceptUrl) {
-            setStep("concepts", "done", { imageUrl: latestConceptUrl });
-          } else {
-            setStep("concepts", "done");
-          }
+          // Mark concepts step done with last concept image (if any)
+          setStep("concepts", "done", latestConceptUrl ? { imageUrl: latestConceptUrl } : undefined);
 
           callbacks.onProgress(98, "Saving design results...");
 
-          const firstConceptUrl = concepts[0]?.url;
+          // Template covers have designId but no url — that's ok.
+          // coverUrl will be undefined for template covers; the validator uses hasEditConcept as fallback.
+          const firstConceptUrl    = concepts[0]?.url;
+          const firstConceptDesignId = concepts[0]?.designId;
 
           const designResult = {
-            coverUrl:           firstConceptUrl,
-            mockupUrl:          generatedAssets.mockup,
-            thumbnailUrl:       generatedAssets.thumbnail,
-            socialUrl:          generatedAssets.social,
+            coverUrl:             firstConceptUrl,          // undefined for template covers
+            mockupUrl:            generatedAssets.mockup,
+            thumbnailUrl:         generatedAssets.thumbnail,
+            socialUrl:            generatedAssets.social,
             assetsCount,
-            completedAt:        new Date().toISOString(),
-            concepts:           concepts.length > 0 ? concepts : undefined,
-            selectedConceptUrl: firstConceptUrl,
-            carouselBundleId:   carouselBundleId,
+            completedAt:          new Date().toISOString(),
+            concepts:             concepts.length > 0 ? concepts : undefined,
+            selectedConceptUrl:   firstConceptUrl,
+            carouselBundleId:     carouselBundleId,
+            thumbnailDesignId:    thumbnailDesignId,        // dedicated 800×800 store thumbnail
+            // primaryCoverDesignId is surfaced via concepts[0].designId at runtime
+            ...(firstConceptDesignId ? { selectedConceptDesignId: firstConceptDesignId } : {}),
           };
 
           const validation = validateDesign(designResult);

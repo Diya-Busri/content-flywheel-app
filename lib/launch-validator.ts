@@ -191,26 +191,29 @@ export function validateDesign(
   const assetCount   = d.assetsCount ?? 0;
 
   const checks: AssetCheck[] = [
+    // All design asset checks are non-required: cover, thumbnail, mockup, and social
+    // images are optional and must never block completion. They surface as warnings
+    // the user can fix in Design Studio — they are not launch blockers.
     check(
       "cover-concept",
       "Product cover generated",
-      true,
+      false,
       hasConcept && hasCover,
       "No cover concepts were generated — retry the Design Agent",
     ),
     check(
       "editable-design",
       "Cover is editable in Design Studio",
-      true,
+      false,
       hasEditConcept,
       "Concepts were generated but no designId was saved — cover cannot be edited",
     ),
     check(
       "store-thumbnail",
       "Store thumbnail generated",
-      true,
+      false,
       hasThumbnail,
-      "Store thumbnail is missing — this image appears on your store listing",
+      "Store thumbnail is missing — create one in Design Studio",
     ),
     check(
       "mockup",
