@@ -117,8 +117,8 @@ export async function runLaunchMarketingAgent(ctx: ExecutionContext): Promise<vo
     productId,
     productName,
     niche:       research?.query           ?? ctx.goal,
-    format:      "guide",                 // server reads actual format from DB
-    pricePoint:  "£27",
+    format:      product?.format      ?? "guide",
+    pricePoint:  product?.pricePoint  ?? "£27",
     goal:        ctx.goal,
     reportSummary:        research?.reportSummary,
     insights:             research?.insights,

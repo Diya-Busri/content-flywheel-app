@@ -123,6 +123,10 @@ export type LaunchStageResults = {
   product?: {
     productId: string;
     productName: string;
+    /** Product format chosen by AI (e.g. "ebook", "guide", "course") */
+    format?: string;
+    /** Price point chosen by AI (e.g. "£27") */
+    pricePoint?: string;
     /** How many sections had non-empty content after generation */
     sectionsGenerated?: number;
     /** Total sections in the outline */

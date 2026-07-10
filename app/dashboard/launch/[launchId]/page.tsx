@@ -764,22 +764,63 @@ export default function LaunchExecutionPage() {
       }
     }
 
-    // Mark already-complete stages (resume case)
-    const initialStatuses: AgentStatus[] = PIPELINE_STAGES.map((stage, idx) => {
-      if (idx >= fromStageIdx) return "waiting";
+    // Mark already-complete stages (resume case: any stage with saved results is shown as complete)
+    const initialStatuses: AgentStatus[] = PIPELINE_STAGES.map((stage) => {
       const key = stage.id as keyof LaunchStageResults;
       return latestResultsRef.current[key] ? "complete" : "waiting";
     });
     setAgentStatuses(initialStatuses);
 
+    // Pre-populate completion summaries + validations for stages we're about to skip
+    {
+      const r = latestResultsRef.current;
+      const resumeSummaries: Record<number, string> = {};
+      PIPELINE_STAGES.forEach((stage, i) => {
+        if (!r[stage.id as keyof LaunchStageResults]) return;
+        if (stage.id === "research" && r.research) {
+          const insights = r.research.insights?.length ?? 0;
+          const opps     = r.research.productOpportunities?.length ?? 0;
+          resumeSummaries[i] = `${insights} insights · ${opps} product opportunities found`;
+        } else if (stage.id === "product" && r.product) {
+          resumeSummaries[i] = `"${r.product.productName ?? "Product"}" created · ready in Digital Products`;
+        } else if (stage.id === "design" && r.design) {
+          const count = r.design.assetsCount ?? 0;
+          resumeSummaries[i] = `${count} marketing asset${count !== 1 ? "s" : ""} generated · cover, mockup, thumbnail, social`;
+        } else if (stage.id === "marketing" && r.marketing) {
+          const carousels = r.marketing.carousels?.length ?? 0;
+          const emails    = r.marketing.emails?.length ?? 0;
+          const xPosts    = r.marketing.xPosts?.length ?? 0;
+          const tiktoks   = r.marketing.tiktokHooks?.length ?? 0;
+          const total     = carousels + emails + xPosts + tiktoks + 9;
+          resumeSummaries[i] = `${total}+ assets · launch copy, ${carousels} carousels, ${emails} emails, ${xPosts + tiktoks} posts`;
+        } else if (stage.id === "store" && r.store) {
+          const score = r.store.readinessScore ?? 0;
+          if (r.store.productId) setStoreProductId(r.store.productId);
+          if (r.store.storeUrl)  setStoreUrl(r.store.storeUrl);
+          resumeSummaries[i] = `Store Readiness ${score}% · ready to publish`;
+        }
+        // Restore stage validation badge
+        const stageData = r[stage.id as keyof LaunchStageResults] as Record<string, unknown> | undefined;
+        const validation = stageData?.validation as StageValidation | undefined;
+        if (validation) setStageValidations(prev => ({ ...prev, [i]: validation }));
+      });
+      if (Object.keys(resumeSummaries).length > 0) {
+        setCompletedSummaries(prev => ({ ...prev, ...resumeSummaries }));
+      }
+    }
+
     const saveProgress = buildSaveProgress(latestResultsRef);
+
+    let hasErrors = false;
 
     for (let i = 0; i < PIPELINE_STAGES.length; i++) {
       const stage = PIPELINE_STAGES[i]!;
 
-      // Skip already-complete stages (only stages BEFORE the retry point)
+      // Skip stages that already have saved results.
+      // For explicit retries, data from fromStageIdx onward was cleared above, so those stages run.
+      // For resume-from-failure (fromStageIdx=0), previously-completed stages are safely skipped.
       const key = stage.id as keyof LaunchStageResults;
-      if (i < fromStageIdx && latestResultsRef.current[key]) continue;
+      if (latestResultsRef.current[key]) continue;
 
       // Skip un-wired stages (no execute fn yet)
       if (!stage.execute) continue;
@@ -890,6 +931,7 @@ export default function LaunchExecutionPage() {
         console.error(`[pipeline] Stage ${stage.id} failed:`, msg);
         setAgentStatuses(prev => prev.map((s, idx) => idx === i ? "error" : s));
         setStageErrors(prev => ({ ...prev, [i]: msg }));
+        hasErrors = true;
         // Persist failed status to DB so page reloads show correct state
         await fetch(`/api/launch/${launchId}`, {
           method:  "PATCH",
@@ -908,13 +950,14 @@ export default function LaunchExecutionPage() {
       return (r?.validation as StageValidation | undefined)?.status === "needs_attention";
     });
 
-    const finalStatus: LaunchStatus = hasNeedsAttention ? "awaiting_approval" : "completed";
+    // If any stage errored OR any validation needs attention → awaiting_approval, not "completed"
+    const finalStatus: LaunchStatus = (hasErrors || hasNeedsAttention) ? "awaiting_approval" : "completed";
     setOverallStatus(finalStatus);
 
     // Always write the final status to DB reliably — do NOT rely solely on the store agent's
     // saveProgress call (that PATCH can fail silently). Without this, a page refresh would
     // find status="running" and re-run the entire pipeline from scratch.
-    if (hasNeedsAttention) {
+    if (hasErrors || hasNeedsAttention) {
       // Sync progress bar to store readiness to fix "100% vs 96%" inconsistency.
       const storeScore = (allResults.store as Record<string, unknown> | undefined)?.readinessScore as number | undefined;
       const syncedPct = storeScore ? Math.min(storeScore, 97) : 97;

@@ -307,6 +307,8 @@ export async function runLaunchProductAgent(ctx: ExecutionContext): Promise<void
           const productResult = {
             productId:        productId,
             productName:      productName ?? goal,
+            format:           format ?? undefined,
+            pricePoint:       pricePoint ?? undefined,
             sectionsGenerated,
             totalSections,
             emptySections,
