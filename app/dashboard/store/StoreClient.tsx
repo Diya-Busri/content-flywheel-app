@@ -41,9 +41,15 @@ import {
   UserCheck,
   Rocket,
   Shield,
+  Trophy,
+  Award,
+  Gift,
+  Sparkles,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { TRUST_FACTOR_META, getTrustLevel, TRUST_LEVELS } from "@/lib/trust-score-config";
+import { REWARDS_CONFIG, CREATOR_LEVELS, getCreatorLevel } from "@/lib/rewards-config";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -83,6 +89,36 @@ type RecentOrder = {
 type DayRevenue = { date: string; cents: number; orders: number };
 type TopProduct = { productId: string; title: string; orders: number; revenueCents: number };
 
+// ── Creator Growth Types ──────────────────────────────────────────────────────
+type ReferralStatus = "pending_signup" | "trial_active" | "product_published" | "pro_converted" | "credit_awarded" | "expired" | "rejected";
+type GrowthReferral = { id: string; referredEmail: string | null; status: ReferralStatus; createdAt: string; convertedAt: string | null; creditAwardedAt: string | null };
+type CreditEvent = { id: string; type: string; amountCredits: number; description: string; createdAt: string };
+type FeaturedSlot = { productId: string; niche: string; featuredUntil: string | null; active: boolean };
+type GrowthSummary = {
+  availableCredits: number; pendingReferrals: number;
+  creditHistory: CreditEvent[]; referrals: GrowthReferral[];
+  activeFeatured: FeaturedSlot[]; creatorLevel: string;
+  salesCount: number; leaderboardOptIn: boolean; creatorScore: number | null;
+};
+type LeaderboardEntry = {
+  rank: number; userId: string; displayName: string;
+  profileImage: string | null; accentColor: string;
+  levelLabel: string; levelEmoji: string;
+  salesCount: number; revenueGbp: number;
+  avgRating: number; followerCount: number; score: number;
+};
+type GrowthLbTab = "top-sellers" | "highest-revenue" | "fastest-growing" | "highest-rated" | "most-followed";
+
+const REFERRAL_STATUS_META: Record<ReferralStatus, { label: string; color: string }> = {
+  pending_signup:    { label: "Pending signup",    color: "text-gray-400"   },
+  trial_active:      { label: "Trial active",      color: "text-blue-400"   },
+  product_published: { label: "Product published", color: "text-purple-400" },
+  pro_converted:     { label: "Pro converted",     color: "text-orange-400" },
+  credit_awarded:    { label: "Credit awarded ✓",  color: "text-green-400"  },
+  expired:           { label: "Expired",           color: "text-gray-500"   },
+  rejected:          { label: "Rejected",          color: "text-red-400"    },
+};
+
 // ── Trust Score Types ─────────────────────────────────────────────────────────
 type TrustLevel = "building" | "developing" | "trusted" | "excellent" | "elite";
 type TrustBreakdown = Record<string, number>;
@@ -117,23 +153,24 @@ interface Customer {
 
 const STORE_BASE = "https://contentflywheel.co.uk/c";
 
-type Tab = "products" | "bundles" | "orders" | "promo" | "affiliates" | "customers" | "email" | "analytics" | "payouts" | "settings" | "trust-score";
+type Tab = "products" | "bundles" | "orders" | "promo" | "affiliates" | "customers" | "email" | "analytics" | "payouts" | "settings" | "trust-score" | "growth";
 
 const TABS: { id: string; label: string; icon: React.ReactNode; href?: string }[] = [
-  { id: "products",   label: "Products",       icon: <ShoppingBag className="w-3.5 h-3.5" /> },
-  { id: "bundles",    label: "Bundles",        icon: <Layers className="w-3.5 h-3.5" /> },
-  { id: "orders",     label: "Orders",         icon: <Package className="w-3.5 h-3.5" />,  href: "/dashboard/orders" },
-  { id: "customers",  label: "Customers",      icon: <UserCircle className="w-3.5 h-3.5" /> },
-  { id: "email",      label: "Email",          icon: <Mail className="w-3.5 h-3.5" /> },
-  { id: "analytics",  label: "Analytics",      icon: <TrendingUp className="w-3.5 h-3.5" /> },
-  { id: "promo",      label: "Promo Codes",    icon: <Tag className="w-3.5 h-3.5" /> },
+  { id: "growth",       label: "Creator Growth", icon: <Sparkles className="w-3.5 h-3.5" /> },
+  { id: "products",     label: "Products",       icon: <ShoppingBag className="w-3.5 h-3.5" /> },
+  { id: "bundles",      label: "Bundles",        icon: <Layers className="w-3.5 h-3.5" /> },
+  { id: "orders",       label: "Orders",         icon: <Package className="w-3.5 h-3.5" />,  href: "/dashboard/orders" },
+  { id: "customers",    label: "Customers",      icon: <UserCircle className="w-3.5 h-3.5" /> },
+  { id: "email",        label: "Email",          icon: <Mail className="w-3.5 h-3.5" /> },
+  { id: "analytics",    label: "Analytics",      icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  { id: "promo",        label: "Promo Codes",    icon: <Tag className="w-3.5 h-3.5" /> },
   { id: "affiliates",   label: "Affiliates",     icon: <Users className="w-3.5 h-3.5" /> },
-  { id: "trust-score", label: "Trust Score",   icon: <Shield className="w-3.5 h-3.5" /> },
-  { id: "payouts",      label: "Payouts",       icon: <CreditCard className="w-3.5 h-3.5" /> },
-  { id: "reviews",    label: "Reviews",        icon: <Star className="w-3.5 h-3.5" />,     href: "/dashboard/reviews" },
-  { id: "webhooks",   label: "Webhooks",       icon: <Zap className="w-3.5 h-3.5" />,      href: "/dashboard/webhooks" },
-  { id: "referral",   label: "Invite Creators",icon: <UserPlus className="w-3.5 h-3.5" />,  href: "/dashboard/referral" },
-  { id: "settings",   label: "Settings",       icon: <Settings className="w-3.5 h-3.5" /> },
+  { id: "trust-score",  label: "Trust Score",    icon: <Shield className="w-3.5 h-3.5" /> },
+  { id: "payouts",      label: "Payouts",        icon: <CreditCard className="w-3.5 h-3.5" /> },
+  { id: "reviews",      label: "Reviews",        icon: <Star className="w-3.5 h-3.5" />,     href: "/dashboard/reviews" },
+  { id: "webhooks",     label: "Webhooks",       icon: <Zap className="w-3.5 h-3.5" />,      href: "/dashboard/webhooks" },
+  { id: "referral",     label: "Invite Creators",icon: <UserPlus className="w-3.5 h-3.5" />,  href: "/dashboard/referral" },
+  { id: "settings",     label: "Settings",       icon: <Settings className="w-3.5 h-3.5" /> },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -548,6 +585,19 @@ export function StoreClient({ userId }: StoreClientProps) {
   const [trustToggling, setTrustToggling] = useState(false);
   const [trustSubTab, setTrustSubTab] = useState<"breakdown" | "history" | "tips">("breakdown");
 
+  // ── Growth state ────────────────────────────────────────────────────────────
+  const [growthSummary, setGrowthSummary] = useState<GrowthSummary | null>(null);
+  const [growthProducts, setGrowthProducts] = useState<{ id: string; title: string }[]>([]);
+  const [growthLoading, setGrowthLoading] = useState(false);
+  const [growthSelectedId, setGrowthSelectedId] = useState("");
+  const [growthSaving, setGrowthSaving] = useState(false);
+  const [growthMsg, setGrowthMsg] = useState("");
+  const [growthModal, setGrowthModal] = useState<"earn" | "history" | "referrals" | null>(null);
+  const [growthCopied, setGrowthCopied] = useState(false);
+  const [growthLbTab, setGrowthLbTab] = useState<GrowthLbTab>("top-sellers");
+  const [growthLbEntries, setGrowthLbEntries] = useState<LeaderboardEntry[]>([]);
+  const [growthLbLoading, setGrowthLbLoading] = useState(false);
+
   // Analytics + Customers + Email (shared fetch)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
@@ -594,6 +644,19 @@ export function StoreClient({ userId }: StoreClientProps) {
     } catch {} finally { setAnalyticsLoading(false); }
   }, []);
 
+  const fetchGrowthData = useCallback(async () => {
+    setGrowthLoading(true);
+    try {
+      const [sumRes, prodRes] = await Promise.all([
+        fetch("/api/rewards/summary").then((r) => r.json()),
+        fetch("/api/products").then((r) => r.json()),
+      ]);
+      setGrowthSummary(sumRes as GrowthSummary);
+      setGrowthProducts((prodRes.products ?? []) as { id: string; title: string }[]);
+    } catch {}
+    setGrowthLoading(false);
+  }, []);
+
   const fetchTrustScore = useCallback(async () => {
     setTrustLoading(true);
     try {
@@ -605,6 +668,28 @@ export function StoreClient({ userId }: StoreClientProps) {
     } catch {}
     setTrustLoading(false);
   }, []);
+
+  const handleGrowthFeature = async () => {
+    if (!growthSelectedId) return;
+    setGrowthSaving(true); setGrowthMsg("");
+    try {
+      const res = await fetch("/api/marketplace/feature", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: growthSelectedId }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setGrowthMsg(data.error ?? "Error"); return; }
+      toast({ title: "✅ Product featured for 7 days!" });
+      fetchGrowthData();
+    } catch { setGrowthMsg("Something went wrong."); }
+    finally { setGrowthSaving(false); }
+  };
+
+  const handleGrowthRemove = async () => {
+    await fetch("/api/marketplace/feature", { method: "DELETE" });
+    toast({ title: "Featured placement removed." });
+    fetchGrowthData();
+  };
 
   const handleTrustRecalculate = async () => {
     setTrustRecalculating(true);
@@ -625,8 +710,19 @@ export function StoreClient({ userId }: StoreClientProps) {
     setTrustToggling(false);
   };
 
+  // Leaderboard fetch (for growth tab) — re-fetches when tab changes
   useEffect(() => {
-    fetchPromoCodes(); fetchBundles(); fetchAffiliates(); fetchLibrary(); fetchAnalytics(); fetchTrustScore();
+    if (activeTab !== "growth") return;
+    setGrowthLbLoading(true);
+    fetch(`/api/marketplace/leaderboard?tab=${growthLbTab}&limit=5`)
+      .then((r) => r.json())
+      .then((d) => setGrowthLbEntries(d.entries ?? []))
+      .catch(() => {})
+      .finally(() => setGrowthLbLoading(false));
+  }, [growthLbTab, activeTab]);
+
+  useEffect(() => {
+    fetchPromoCodes(); fetchBundles(); fetchAffiliates(); fetchLibrary(); fetchAnalytics(); fetchTrustScore(); fetchGrowthData();
     // Fetch store settings to resolve custom subdomain URL
     fetch("/api/store-settings")
       .then((r) => r.ok ? r.json() : null)
@@ -635,7 +731,7 @@ export function StoreClient({ userId }: StoreClientProps) {
       })
       .catch(() => {})
       .finally(() => setCustomDomainLoaded(true));
-  }, [fetchPromoCodes, fetchBundles, fetchAffiliates, fetchLibrary, fetchAnalytics, fetchTrustScore]);
+  }, [fetchPromoCodes, fetchBundles, fetchAffiliates, fetchLibrary, fetchAnalytics, fetchTrustScore, fetchGrowthData]);
 
   const handleCopy = async () => {
     try {
@@ -1573,6 +1669,384 @@ export function StoreClient({ userId }: StoreClientProps) {
             </div>
           </div>
         )}
+
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        {/* CREATOR GROWTH TAB                                                    */}
+        {/* ══════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "growth" && (() => {
+          const referralLink = typeof window !== "undefined" ? `${window.location.origin}/signup?ref=me` : "";
+
+          const credits       = growthSummary?.availableCredits ?? 0;
+          const levelMeta     = getCreatorLevel(growthSummary?.salesCount ?? 0);
+          const nextLevel     = CREATOR_LEVELS.find((l) => l.minSales > (growthSummary?.salesCount ?? 0));
+          const salesCount    = growthSummary?.salesCount ?? 0;
+          const featuredSlot  = growthSummary?.activeFeatured?.[0] ?? null;
+          const featuredUntil = featuredSlot?.featuredUntil ? new Date(featuredSlot.featuredUntil).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null;
+          const pendingCount  = (growthSummary?.referrals ?? []).filter((r) => !["credit_awarded","expired","rejected"].includes(r.status)).length;
+          const earnedCount   = (growthSummary?.referrals ?? []).filter((r) => r.status === "credit_awarded").length;
+          const trustLm       = trustData ? getTrustLevel(trustData.score) : null;
+
+          // Progress to next level
+          const progressPct = nextLevel
+            ? Math.round(((salesCount - levelMeta.minSales) / (nextLevel.minSales - levelMeta.minSales)) * 100)
+            : 100;
+
+          const GrowthLbTabs: { id: GrowthLbTab; label: string }[] = [
+            { id: "top-sellers",     label: "Top Sellers" },
+            { id: "highest-revenue", label: "Revenue"     },
+            { id: "fastest-growing", label: "Growing"     },
+            { id: "highest-rated",   label: "Rated"       },
+            { id: "most-followed",   label: "Followed"    },
+          ];
+
+          return (
+            <div className="space-y-5">
+
+              {/* ── Modals ── */}
+              {growthModal === "earn" && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-[#141414] rounded-2xl border border-gray-200 dark:border-white/10 w-full max-w-md shadow-2xl">
+                    <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-white/8">
+                      <div>
+                        <h3 className="font-bold text-base text-gray-900 dark:text-white">Ways to Earn Featured Credits</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Real creator growth = real credits</p>
+                      </div>
+                      <button onClick={() => setGrowthModal(null)} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+                    </div>
+                    <div className="p-5 space-y-2.5">
+                      {[
+                        { emoji: "👥", label: "Refer a creator who goes Pro", credit: "+1 credit", desc: "Awarded only after they pay their first invoice." },
+                        { emoji: "🛒", label: `Every ${REWARDS_CONFIG.SALES_PER_CREDIT} verified sales`, credit: "+1 credit", desc: "Based on completed native store orders." },
+                        { emoji: "💷", label: `Every £${REWARDS_CONFIG.REVENUE_PER_CREDIT_GBP} verified revenue`, credit: "+1 credit", desc: "Cumulative GBP revenue from your native store." },
+                        { emoji: "🏆", label: "Product of the Week winner", credit: "+2 credits", desc: "Admin-awarded weekly prize." },
+                        { emoji: "⭐", label: `${REWARDS_CONFIG.REVIEWS_PER_CREDIT} five-star reviews`, credit: "+1 credit", desc: "Verified, approved product reviews." },
+                        { emoji: "✅", label: "Complete creator profile", credit: "+0.25 credits", desc: "Name, bio, photo & brand colour all set." },
+                        { emoji: "🎯", label: "Community challenge completion", credit: "+0.5 credits", desc: "Complete admin-set community challenges." },
+                      ].map((w) => (
+                        <div key={w.label} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/[0.06]">
+                          <span className="text-xl flex-shrink-0">{w.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-gray-900 dark:text-white">{w.label}</span>
+                              <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded-full">{w.credit}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{w.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {growthModal === "history" && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-[#141414] rounded-2xl border border-gray-200 dark:border-white/10 w-full max-w-md shadow-2xl">
+                    <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-white/8">
+                      <h3 className="font-bold text-base text-gray-900 dark:text-white">Credit History</h3>
+                      <button onClick={() => setGrowthModal(null)} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+                    </div>
+                    <div className="p-5 max-h-96 overflow-y-auto space-y-2">
+                      {(growthSummary?.creditHistory ?? []).length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-6">No credit activity yet</p>
+                      ) : (growthSummary?.creditHistory ?? []).map((e) => (
+                        <div key={e.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-white/[0.03]">
+                          <span className={`text-sm font-black flex-shrink-0 ${e.amountCredits > 0 ? "text-green-500" : "text-red-400"}`}>
+                            {e.amountCredits > 0 ? "+" : ""}{e.amountCredits % 1 === 0 ? e.amountCredits.toFixed(0) : e.amountCredits.toFixed(2)}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{e.description}</p>
+                            <p className="text-xs text-gray-400">{new Date(e.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {growthModal === "referrals" && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-[#141414] rounded-2xl border border-gray-200 dark:border-white/10 w-full max-w-md shadow-2xl">
+                    <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-white/8">
+                      <div>
+                        <h3 className="font-bold text-base text-gray-900 dark:text-white">Invite Creators</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Earn 1 credit per creator who goes Pro</p>
+                      </div>
+                      <button onClick={() => setGrowthModal(null)} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={18} /></button>
+                    </div>
+                    <div className="p-5">
+                      <div className="flex gap-2 mb-4">
+                        <input readOnly value={referralLink} className="flex-1 text-xs bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-gray-600 dark:text-gray-300 font-mono" />
+                        <button onClick={() => { navigator.clipboard.writeText(referralLink); setGrowthCopied(true); setTimeout(() => setGrowthCopied(false), 2000); }}
+                          className="px-3 py-2 rounded-lg bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5 hover:bg-violet-700 transition-colors">
+                          {growthCopied ? <Check size={13} /> : <Copy size={13} />}{growthCopied ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 mb-4">
+                        ⚠️ Credits are only awarded after the referred creator pays their first invoice.
+                      </p>
+                      <div className="max-h-52 overflow-y-auto space-y-2">
+                        {(growthSummary?.referrals ?? []).length === 0 ? (
+                          <p className="text-sm text-gray-400 text-center py-4">No referrals yet</p>
+                        ) : (growthSummary?.referrals ?? []).map((r) => {
+                          const meta = REFERRAL_STATUS_META[r.status];
+                          return (
+                            <div key={r.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-white/[0.03]">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{r.referredEmail ?? "Creator"}</p>
+                                <p className={`text-xs ${meta.color}`}>{meta.label}</p>
+                              </div>
+                              <span className="text-xs text-gray-400">{new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Loading ── */}
+              {growthLoading && (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <Loader2 className="w-7 h-7 animate-spin text-orange-600" />
+                  <p className="text-sm text-gray-500">Loading your growth dashboard…</p>
+                </div>
+              )}
+
+              {!growthLoading && (
+                <>
+                  {/* ── Row 1: Level + Trust Score ── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                    {/* Creator Level card */}
+                    <div className="rounded-2xl border border-violet-200 dark:border-violet-800/40 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20 p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-2xl">{levelMeta.emoji}</span>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Creator Level</p>
+                          <p className="text-base font-black text-gray-900 dark:text-white leading-tight">{levelMeta.label}</p>
+                        </div>
+                      </div>
+                      {nextLevel ? (
+                        <>
+                          <div className="w-full h-2 rounded-full bg-violet-100 dark:bg-violet-900/40 overflow-hidden mb-1.5">
+                            <div className="h-full rounded-full bg-violet-600 transition-all duration-700" style={{ width: `${progressPct}%` }} />
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="font-bold text-violet-600 dark:text-violet-400">{salesCount}</span> sales ·{" "}
+                            <span className="font-semibold">{nextLevel.minSales - salesCount} more</span> to reach {nextLevel.emoji} {nextLevel.label}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs font-bold text-violet-600 dark:text-violet-400">💎 You&apos;ve reached the top level!</p>
+                      )}
+                    </div>
+
+                    {/* Trust Score mini card */}
+                    <button
+                      onClick={() => setActiveTab("trust-score")}
+                      className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-5 text-left hover:border-orange-300 dark:hover:border-orange-700/50 transition-colors w-full"
+                      style={trustLm ? { borderColor: `${trustLm.color}30` } : {}}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <TrustShieldIcon color={trustLm?.color ?? "#9ca3af"} size={18} />
+                        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: trustLm?.color ?? "#9ca3af" }}>Trust Score</p>
+                        {trustLm && (
+                          <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${trustLm.color}18`, color: trustLm.color, border: `1px solid ${trustLm.color}35` }}>
+                            {trustLm.emoji} {trustLm.label}
+                          </span>
+                        )}
+                      </div>
+                      {trustData ? (
+                        <>
+                          <p className="text-3xl font-black leading-none mb-2" style={{ color: trustLm?.color ?? "#111827" }}>
+                            {trustData.score}<span className="text-sm font-semibold text-gray-400">/100</span>
+                          </p>
+                          <TrustProgressBar value={trustData.score} color={trustLm?.color ?? "#9ca3af"} />
+                          <p className="text-xs text-gray-400 mt-2">Click for full breakdown →</p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-400">Not calculated yet</p>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* ── Row 2: Stats ── */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <button onClick={() => setGrowthModal("history")}
+                      className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 text-left hover:border-violet-300 dark:hover:border-violet-600/40 transition-colors">
+                      <div className="flex items-center gap-1.5 mb-1"><Gift className="w-3.5 h-3.5 text-violet-500" /><p className="text-xs text-gray-500">Available</p></div>
+                      <p className="text-2xl font-black text-violet-600 dark:text-violet-400 leading-none">{credits % 1 === 0 ? credits.toFixed(0) : credits.toFixed(2)}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">featured credits</p>
+                    </button>
+                    <button onClick={() => setGrowthModal("referrals")}
+                      className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 text-left hover:border-violet-300 dark:hover:border-violet-600/40 transition-colors">
+                      <div className="flex items-center gap-1.5 mb-1"><UserPlus className="w-3.5 h-3.5 text-violet-500" /><p className="text-xs text-gray-500">Referrals</p></div>
+                      <p className="text-2xl font-black text-gray-900 dark:text-white leading-none">{earnedCount}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{pendingCount > 0 ? `+${pendingCount} pending` : "converted"}</p>
+                    </button>
+                    <div className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4">
+                      <div className="flex items-center gap-1.5 mb-1"><Star className="w-3.5 h-3.5 text-yellow-500" /><p className="text-xs text-gray-500">Featured</p></div>
+                      <p className="text-2xl font-black text-gray-900 dark:text-white leading-none">{featuredSlot ? "Active" : "—"}</p>
+                      {featuredUntil && <p className="text-xs text-gray-400 mt-0.5">until {featuredUntil}</p>}
+                    </div>
+                  </div>
+
+                  {/* ── Feature Your Product ── */}
+                  <div className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                        <Sparkles className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">Feature a Product</p>
+                        <p className="text-xs text-gray-500">Pin your product at the top of the Marketplace for 7 days</p>
+                      </div>
+                      <span className="ml-auto text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2.5 py-1 rounded-full border border-violet-200 dark:border-violet-700/40">
+                        1 credit / slot
+                      </span>
+                    </div>
+                    {featuredSlot ? (
+                      <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800/40">
+                        <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0 animate-pulse" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 min-w-0 truncate">
+                          <strong>{growthProducts.find((p) => p.id === featuredSlot.productId)?.title ?? "Your product"}</strong>
+                          {featuredUntil && <span className="text-gray-400 ml-1">· until {featuredUntil}</span>}
+                        </span>
+                        <button onClick={handleGrowthRemove} className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                          <X size={12} /> Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <select value={growthSelectedId} onChange={(e) => setGrowthSelectedId(e.target.value)}
+                          className="flex-1 min-w-0 text-sm border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 bg-gray-50 dark:bg-[#111] text-gray-700 dark:text-gray-300 focus:outline-none focus:border-violet-400">
+                          <option value="">Choose a product to feature…</option>
+                          {growthProducts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                        </select>
+                        <Button onClick={handleGrowthFeature} disabled={!growthSelectedId || credits < 1 || growthSaving}
+                          className="bg-violet-600 hover:bg-violet-700 text-white h-9 px-4 font-bold shrink-0">
+                          {growthSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Feature (1 credit)"}
+                        </Button>
+                        {credits < 1 && (
+                          <button onClick={() => setGrowthModal("earn")} className="text-xs text-gray-400 hover:text-violet-600 transition-colors w-full text-center mt-1">
+                            How to earn credits →
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {growthMsg && <p className="text-xs mt-2 text-red-500">{growthMsg}</p>}
+                  </div>
+
+                  {/* ── Quick Actions ── */}
+                  <div className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-5">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white mb-3">Quick Actions</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <button onClick={() => setGrowthModal("earn")}
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-100 dark:border-white/8 hover:border-violet-300 dark:hover:border-violet-600/40 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all text-center group">
+                        <Award className="w-5 h-5 text-violet-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">View Rewards</span>
+                      </button>
+                      <button onClick={() => setGrowthModal("referrals")}
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-100 dark:border-white/8 hover:border-violet-300 dark:hover:border-violet-600/40 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all text-center group">
+                        <UserPlus className="w-5 h-5 text-violet-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Invite Creator</span>
+                      </button>
+                      <Link href="/marketplace/leaderboard"
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-100 dark:border-white/8 hover:border-yellow-300 dark:hover:border-yellow-600/40 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-all text-center group">
+                        <Trophy className="w-5 h-5 text-yellow-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Leaderboard</span>
+                      </Link>
+                      <button onClick={() => setActiveTab("trust-score")}
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-100 dark:border-white/8 hover:border-orange-300 dark:hover:border-orange-600/40 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all text-center group">
+                        <Shield className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Trust Score</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ── Trust Score Tips ── */}
+                  {trustData && (trustData.recommendations ?? []).length > 0 && (
+                    <div className="rounded-2xl border border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-950/20 p-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <TrustShieldIcon color="#f97316" size={18} />
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">Improve Your Trust Score</p>
+                        <button onClick={() => setActiveTab("trust-score")} className="ml-auto text-xs text-orange-600 dark:text-orange-400 font-semibold hover:underline">Full breakdown →</button>
+                      </div>
+                      <div className="space-y-2">
+                        {trustData.recommendations.slice(0, 4).map((tip, i) => (
+                          <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl bg-white dark:bg-[#1A1A1A] border border-orange-100 dark:border-orange-800/30">
+                            <span className="text-orange-500 flex-shrink-0 mt-0.5">💡</span>
+                            <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{tip}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Leaderboard ── */}
+                  <div className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Trophy className="w-4 h-4 text-yellow-500" />
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">Top Creators</p>
+                      <Link href="/marketplace/leaderboard" className="ml-auto text-xs text-gray-400 hover:text-yellow-600 font-semibold transition-colors">View full →</Link>
+                    </div>
+                    <div className="flex gap-1 mb-4 flex-wrap">
+                      {GrowthLbTabs.map((t) => (
+                        <button key={t.id} onClick={() => setGrowthLbTab(t.id)}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-colors ${growthLbTab === t.id ? "bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-700/40" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    {growthLbLoading ? (
+                      <div className="py-6 text-center"><Loader2 className="w-5 h-5 animate-spin text-gray-400 mx-auto" /></div>
+                    ) : growthLbEntries.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-6">No creators on this board yet — opt in to appear!</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {growthLbEntries.map((e) => (
+                          <a key={e.userId} href={`/c/${e.userId}`}
+                            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-colors group">
+                            <span className={`text-sm font-black w-5 text-center flex-shrink-0 ${e.rank === 1 ? "text-yellow-500" : e.rank === 2 ? "text-gray-400" : e.rank === 3 ? "text-orange-400" : "text-gray-300"}`}>{e.rank}</span>
+                            {e.profileImage ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={e.profileImage} alt={e.displayName} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white" style={{ background: e.accentColor }}>
+                                {e.displayName.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 dark:text-white truncate group-hover:text-violet-600 transition-colors">{e.displayName}</p>
+                              <p className="text-xs text-gray-400">{e.levelEmoji} {e.levelLabel}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0 text-xs font-bold text-gray-700 dark:text-gray-300">
+                              {growthLbTab === "top-sellers"     && `${e.salesCount} sales`}
+                              {growthLbTab === "highest-revenue" && `£${e.revenueGbp.toFixed(0)}`}
+                              {growthLbTab === "highest-rated"   && `★ ${e.avgRating.toFixed(1)}`}
+                              {(growthLbTab === "most-followed" || growthLbTab === "fastest-growing") && `${e.followerCount} followers`}
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {!growthSummary?.leaderboardOptIn && (
+                      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/8 text-center">
+                        <p className="text-xs text-gray-400 mb-2">You&apos;re not on the leaderboard yet</p>
+                        <Link href="/marketplace/leaderboard" className="text-xs font-bold text-yellow-600 dark:text-yellow-400 hover:underline">
+                          Opt in to appear →
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ══════════════════════════════════════════════════════════════════════ */}
         {/* TRUST SCORE TAB                                                       */}
