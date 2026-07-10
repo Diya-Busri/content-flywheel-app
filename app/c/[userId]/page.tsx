@@ -128,7 +128,7 @@ export default async function CreatorProfilePage({
   const profileImageUrl = storeSettings?.profileImageUrl ?? null;
   const bannerImageUrl = storeSettings?.bannerImageUrl ?? null;
   const bannerGradient = storeSettings?.bannerGradient ?? null;
-  const bannerImagePosition = (storeSettings as unknown as { bannerImagePosition?: string | null })?.bannerImagePosition ?? "center 20%";
+  const bannerImagePosition = (storeSettings as unknown as { bannerImagePosition?: string | null })?.bannerImagePosition ?? "center 40%";
 
   const FONT_CSS: Record<string, string> = {
     inter:       "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -188,7 +188,7 @@ export default async function CreatorProfilePage({
       )}
 
       {/* ── Hero banner ── */}
-      <div style={{ position: "relative", height: bannerImageUrl ? "220px" : "200px", overflow: "hidden" }}>
+      <div style={{ position: "relative", height: bannerImageUrl ? "150px" : "180px", overflow: "hidden" }}>
 
         {bannerImageUrl ? (
           /* Photo banner — full bleed image pinned to top */
