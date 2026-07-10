@@ -829,7 +829,17 @@ export default function LaunchExecutionPage() {
           const opps     = r.research.productOpportunities?.length ?? 0;
           resumeSummaries[i] = `${insights} insights · ${opps} product opportunities found`;
         } else if (stage.id === "product" && r.product) {
-          resumeSummaries[i] = `"${r.product.productName ?? "Product"}" created · ready in Digital Products`;
+          {
+            const name    = r.product.productName ?? "Product";
+            const rp      = r.product as Record<string, unknown>;
+            const fmt     = rp.format     as string | undefined;
+            const price   = rp.pricePoint as string | undefined;
+            const why     = rp.whyThisOne as string | undefined;
+            const fmtStr  = fmt   ? ` · ${fmt.charAt(0).toUpperCase() + fmt.slice(1)}` : "";
+            const priceStr = price ? ` · ${price}` : "";
+            const whyStr  = why   ? ` — ${why.slice(0, 60)}${why.length > 60 ? "…" : ""}` : "";
+            resumeSummaries[i] = `"${name}"${fmtStr}${priceStr}${whyStr}`;
+          }
         } else if (stage.id === "design" && r.design) {
           const count = r.design.assetsCount ?? 0;
           resumeSummaries[i] = `${count} marketing asset${count !== 1 ? "s" : ""} generated · cover, mockup, thumbnail, social`;
@@ -944,10 +954,16 @@ export default function LaunchExecutionPage() {
             [i]: `${insights} insights · ${opps} product opportunities found`,
           }));
         } else if (stage.id === "product" && results.product) {
-          const name = results.product.productName ?? "Product";
+          const name   = results.product.productName ?? "Product";
+          const fmt    = (results.product as Record<string, unknown>).format as string | undefined;
+          const price  = (results.product as Record<string, unknown>).pricePoint as string | undefined;
+          const why    = (results.product as Record<string, unknown>).whyThisOne as string | undefined;
+          const fmtStr = fmt ? ` · ${fmt.charAt(0).toUpperCase() + fmt.slice(1)}` : "";
+          const priceStr = price ? ` · ${price}` : "";
+          const whyStr = why ? ` — ${why.slice(0, 60)}${why.length > 60 ? "…" : ""}` : "";
           setCompletedSummaries(prev => ({
             ...prev,
-            [i]: `"${name}" created · ready in Digital Products`,
+            [i]: `"${name}"${fmtStr}${priceStr}${whyStr}`,
           }));
         } else if (stage.id === "design" && results.design) {
           const count = results.design.assetsCount ?? 0;

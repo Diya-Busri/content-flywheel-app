@@ -136,7 +136,11 @@ export async function runLaunchProductAgent(ctx: ExecutionContext): Promise<void
   let productId:          string | null = null;
   let productName:        string | null = null;
   let format:             string | null = null;
+  let niche:              string | null = null;
   let pricePoint:         string | null = null;
+  let description:        string | null = null;
+  let idealFor:           string | null = null;
+  let whyThisOne:         string | null = null;
   let sectionsGenerated   = 0;
   let totalSections       = 0;
   let emptySections       = 0;
@@ -296,7 +300,11 @@ export async function runLaunchProductAgent(ctx: ExecutionContext): Promise<void
           productId         = event.productId   as string;
           productName       = (event.productName as string | undefined) ?? productName;
           format            = (event.format      as string | undefined) ?? format;
+          niche             = (event.niche       as string | undefined) ?? niche;
           pricePoint        = (event.pricePoint  as string | undefined) ?? pricePoint;
+          description       = (event.description as string | undefined) ?? description;
+          idealFor          = (event.idealFor    as string | undefined) ?? idealFor;
+          whyThisOne        = (event.whyThisOne  as string | undefined) ?? whyThisOne;
           sectionsGenerated = (event.sectionsGenerated as number | undefined) ?? sectionsGenerated;
           totalSections     = (event.totalSections     as number | undefined) ?? totalSections;
           emptySections     = (event.emptySections     as number | undefined) ?? sectionsFailedCount;
@@ -308,7 +316,11 @@ export async function runLaunchProductAgent(ctx: ExecutionContext): Promise<void
             productId:        productId,
             productName:      productName ?? goal,
             format:           format ?? undefined,
+            niche:            niche ?? undefined,
             pricePoint:       pricePoint ?? undefined,
+            description:      description ?? undefined,
+            idealFor:         idealFor ?? undefined,
+            whyThisOne:       whyThisOne ?? undefined,
             sectionsGenerated,
             totalSections,
             emptySections,
