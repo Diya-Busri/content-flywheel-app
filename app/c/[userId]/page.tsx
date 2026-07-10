@@ -94,9 +94,12 @@ export default async function CreatorProfilePage({
   const brandName = (storeSettings?.storeName?.trim() || brandVoice?.brandName?.trim() || "Creator") as string;
   const initials = brandName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
 
+  // DB already filters to status='active' — all products here are published.
+  // Keep only products that have some purchasable signal (native price, external
+  // checkout URL, or price label). Products with none of these are incomplete.
   const rawProducts = products.filter((p) => {
     const ma = p.marketingAssets as MarketingAssets | null;
-    return ma?.isNativePublished || ma?.checkoutUrl || ma?.priceLabel;
+    return ma?.nativePrice || ma?.isNativePublished || ma?.checkoutUrl || ma?.priceLabel;
   });
 
   // Sort products
