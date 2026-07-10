@@ -284,53 +284,47 @@ function streamProductGeneration(
       // Track which sections failed so we can report them
       const failedSectionIndices: number[] = [];
 
-      const batchSize = 3;
-      for (let i = 0; i < outline.length; i += batchSize) {
-        const batch = outline.slice(i, i + batchSize);
-        const results = await Promise.allSettled(
-          batch.map(async (section, batchIdx) => {
-            const idx = i + batchIdx;
-            try {
-              const result = await generateSingleSectionBody(genParams, section, idx, outline.length);
-              const body = result.body?.trim() ?? "";
-              if (!body || body.length < 50) {
-                // Generation produced insufficient content — treat as failure
-                throw new Error(`Section "${section.title}" returned insufficient content (${body.length} chars)`);
-              }
-              await send({ type: "section-done", index: idx, title: section.title, total: outline.length });
-              return { id: section.id, title: section.title, content: body, order: idx + 1 };
-            } catch (secErr) {
-              // Stream a section-failed event so the UI can show it specifically
-              await send({
-                type:   "section-failed",
-                index:  idx,
-                title:  section.title,
-                total:  outline.length,
-                reason: secErr instanceof Error ? secErr.message : "Generation timed out",
-              });
-              throw secErr; // re-throw so allSettled captures as rejected
+      // Run all sections in parallel — gpt-4o-mini is fast enough (3-8s each)
+      // that firing all at once is well within the 300s Vercel limit and ~3× faster
+      // than sequential batches of 3.
+      const allResults = await Promise.allSettled(
+        outline.map(async (section, idx) => {
+          try {
+            const result = await generateSingleSectionBody(genParams, section, idx, outline.length);
+            const body = result.body?.trim() ?? "";
+            if (!body || body.length < 50) {
+              throw new Error(`Section "${section.title}" returned insufficient content (${body.length} chars)`);
             }
-          })
-        );
+            await send({ type: "section-done", index: idx, title: section.title, total: outline.length });
+            return { id: section.id, title: section.title, content: body, order: idx + 1 };
+          } catch (secErr) {
+            await send({
+              type:   "section-failed",
+              index:  idx,
+              title:  section.title,
+              total:  outline.length,
+              reason: secErr instanceof Error ? secErr.message : "Generation timed out",
+            });
+            throw secErr;
+          }
+        })
+      );
 
-        for (let ri = 0; ri < results.length; ri++) {
-          const r   = results[ri]!;
-          const idx = i + ri;
-          if (r.status === "fulfilled") {
-            populated.push(r.value);
-          } else {
-            // Graceful fallback — keep section in the product but with a placeholder body
-            const sec = outline[idx];
-            if (sec) {
-              populated.push({
-                id:      sec.id,
-                title:   sec.title,
-                // Minimal placeholder so the section title at least exists
-                content: `[Content generation failed for "${sec.title}" — use the editor to add content]`,
-                order:   idx + 1,
-              });
-              failedSectionIndices.push(idx);
-            }
+      for (let ri = 0; ri < allResults.length; ri++) {
+        const r   = allResults[ri]!;
+        const idx = ri;
+        if (r.status === "fulfilled") {
+          populated.push(r.value);
+        } else {
+          const sec = outline[idx];
+          if (sec) {
+            populated.push({
+              id:      sec.id,
+              title:   sec.title,
+              content: `[Content generation failed for "${sec.title}" — use the editor to add content]`,
+              order:   idx + 1,
+            });
+            failedSectionIndices.push(idx);
           }
         }
       }
