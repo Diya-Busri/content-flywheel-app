@@ -520,6 +520,8 @@ function streamDesignGeneration(
           ...(generatedUrls.social          ? { socialPreviewUrl:   generatedUrls.social }    : {}),
           ...(successfulConcepts.length > 0 ? { coverConcepts:      successfulConcepts }      : {}),
           ...(thumbnailDesignId             ? { thumbnailDesignId:  thumbnailDesignId }       : {}),
+          // coverDesignId is read by the product editor to render the cover page canvas
+          ...(primaryDesignId               ? { coverDesignId:      primaryDesignId }         : {}),
         };
 
         /* ── Update cover page: store primary design reference (no image URL) ── */
