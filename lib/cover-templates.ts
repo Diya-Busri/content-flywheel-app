@@ -529,3 +529,101 @@ export function buildStoreThumbnailConcept(input: CoverInput): ThumbnailConcept 
     data:  buildStoreThumbnail(input, pal),
   };
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BACK COVER — 1080 × 1350
+   Clean design that mirrors the front cover palette. Shows a thank-you message,
+   the product title, author strip, and a decorative accent — fully editable.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+function buildBackCover(input: CoverInput, pal: Palette): DesignData {
+  const { title, author, category } = input;
+  const isLight = !pal.darkBg || pal.bg.startsWith("#F") || pal.bg.startsWith("#f");
+  const bg       = pal.bg || "#FFFFFF";
+  const textCol  = pal.text || "#111111";
+  const mutedCol = isLight ? "#666666" : "rgba(255,255,255,0.55)";
+
+  return {
+    width: W, height: H,
+    background: bg,
+    elements: [
+      // Top accent bar — full width, branded colour
+      shape("bc-top-bar", 0, 0, W, 10, { fill: pal.primary, zIndex: 1 }),
+
+      // Decorative background circle — top right
+      shape("bc-circ-a", W - 200, -100, 400, 400, {
+        fill: pal.primary, opacity: 0.06, borderRadius: 200, zIndex: 0,
+      }),
+      // Decorative background circle — bottom left
+      shape("bc-circ-b", -120, H - 300, 320, 320, {
+        fill: pal.primary, opacity: 0.05, borderRadius: 160, zIndex: 0,
+      }),
+
+      // Category pill
+      shape("bc-cat-bg", W / 2 - 90, 88, 180, 36, {
+        fill: pal.primary, opacity: 0.12, borderRadius: 18, zIndex: 1,
+      }),
+      txt("bc-cat", category.toUpperCase(), W / 2 - 90, 90, 180, 36, {
+        fontSize: 11, fontWeight: "700", color: pal.primary,
+        letterSpacing: 2, textAlign: "center", zIndex: 2,
+      }),
+
+      // "Thank You" heading — large, centred
+      txt("bc-thanks", "Thank You", 80, 400, W - 160, 160, {
+        fontSize: 80, fontWeight: "900", color: textCol,
+        textAlign: "center", lineHeight: 1.0, zIndex: 2,
+      }),
+
+      // Accent separator
+      shape("bc-sep", W / 2 - 60, 580, 120, 5, {
+        fill: pal.primary, borderRadius: 3, zIndex: 2,
+      }),
+
+      // Sub-message
+      txt("bc-msg", `Thank you for reading "${title}". We hope you found it valuable.`, 100, 620, W - 200, 160, {
+        fontSize: 24, fontWeight: "400", color: mutedCol,
+        textAlign: "center", lineHeight: 1.55, zIndex: 2,
+      }),
+
+      // CTA prompt — "Visit our website / follow us"
+      txt("bc-cta", "Follow us for more resources and updates.", 100, 820, W - 200, 80, {
+        fontSize: 20, fontWeight: "500", color: mutedCol,
+        textAlign: "center", lineHeight: 1.4, zIndex: 2,
+      }),
+
+      // Bottom author strip background
+      shape("bc-author-bg", 0, H - 130, W, 130, {
+        fill: pal.primary, zIndex: 1,
+      }),
+      // Author name
+      txt("bc-author", `By ${author}`, 0, H - 90, W, 50, {
+        fontSize: 18, fontWeight: "600", color: "#FFFFFF",
+        textAlign: "center", letterSpacing: 1, zIndex: 2,
+      }),
+      // "Created with Content Flywheel" caption
+      txt("bc-brand", "Created with Content Flywheel", 0, H - 48, W, 36, {
+        fontSize: 12, fontWeight: "400", color: "rgba(255,255,255,0.6)",
+        textAlign: "center", letterSpacing: 0.5, zIndex: 2,
+      }),
+    ],
+  };
+}
+
+export interface BackCoverConcept {
+  id:    "back-cover";
+  name:  "Back Cover";
+  label: "Back Cover";
+  style: "back-cover";
+  data:  DesignData;
+}
+
+export function buildBackCoverConcept(input: CoverInput): BackCoverConcept {
+  const pal = PALETTES[input.niche] ?? PALETTES.default;
+  return {
+    id:    "back-cover",
+    name:  "Back Cover",
+    label: "Back Cover",
+    style: "back-cover",
+    data:  buildBackCover(input, pal),
+  };
+}

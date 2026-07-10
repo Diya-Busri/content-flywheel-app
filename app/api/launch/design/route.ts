@@ -43,6 +43,7 @@ import {
   detectNiche,
   buildAllCoverConcepts,
   buildStoreThumbnailConcept,
+  buildBackCoverConcept,
   type CoverInput,
 } from "@/lib/cover-templates";
 
@@ -379,6 +380,7 @@ function streamDesignGeneration(
     const successfulConcepts: Array<{ style: string; label: string; designId: string }> = [];
     let carouselBundleId: string | undefined;
     let thumbnailDesignId: string | undefined;
+    let backCoverDesignId: string | undefined;
     let bannerUrl: string | undefined;
 
     try {
@@ -475,6 +477,32 @@ function streamDesignGeneration(
         console.warn("[launch/design] Thumbnail design failed (non-fatal):", thumbErr);
       }
 
+      /* ── Phase 1c: Generate back cover design (matches front cover palette) ── */
+      try {
+        await send({ type: "asset-generating", assetId: "cover:back", label: "Back Cover" });
+        const backConcept = buildBackCoverConcept(coverInput);
+        const [backRow] = await db
+          .insert(designsTable)
+          .values({
+            userId,
+            title:      `${productName} — Back Cover`,
+            data:       backConcept.data,
+            bundleId:   null,
+            slideIndex: null,
+          })
+          .returning({ id: designsTable.id });
+        backCoverDesignId = backRow.id;
+        await send({
+          type:         "asset-done",
+          assetId:      "cover:back",
+          label:        "Back Cover",
+          designId:     backCoverDesignId,
+          conceptStyle: "back-cover",
+        });
+      } catch (backErr) {
+        console.warn("[launch/design] Back cover design failed (non-fatal):", backErr);
+      }
+
       /* ── Phase 2: Generate mockup, thumbnail, social sequentially ── */
       for (const asset of REGULAR_ASSETS) {
         await send({ type: "asset-generating", assetId: asset.id, label: asset.label });
@@ -553,6 +581,9 @@ function streamDesignGeneration(
           if (i === 0 && primaryDesignId) {
             return { ...existing, designId: primaryDesignId };
           }
+          if (i === totalPages - 1 && backCoverDesignId) {
+            return { ...existing, designId: backCoverDesignId };
+          }
           return existing;
         });
 
@@ -599,6 +630,7 @@ function streamDesignGeneration(
       const assetsCount =
         successfulConcepts.length +
         (thumbnailDesignId       ? 1 : 0) +
+        (backCoverDesignId       ? 1 : 0) +
         (generatedUrls.mockup    ? 1 : 0) +
         (generatedUrls.thumbnail ? 1 : 0) +
         (generatedUrls.social    ? 1 : 0) +
