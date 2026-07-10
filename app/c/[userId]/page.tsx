@@ -128,6 +128,7 @@ export default async function CreatorProfilePage({
   const profileImageUrl = storeSettings?.profileImageUrl ?? null;
   const bannerImageUrl = storeSettings?.bannerImageUrl ?? null;
   const bannerGradient = storeSettings?.bannerGradient ?? null;
+  const bannerImagePosition = (storeSettings as unknown as { bannerImagePosition?: string | null })?.bannerImagePosition ?? "center 20%";
 
   const FONT_CSS: Record<string, string> = {
     inter:       "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -148,7 +149,7 @@ export default async function CreatorProfilePage({
   // Banner background
   let bannerBg: string;
   if (bannerImageUrl) {
-    bannerBg = `url(${bannerImageUrl}) center top/cover no-repeat`;
+    bannerBg = `url(${bannerImageUrl}) ${bannerImagePosition}/cover no-repeat`;
   } else if (bannerGradient) {
     bannerBg = `linear-gradient(${bannerGradient})`;
   } else {
@@ -195,7 +196,7 @@ export default async function CreatorProfilePage({
           <img
             src={bannerImageUrl}
             alt=""
-            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }}
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: bannerImagePosition, display: "block" }}
           />
         ) : bannerGradient ? (
           /* Custom gradient set by creator */

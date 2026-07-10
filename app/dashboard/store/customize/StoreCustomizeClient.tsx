@@ -27,6 +27,7 @@ interface StoreSettings {
   layout: string;
   bannerImageUrl: string | null;
   bannerGradient: string | null;
+  bannerImagePosition: string;
   profileImageUrl: string | null;
   bio: string | null;
   storeName: string | null;
@@ -114,7 +115,7 @@ function StorePreview({ settings, brandName }: { settings: StoreSettings; brandN
 
   let bannerBg: string;
   if (settings.bannerImageUrl) {
-    bannerBg = `url(${settings.bannerImageUrl}) center/cover no-repeat`;
+    bannerBg = `url(${settings.bannerImageUrl}) ${settings.bannerImagePosition ?? "center 20%"}/cover no-repeat`;
   } else if (settings.bannerGradient) {
     bannerBg = `linear-gradient(${settings.bannerGradient})`;
   } else {
@@ -311,6 +312,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     layout: "grid",
     bannerImageUrl: null,
     bannerGradient: null,
+    bannerImagePosition: "center 20%",
     profileImageUrl: null,
     bio: null,
     storeName: null,
@@ -396,6 +398,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             layout: data.layout ?? "grid",
             bannerImageUrl: data.bannerImageUrl ?? null,
             bannerGradient: data.bannerGradient ?? null,
+            bannerImagePosition: data.bannerImagePosition ?? "center 20%",
             profileImageUrl: data.profileImageUrl ?? null,
             bio: data.bio ?? null,
             storeName: data.storeName ?? null,
@@ -898,13 +901,49 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                   <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "banner"); e.target.value = ""; }} />
                   {settings.bannerImageUrl ? (
-                    <div className="relative rounded-xl overflow-hidden border border-gray-200 mb-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={settings.bannerImageUrl} alt="Banner" className="w-full h-20 object-cover" />
-                      <button onClick={() => set("bannerImageUrl", null)}
-                        className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
-                        <X size={11} />
-                      </button>
+                    <div className="space-y-2 mb-2">
+                      <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={settings.bannerImageUrl}
+                          alt="Banner"
+                          className="w-full h-20 object-cover"
+                          style={{ objectPosition: settings.bannerImagePosition ?? "center 20%" }}
+                        />
+                        <button onClick={() => set("bannerImageUrl", null)}
+                          className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                          <X size={11} />
+                        </button>
+                      </div>
+                      {/* Position slider */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-gray-500">Vertical position</label>
+                          <span className="text-[10px] text-gray-400">
+                            {(() => {
+                              const pct = parseInt((settings.bannerImagePosition ?? "center 20%").match(/(\d+)%/)?.[1] ?? "20", 10);
+                              if (pct <= 15) return "Top";
+                              if (pct <= 40) return "Upper";
+                              if (pct <= 60) return "Center";
+                              if (pct <= 80) return "Lower";
+                              return "Bottom";
+                            })()}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={5}
+                          value={parseInt((settings.bannerImagePosition ?? "center 20%").match(/(\d+)%/)?.[1] ?? "20", 10)}
+                          onChange={(e) => set("bannerImagePosition", `center ${e.target.value}%`)}
+                          className="w-full h-1.5 rounded-full accent-orange-500 cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-gray-400 mt-0.5">
+                          <span>Top</span>
+                          <span>Bottom</span>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex gap-2 mb-2">

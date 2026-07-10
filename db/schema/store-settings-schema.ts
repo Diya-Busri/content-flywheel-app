@@ -11,6 +11,7 @@ export const storeSettingsTable = pgTable("store_settings", {
   // Branding
   bannerImageUrl: text("banner_image_url"),
   bannerGradient: text("banner_gradient"), // e.g. "135deg, #f97316, #ea580c"
+  bannerImagePosition: text("banner_image_position").default("center 20%"), // CSS object-position
   profileImageUrl: text("profile_image_url"),
   bio: text("bio"),
   // Identity

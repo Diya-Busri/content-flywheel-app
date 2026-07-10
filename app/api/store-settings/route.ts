@@ -85,6 +85,7 @@ export async function PATCH(req: NextRequest) {
       "layout",
       "bannerImageUrl",
       "bannerGradient",
+      "bannerImagePosition",
       "profileImageUrl",
       "bio",
       "storeName",

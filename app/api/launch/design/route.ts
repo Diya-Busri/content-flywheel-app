@@ -37,6 +37,7 @@ import { contentBundlesTable } from "@/db/schema/bundles-schema";
 import { designsTable } from "@/db/schema/designs-schema";
 import type { DesignData, DesignElement } from "@/db/schema/designs-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { upload } from "@/lib/storage";
 import {
   detectNiche,
@@ -80,6 +81,9 @@ function buildImagePrompt(
 
     case "social":
       return `Eye-catching square social media promotional image for "${name}". ${n} themed. Bold visual hierarchy. Shareable modern design. No real people. Clean contemporary aesthetic.`;
+
+    case "banner":
+      return `Wide landscape storefront hero banner for a digital creator in the "${n}" niche. Inspired by the product "${name}". Clean minimal workspace or lifestyle scene. Soft natural lighting. Muted premium colour palette. No text overlays. No people. Cinematic wide crop.`;
 
     default:
       return `Professional marketing image for "${name}" in ${n}`;
@@ -375,6 +379,7 @@ function streamDesignGeneration(
     const successfulConcepts: Array<{ style: string; label: string; designId: string }> = [];
     let carouselBundleId: string | undefined;
     let thumbnailDesignId: string | undefined;
+    let bannerUrl: string | undefined;
 
     try {
       /* ── Step 0: prep ── */
@@ -485,6 +490,16 @@ function streamDesignGeneration(
         }
       }
 
+      /* ── Phase 2b: Generate storefront banner (1536×1024 landscape) ── */
+      await send({ type: "asset-generating", assetId: "banner", label: "Store Banner" });
+      try {
+        bannerUrl = await generateAndStoreImage("banner", productName, niche, format, userId, apiKey, "1536x1024");
+        await send({ type: "asset-done", assetId: "banner", label: "Store Banner", url: bannerUrl });
+      } catch (bannerErr) {
+        console.warn("[launch/design] Banner generation failed (non-fatal):", bannerErr);
+        await send({ type: "asset-error", assetId: "banner", label: "Store Banner", message: String(bannerErr) });
+      }
+
       /* ── Phase 3: Generate Instagram carousel ── */
       await send({ type: "step", id: "carousel", label: "Creating Instagram carousel..." });
 
@@ -550,6 +565,32 @@ function streamDesignGeneration(
           .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
       }
 
+      /* ── Set store banner (non-destructive — only if none already set) ── */
+      if (bannerUrl) {
+        try {
+          const [existingStore] = await db
+            .select({ bannerImageUrl: storeSettingsTable.bannerImageUrl })
+            .from(storeSettingsTable)
+            .where(eq(storeSettingsTable.userId, userId))
+            .limit(1);
+
+          if (!existingStore?.bannerImageUrl) {
+            await db
+              .insert(storeSettingsTable)
+              .values({ userId, bannerImageUrl: bannerUrl, updatedAt: new Date() })
+              .onConflictDoUpdate({
+                target: storeSettingsTable.userId,
+                set: { bannerImageUrl: bannerUrl, updatedAt: new Date() },
+              });
+            console.log("[launch/design] Store banner set from AI generation");
+          } else {
+            console.log("[launch/design] Store already has a banner — skipping auto-set");
+          }
+        } catch (storeErr) {
+          console.warn("[launch/design] Failed to set store banner (non-fatal):", storeErr);
+        }
+      }
+
       await send({ type: "step-done", id: "saving" });
 
       // Concepts are design records, not images — count them separately
@@ -558,7 +599,8 @@ function streamDesignGeneration(
         (thumbnailDesignId       ? 1 : 0) +
         (generatedUrls.mockup    ? 1 : 0) +
         (generatedUrls.thumbnail ? 1 : 0) +
-        (generatedUrls.social    ? 1 : 0);
+        (generatedUrls.social    ? 1 : 0) +
+        (bannerUrl               ? 1 : 0);
 
       await send({
         type:             "done",
