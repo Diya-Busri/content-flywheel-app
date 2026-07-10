@@ -666,6 +666,7 @@ export default function LaunchExecutionPage() {
   const [demoMode, setDemoMode] = useState(() => readDemoMode());
   const [demoThinkingIdx, setDemoThinkingIdx] = useState(0);
   const [showCompletionReveal, setShowCompletionReveal] = useState(false);
+  const [resumedStageCount,   setResumedStageCount]   = useState(0);
 
   useEffect(() => {
     setDemoMode(readDemoMode());
@@ -806,6 +807,7 @@ export default function LaunchExecutionPage() {
       });
       if (Object.keys(resumeSummaries).length > 0) {
         setCompletedSummaries(prev => ({ ...prev, ...resumeSummaries }));
+        setResumedStageCount(Object.keys(resumeSummaries).length);
       }
     }
 
@@ -1041,6 +1043,7 @@ export default function LaunchExecutionPage() {
             await runPipeline(data);
           } finally {
             setPipelineActive(false);
+            setResumedStageCount(0);
           }
         } else {
           /* Already completed (or awaiting review) — restore completed UI from saved results */
@@ -1145,6 +1148,18 @@ export default function LaunchExecutionPage() {
         <div className="sticky top-0 z-40 flex items-center gap-2.5 px-4 py-2.5 text-[12px] font-medium bg-amber-50 dark:bg-amber-950/70 border-b border-amber-200 dark:border-amber-700/50 text-amber-800 dark:text-amber-200">
           <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-amber-600 dark:text-amber-400" />
           <span>AI pipeline is running — keep this tab open for live updates</span>
+        </div>
+      )}
+
+      {/* ── Resume notice ── */}
+      {pipelineActive && resumedStageCount > 0 && (
+        <div className="sticky top-[38px] z-39 flex items-center gap-2 px-4 py-2 text-[11px] font-medium bg-sky-50 dark:bg-sky-950/60 border-b border-sky-200 dark:border-sky-800/50 text-sky-700 dark:text-sky-300">
+          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor">
+            <path fillRule="evenodd" d="M8 1a7 7 0 100 14A7 7 0 008 1zM6.75 5.25a.75.75 0 011.5 0v3.19l1.53 1.53a.75.75 0 01-1.06 1.06l-1.75-1.75A.75.75 0 016.75 8.75V5.25z" clipRule="evenodd"/>
+          </svg>
+          <span>
+            Resumed from previous run — {resumedStageCount} stage{resumedStageCount !== 1 ? "s" : ""} already complete, continuing from where you left off
+          </span>
         </div>
       )}
 
