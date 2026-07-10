@@ -301,6 +301,7 @@ export function DesignStudioLanding() {
   const [designSort, setDesignSort] = useState<"newest" | "oldest" | "name">("newest");
   const [showClearBundles, setShowClearBundles] = useState(false);
   const [clearingBundles, setClearingBundles] = useState(false);
+  const [bundleSort, setBundleSort] = useState<"newest" | "oldest" | "name">("newest");
 
   useEffect(() => {
     Promise.all([
@@ -478,48 +479,102 @@ export function DesignStudioLanding() {
               ))}
             </div>
           </div>
-        ) : bundles.length > 0 ? (
-          <div className="mb-8">
-            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-orange-500" />
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Bundles</h2>
-                <span className="text-xs text-gray-400 ml-1">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</span>
+        ) : bundles.length > 0 ? (() => {
+          const filteredBundles = bundles
+            .filter(b => !bundleSearch || b.title?.toLowerCase().includes(bundleSearch.toLowerCase()) || (STYLE_LABELS[b.style] ?? b.style).toLowerCase().includes(bundleSearch.toLowerCase()))
+            .sort((a, b) => {
+              if (bundleSort === "name") return (a.title ?? "").localeCompare(b.title ?? "");
+              if (bundleSort === "oldest") return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+              return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+            });
+
+          // Date grouping (only when sorted by date)
+          const now = Date.now();
+          const DAY = 86400000;
+          const getGroup = (d: Date) => {
+            const age = now - d.getTime();
+            if (age < DAY) return "Today";
+            if (age < 2 * DAY) return "Yesterday";
+            if (age < 7 * DAY) return "This week";
+            if (age < 14 * DAY) return "Last week";
+            return "Older";
+          };
+          const GROUP_ORDER = ["Today", "Yesterday", "This week", "Last week", "Older"];
+          const useGroups = bundleSort !== "name" && !bundleSearch;
+
+          const grouped: Record<string, typeof filteredBundles> = {};
+          if (useGroups) {
+            for (const b of filteredBundles) {
+              const g = getGroup(new Date(b.updatedAt));
+              if (!grouped[g]) grouped[g] = [];
+              grouped[g].push(b);
+            }
+          }
+
+          return (
+            <div className="mb-8">
+              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-orange-500" />
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Bundles</h2>
+                  <span className="text-xs text-gray-400 ml-1">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
+                    onClick={() => setShowClearBundles(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Clear All
+                  </Button>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={bundleSearch}
+                      onChange={e => setBundleSearch(e.target.value)}
+                      placeholder="Search bundles…"
+                      className="h-8 pl-8 pr-3 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-500 w-40"
+                    />
+                  </div>
+                  <select
+                    value={bundleSort}
+                    onChange={e => setBundleSort(e.target.value as typeof bundleSort)}
+                    className="h-8 px-2 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="name">A–Z</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
-                onClick={() => setShowClearBundles(true)}
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Clear All
-              </Button>
-              {bundles.length > 6 && (
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={bundleSearch}
-                    onChange={e => setBundleSearch(e.target.value)}
-                    placeholder="Search bundles…"
-                    className="h-8 pl-8 pr-3 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-500 w-44"
-                  />
+
+              {useGroups ? (
+                <div className="space-y-6">
+                  {GROUP_ORDER.filter(g => grouped[g]?.length).map(g => (
+                    <div key={g}>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">{g}</p>
+                      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                        <AnimatePresence>
+                          {grouped[g].map(b => <BundleCard key={b.id} bundle={b} onDelete={deleteBundle} />)}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredBundles.length === 0 ? (
+                <p className="text-sm text-gray-400 py-8 text-center">No bundles match &ldquo;{bundleSearch}&rdquo;</p>
+              ) : (
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+                  <AnimatePresence>
+                    {filteredBundles.map(b => <BundleCard key={b.id} bundle={b} onDelete={deleteBundle} />)}
+                  </AnimatePresence>
                 </div>
               )}
-              </div>
             </div>
-            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              <AnimatePresence>
-                {bundles
-                  .filter(b => !bundleSearch || b.title?.toLowerCase().includes(bundleSearch.toLowerCase()) || (STYLE_LABELS[b.style] ?? b.style).toLowerCase().includes(bundleSearch.toLowerCase()))
-                  .map((b) => (
-                    <BundleCard key={b.id} bundle={b} onDelete={deleteBundle} />
-                  ))}
-              </AnimatePresence>
-            </div>
-          </div>
-        ) : null}
+          );
+        })() : null}
 
         {/* Single Designs grid */}
         {!loading && designs.length > 0 && (
