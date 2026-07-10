@@ -675,7 +675,7 @@ Return ONLY valid JSON: {"body": "<p>...</p>", "imagePrompt": "optional one sent
   const completion = await withRetry429(
     () =>
       openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini", // faster + higher rate limits → prevents section timeouts on 10-section products
         messages: [
           { role: "system", content: systemMessage },
           { role: "user", content: prompt },
