@@ -715,6 +715,9 @@ export default function LaunchExecutionPage() {
   const [resumedStageCount,   setResumedStageCount]   = useState(0);
   const [publishing,          setPublishing]          = useState(false);
   const [publishedOk,         setPublishedOk]         = useState(false);
+  const [awaitingApproval,    setAwaitingApproval]    = useState(false);
+  // Stores the Promise.resolve() that unblocks the pipeline after approval
+  const approvalResolveRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setDemoMode(readDemoMode());
@@ -955,6 +958,11 @@ export default function LaunchExecutionPage() {
             ...prev,
             [i]: `${insights} insights · ${opps} product opportunities found`,
           }));
+          // ── Approval gate: pause pipeline and let the user review before continuing ──
+          setActiveIdx(-1);
+          setAwaitingApproval(true);
+          await new Promise<void>(resolve => { approvalResolveRef.current = resolve; });
+          setAwaitingApproval(false);
         } else if (stage.id === "product" && results.product) {
           const name   = results.product.productName ?? "Product";
           const fmt    = (results.product as Record<string, unknown>).format as string | undefined;
@@ -1368,6 +1376,60 @@ export default function LaunchExecutionPage() {
             );
           })}
         </div>
+
+        {/* ── Approval gate — shown after Research, before Product ── */}
+        {awaitingApproval && project && (() => {
+          const r = project.stageResults?.research;
+          const topOpp = r?.productOpportunities?.[0];
+          const topInsight = r?.insights?.[0];
+          const smartPrice = topOpp?.priceRange ?? "£37";
+          return (
+            <div className="mt-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-500/8 via-amber-500/5 to-background p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🔍</span>
+                <h3 className="text-[15px] font-black text-foreground">Research Complete — Review Before Building</h3>
+              </div>
+              {topOpp && (
+                <div className="mb-4 p-3 rounded-xl bg-background/60 border border-border/50 text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-1">Recommended Product</p>
+                  <p className="text-[14px] font-bold text-foreground">{topOpp.title}</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">{topOpp.description}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-[11px] font-semibold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full">{topOpp.type}</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground">{smartPrice}</span>
+                  </div>
+                </div>
+              )}
+              {topInsight && (
+                <p className="text-[12px] text-muted-foreground mb-4 italic">
+                  &ldquo;{topInsight.slice(0, 120)}{topInsight.length > 120 ? "…" : ""}&rdquo;
+                </p>
+              )}
+              <p className="text-[12px] text-muted-foreground mb-4">
+                The AI has identified your best product opportunity. Continue to generate your full digital product, or go back to adjust your goal.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={() => {
+                    approvalResolveRef.current?.();
+                    approvalResolveRef.current = null;
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-[14px] font-bold text-white transition-colors shadow-lg shadow-orange-500/20"
+                >
+                  <Package className="w-4 h-4" />
+                  Build This Product
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => router.push("/dashboard/launch")}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border text-[13px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+                >
+                  Start over with a new goal
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Pipeline complete — success panel ── */}
         {overallStatus === "completed" && (
