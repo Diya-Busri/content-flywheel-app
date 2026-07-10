@@ -445,17 +445,44 @@ function streamProductGeneration(
         typography: { heading: "Inter", body: "Open Sans", size: 16 },
       };
 
+      // Build SEO-ready marketing assets from research data — no extra AI call needed
+      const seoKeywords: string[] = [
+        ...highOppKeywords,
+        ...keywords
+          .filter(k => k.opportunity !== "High") // already have High above
+          .slice(0, 5)
+          .map(k => k.term),
+      ].slice(0, 15); // cap at 15 keywords
+
+      // Hashtags: niche-derived from keywords, stripped to alphanumeric, prefixed with #
+      const hashtagSources = [selection.niche, ...highOppKeywords.slice(0, 5)];
+      const hashtags: string[] = [...new Set(
+        hashtagSources
+          .flatMap(s => s.toLowerCase().split(/[\s,\-/]+/))
+          .filter(w => w.length > 2)
+          .map(w => `#${w.replace(/[^a-z0-9]/g, "")}`)
+          .filter(h => h.length > 2),
+      )].slice(0, 10);
+
+      const initialMarketingAssets = {
+        productDescription: selection.description || undefined,
+        seoKeywords:        seoKeywords.length > 0 ? seoKeywords : undefined,
+        hashtags:           hashtags.length > 0 ? hashtags : undefined,
+        priceLabel:         selection.pricePoint || undefined,
+      };
+
       const [inserted] = await db
         .insert(productsTable)
         .values({
           userId,
-          title:          selection.productName,
-          niche:          selection.niche,
-          format:         selection.format,
-          content:        { sections: populated },
+          title:           selection.productName,
+          niche:           selection.niche,
+          format:          selection.format,
+          content:         { sections: populated },
           designSettings,
-          placedElements: [],
-          status:         "draft",
+          placedElements:  [],
+          status:          "draft",
+          marketingAssets: initialMarketingAssets,
         })
         .returning({ id: productsTable.id });
 
