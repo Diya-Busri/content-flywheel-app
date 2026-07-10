@@ -528,6 +528,13 @@ function streamDesignGeneration(
       if (currentProduct[0]) {
         const existingMarketing = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
 
+        /* ── Update cover page: store primary design reference (no image URL) ── */
+        const existingDs    = (currentProduct[0].designSettings ?? {}) as Record<string, unknown>;
+        const sections      = (currentProduct[0].content as { sections?: unknown[] })?.sections ?? [];
+        const totalPages    = sections.length + 2;
+        const existingPages = (existingDs.pages as Record<string, unknown>[] | undefined) ?? [];
+        const primaryDesignId = successfulConcepts[0]?.designId;
+
         const updatedMarketing = {
           ...existingMarketing,
           ...(generatedUrls.mockup          ? { bookMockupUrl:      generatedUrls.mockup }    : {}),
@@ -538,13 +545,6 @@ function streamDesignGeneration(
           // coverDesignId is read by the product editor to render the cover page canvas
           ...(primaryDesignId               ? { coverDesignId:      primaryDesignId }         : {}),
         };
-
-        /* ── Update cover page: store primary design reference (no image URL) ── */
-        const existingDs    = (currentProduct[0].designSettings ?? {}) as Record<string, unknown>;
-        const sections      = (currentProduct[0].content as { sections?: unknown[] })?.sections ?? [];
-        const totalPages    = sections.length + 2;
-        const existingPages = (existingDs.pages as Record<string, unknown>[] | undefined) ?? [];
-        const primaryDesignId = successfulConcepts[0]?.designId;
 
         const pages = Array.from({ length: totalPages }, (_, i) => {
           const existing = existingPages[i] ?? {};
