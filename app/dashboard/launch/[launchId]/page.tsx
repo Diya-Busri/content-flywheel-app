@@ -619,6 +619,52 @@ function AgentCard({
   );
 }
 
+/* ─── Plain-English error translation ───────────────────────────────────────
+   Converts raw JS/network errors into messages a creator can act on.
+   Falls back to the original message if nothing matches.
+──────────────────────────────────────────────────────────────────────────── */
+function friendlyError(raw: string, stageId?: string): string {
+  const lower = raw.toLowerCase();
+
+  // Network / timeout
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("signal timed out"))
+    return "This step took too long to respond. Check your internet connection and try again.";
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("network request failed"))
+    return "Couldn't reach the server — check your internet connection and retry.";
+  if (lower.includes("503") || lower.includes("service unavailable"))
+    return "The AI service is temporarily unavailable. Wait a moment and retry.";
+  if (lower.includes("429") || lower.includes("rate limit") || lower.includes("too many requests"))
+    return "Too many requests right now. Wait 30 seconds and retry.";
+  if (lower.includes("401") || lower.includes("unauthorized"))
+    return "Your session expired. Refresh the page and try again.";
+  if (lower.includes("500") || lower.includes("internal server error"))
+    return "Something went wrong on our end. Retry — it usually resolves itself.";
+
+  // OpenAI / generation
+  if (lower.includes("openai") && lower.includes("key"))
+    return "AI is not configured. Contact support.";
+  if (lower.includes("ai returned no sections") || lower.includes("no outline sections"))
+    return "The AI didn't return any content. This is rare — retry and it will usually work.";
+  if (lower.includes("insufficient content"))
+    return "The AI produced very short content for a section. Retry to regenerate it.";
+  if (lower.includes("json") || lower.includes("parse") || lower.includes("unexpected token"))
+    return "The AI returned an unexpected response. Retry — it will usually work on the second attempt.";
+
+  // Stage-specific
+  if (stageId === "research" && (lower.includes("no product opportunit") || lower.includes("no insights")))
+    return "Research didn't find enough data for your niche. Try a slightly broader goal and retry.";
+  if (stageId === "product" && lower.includes("db insert failed"))
+    return "Couldn't save the product to your library. Retry — this is usually a temporary glitch.";
+  if (stageId === "design" && lower.includes("without generating any assets"))
+    return "No design assets were created. Retry — the AI image service occasionally has brief outages.";
+  if (stageId === "store" && lower.includes("no productid"))
+    return "Couldn't link the product to your store. Make sure the Product stage completed first.";
+
+  // Fallback — strip raw JS noise, keep it under 120 chars
+  const cleaned = raw.replace(/^Error:\s*/i, "").replace(/\s+/g, " ").trim();
+  return cleaned.length > 120 ? cleaned.slice(0, 117) + "…" : cleaned;
+}
+
 /* ═══════════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════════ */
@@ -929,8 +975,9 @@ export default function LaunchExecutionPage() {
           }));
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[pipeline] Stage ${stage.id} failed:`, msg);
+        const raw = err instanceof Error ? err.message : String(err);
+        const msg = friendlyError(raw, stage.id);
+        console.error(`[pipeline] Stage ${stage.id} failed:`, raw);
         setAgentStatuses(prev => prev.map((s, idx) => idx === i ? "error" : s));
         setStageErrors(prev => ({ ...prev, [i]: msg }));
         hasErrors = true;
@@ -1002,8 +1049,9 @@ export default function LaunchExecutionPage() {
       // runPipeline handles status reset internally via fromStageIdx
       await runPipeline(freshProj, fromIdx);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[retry]", msg);
+      const raw = err instanceof Error ? err.message : String(err);
+      const msg = friendlyError(raw, PIPELINE_STAGES[fromIdx]?.id);
+      console.error("[retry]", raw);
       setStageErrors(prev => ({ ...prev, [fromIdx]: msg }));
     } finally {
       setRetryingIdx(null);
