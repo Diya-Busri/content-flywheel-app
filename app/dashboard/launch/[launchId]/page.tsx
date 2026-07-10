@@ -713,6 +713,8 @@ export default function LaunchExecutionPage() {
   const [demoThinkingIdx, setDemoThinkingIdx] = useState(0);
   const [showCompletionReveal, setShowCompletionReveal] = useState(false);
   const [resumedStageCount,   setResumedStageCount]   = useState(0);
+  const [publishing,          setPublishing]          = useState(false);
+  const [publishedOk,         setPublishedOk]         = useState(false);
 
   useEffect(() => {
     setDemoMode(readDemoMode());
@@ -1375,12 +1377,48 @@ export default function LaunchExecutionPage() {
             <p className="text-[13px] text-muted-foreground mb-2 max-w-xs mx-auto leading-relaxed">
               Research, product, design assets, and marketing copy are all ready in your workspace.
             </p>
-            <p className="text-[11px] font-semibold text-green-600 dark:text-green-400 mb-5">
-              {redirectCountdown !== null
-                ? `Opening workspace in ${redirectCountdown}s…`
-                : "Opening workspace…"}
-            </p>
+            {!publishedOk && (
+              <p className="text-[11px] font-semibold text-green-600 dark:text-green-400 mb-5">
+                {redirectCountdown !== null
+                  ? `Opening workspace in ${redirectCountdown}s…`
+                  : "Opening workspace…"}
+              </p>
+            )}
+            {publishedOk && (
+              <p className="text-[11px] font-semibold text-green-600 dark:text-green-400 mb-5">
+                ✓ Published to your store!
+              </p>
+            )}
             <div className="flex items-center justify-center gap-3 flex-wrap">
+              {/* One-click publish — makes product active on the native store */}
+              {!publishedOk && (
+                <button
+                  disabled={publishing}
+                  onClick={async () => {
+                    setPublishing(true);
+                    try {
+                      const res = await fetch(`/api/launch/${launchId}/publish`, { method: "POST" });
+                      if (res.ok) {
+                        setPublishedOk(true);
+                        if (storeUrl) {
+                          // Redirect to store after a short delay
+                          setTimeout(() => router.push(storeUrl), 1500);
+                        }
+                      }
+                    } catch { /* non-fatal */ } finally {
+                      setPublishing(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-[14px] font-bold text-white transition-colors shadow-lg shadow-green-600/20"
+                >
+                  {publishing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Rocket className="w-4 h-4" />
+                  )}
+                  {publishing ? "Publishing…" : "Publish to Store"}
+                </button>
+              )}
               <button
                 onClick={() => router.push(`/dashboard/launch/${launchId}/workspace`)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-[14px] font-bold text-white transition-colors shadow-lg shadow-orange-500/20"
