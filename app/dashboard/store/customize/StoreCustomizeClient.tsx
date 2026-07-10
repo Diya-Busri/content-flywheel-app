@@ -612,6 +612,26 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
         <div className="w-[380px] flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
           <div className="p-5 space-y-7">
 
+            {/* ── Store completeness nudge ── */}
+            {!loading && (() => {
+              const missing: string[] = [];
+              if (!settings.storeName?.trim()) missing.push("store name");
+              if (!settings.bio?.trim()) missing.push("bio");
+              if (!settings.profileImageUrl) missing.push("profile photo");
+              if (missing.length === 0) return null;
+              return (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex gap-3 items-start">
+                  <span className="text-lg mt-0.5 flex-shrink-0">⚠️</span>
+                  <div>
+                    <p className="text-sm font-bold text-amber-900 leading-snug mb-1">Complete your store to build trust</p>
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      Missing: <strong>{missing.join(", ")}</strong>. Stores with a photo and bio convert significantly better.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── AI Design ── */}
             <div className="rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 overflow-hidden">
               <button

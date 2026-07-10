@@ -41,7 +41,7 @@ function productEmoji(ma: MarketingAssets | null): string {
   if (f === "course") return "🎓";
   if (f === "template") return "📋";
   if (f === "spreadsheet") return "📊";
-  return "✦";
+  return "📄";
 }
 
 export default async function CreatorProfilePage({
@@ -287,17 +287,19 @@ export default async function CreatorProfilePage({
           <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: t.text, letterSpacing: "-0.8px", lineHeight: 1.15 }}>
             {brandName}
           </h1>
-          {/* Creator level badge */}
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: "4px",
-            padding: "3px 10px", borderRadius: "999px",
-            background: t.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-            border: `1px solid ${t.cardBorder}`,
-            fontSize: "12px", fontWeight: "700", color: t.subText,
-            letterSpacing: "0.01em", whiteSpace: "nowrap",
-          }}>
-            {creatorLevel.emoji} {creatorLevel.label}
-          </span>
+          {/* Creator level badge — only show earned levels, not "New Creator" */}
+          {creatorLevel.id !== "new" && (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: "4px",
+              padding: "3px 10px", borderRadius: "999px",
+              background: t.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+              border: `1px solid ${t.cardBorder}`,
+              fontSize: "12px", fontWeight: "700", color: t.subText,
+              letterSpacing: "0.01em", whiteSpace: "nowrap",
+            }}>
+              {creatorLevel.emoji} {creatorLevel.label}
+            </span>
+          )}
         </div>
         {tagline && (
           <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: "600", color: accent }}>
@@ -429,10 +431,13 @@ export default async function CreatorProfilePage({
                         <div style={{
                           height: "200px",
                           background: `linear-gradient(135deg, ${accent}28, ${accent}60)`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: "64px",
+                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                          gap: "12px", padding: "24px",
                           border: `1px solid ${accent}20`,
-                        }}>{emoji}</div>
+                        }}>
+                          <span style={{ fontSize: "48px" }}>{emoji}</span>
+                          <span style={{ fontSize: "15px", fontWeight: "800", color: "#fff", textAlign: "center", lineHeight: "1.3", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textShadow: "0 1px 4px rgba(0,0,0,0.2)" }}>{p.title}</span>
+                        </div>
                       )}
                       <div style={{ padding: "24px 26px" }}>
                         <span style={{
@@ -510,9 +515,12 @@ export default async function CreatorProfilePage({
                         <div style={{
                           width: "100%", aspectRatio: "1/1",
                           background: `linear-gradient(135deg, ${accent}18, ${accent}44)`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: "40px",
-                        }}>{emoji}</div>
+                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                          gap: "8px", padding: "16px",
+                        }}>
+                          <span style={{ fontSize: "32px" }}>{emoji}</span>
+                          <span style={{ fontSize: "12px", fontWeight: "700", color: accent, textAlign: "center", lineHeight: "1.3", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.title}</span>
+                        </div>
                       )}
                       <div style={{ padding: "12px 14px 14px", flex: 1, display: "flex", flexDirection: "column" }}>
                         <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: "700", color: t.text, lineHeight: "1.35", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", letterSpacing: "-0.2px" }}>{p.title}</p>
