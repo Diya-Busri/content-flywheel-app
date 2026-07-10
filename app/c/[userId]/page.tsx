@@ -69,7 +69,12 @@ export default async function CreatorProfilePage({
   const [products, activeBundles, followerCountRow, creatorScore] = await Promise.all([
     db.select({ id: productsTable.id, title: productsTable.title, marketingAssets: productsTable.marketingAssets })
       .from(productsTable)
-      .where(and(eq(productsTable.userId, userId), eq(productsTable.status, "active"), isNull(productsTable.deletedAt)))
+      .where(and(
+        eq(productsTable.userId, userId),
+        isNull(productsTable.deletedAt),
+        // Accept both publish paths: launch pipeline (status=active) and native publish button (isNativePublished=true)
+        sql`(${productsTable.status} = 'active' OR ${productsTable.marketingAssets}->>'isNativePublished' = 'true')`,
+      ))
       .limit(20),
     db.select({ id: productBundlesTable.id, title: productBundlesTable.title, description: productBundlesTable.description, bundlePrice: productBundlesTable.bundlePrice, productIds: productBundlesTable.productIds })
       .from(productBundlesTable)

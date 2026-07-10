@@ -130,7 +130,7 @@ export async function POST(
 
     await db
       .update(productsTable)
-      .set({ marketingAssets: updatedAssets, updatedAt: new Date() })
+      .set({ marketingAssets: updatedAssets, status: "active", updatedAt: new Date() })
       .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
 
     // If this is the first publish (was not already published), notify waitlist + followers
@@ -287,7 +287,7 @@ export async function DELETE(
 
     await db
       .update(productsTable)
-      .set({ marketingAssets: updatedAssets, updatedAt: new Date() })
+      .set({ marketingAssets: updatedAssets, status: "draft", updatedAt: new Date() })
       .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId)));
 
     return NextResponse.json({ success: true });
