@@ -69,12 +69,23 @@ export async function runLaunchDesignAgent(ctx: ExecutionContext): Promise<void>
   const productId   = product?.productId  ?? "";
   const productName = product?.productName ?? ctx.goal;
 
-  /* Pull niche/format from research if available */
+  /* Pull niche/format from previous stages */
   const research = stageResults.research;
-  const niche    = typeof (research as Record<string, unknown> | undefined)?.query === "string"
-    ? (research as { query: string }).query
-    : ctx.goal;
-  const format   = "guide";
+
+  // Use first research keyword as a clean niche label (e.g. "digital cookbooks"),
+  // falling back to stripping the "I want to build a…" preamble from the goal.
+  const researchKeywords = Array.isArray((research as Record<string, unknown> | undefined)?.keywords)
+    ? (research as unknown as { keywords: string[] }).keywords
+    : [];
+  const rawGoal = ctx.goal;
+  const niche = researchKeywords.length > 0
+    ? researchKeywords[0]
+    : rawGoal
+        .replace(/^i\s+want\s+to\s+(build|create|make|write|develop|launch|sell)\s+(a\s+|an\s+)?/i, "")
+        .replace(/^(build|create|make|write|develop|launch|sell)\s+(a\s+|an\s+)?/i, "")
+        .slice(0, 50);
+
+  const format = product?.format ?? "guide";
 
   if (!productId) {
     throw new Error("Design Agent: no productId in stageResults — run Product Agent first");

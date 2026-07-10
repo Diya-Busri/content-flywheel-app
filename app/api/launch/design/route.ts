@@ -390,11 +390,13 @@ function streamDesignGeneration(
       await send({ type: "step", id: "concepts", label: "Creating 6 cover concepts..." });
 
       const detectedNiche = detectNiche(productName, niche);
+      // Capitalise format for display (e.g. "guide" → "Guide")
+      const fmtLabel = format ? format.charAt(0).toUpperCase() + format.slice(1) : "Guide";
       const coverInput: CoverInput = {
         title:    productName,
-        subtitle: `Your complete ${format} on ${niche}`,
+        subtitle: `A ${fmtLabel} for ${niche}`.slice(0, 60),
         author:   "The Author",   // will be overridden from product data when available
-        category: niche || "Digital Product",
+        category: fmtLabel,       // clean short label: "Guide", "Ebook", "Course", etc.
         niche:    detectedNiche,
       };
 
