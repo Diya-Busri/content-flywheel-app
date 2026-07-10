@@ -299,6 +299,8 @@ export function DesignStudioLanding() {
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [designSearch, setDesignSearch] = useState("");
   const [designSort, setDesignSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [showClearBundles, setShowClearBundles] = useState(false);
+  const [clearingBundles, setClearingBundles] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -364,6 +366,17 @@ export function DesignStudioLanding() {
   async function deleteBundle(id: string) {
     await fetch(`/api/design-bundles/${id}`, { method: "DELETE" });
     setBundles((prev) => prev.filter((b) => b.id !== id));
+  }
+
+  async function clearAllBundles() {
+    setClearingBundles(true);
+    try {
+      await Promise.allSettled(bundles.map((b) => fetch(`/api/design-bundles/${b.id}`, { method: "DELETE" })));
+      setBundles([]);
+      setShowClearBundles(false);
+    } finally {
+      setClearingBundles(false);
+    }
   }
 
   async function duplicateDesign(design: SelectDesign) {
@@ -473,6 +486,15 @@ export function DesignStudioLanding() {
                 <h2 className="text-base font-bold text-gray-900 dark:text-white">Content Bundles</h2>
                 <span className="text-xs text-gray-400 ml-1">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</span>
               </div>
+              <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1.5"
+                onClick={() => setShowClearBundles(true)}
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear All
+              </Button>
               {bundles.length > 6 && (
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
@@ -485,6 +507,7 @@ export function DesignStudioLanding() {
                   />
                 </div>
               )}
+              </div>
             </div>
             <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               <AnimatePresence>
@@ -576,6 +599,30 @@ export function DesignStudioLanding() {
           );
         })() : null}
       </div>
+
+      {/* Clear All Bundles Confirm Dialog */}
+      <Dialog open={showClearBundles} onOpenChange={setShowClearBundles}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Clear all bundles?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            This will permanently delete all <strong>{bundles.length} content bundle{bundles.length !== 1 ? "s" : ""}</strong>. This cannot be undone.
+          </p>
+          <div className="flex gap-3 mt-4">
+            <Button variant="outline" className="flex-1" onClick={() => setShowClearBundles(false)} disabled={clearingBundles}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white gap-2"
+              onClick={clearAllBundles}
+              disabled={clearingBundles}
+            >
+              {clearingBundles ? "Deleting…" : <><Trash2 className="w-4 h-4" /> Delete All</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* New Design Dialog */}
       <Dialog open={showNew} onOpenChange={(open) => { setShowNew(open); if (!open) { setSelectedProductId(""); setCreateError(null); } }}>
