@@ -186,7 +186,7 @@ function FormatBadge({ format }: { format?: string }) {
   const label = format === "ebook" ? "eBook" : format === "template" ? "Template" :
     format === "course" ? "Course" : format === "bundle" ? "Bundle" : format;
   return (
-    <Badge variant="outline" className="text-[10px] border-gray-300 text-gray-600 shrink-0 bg-gray-100">
+    <Badge variant="outline" className="text-[10px] border-gray-300 dark:border-white/20 text-gray-600 dark:text-gray-300 shrink-0 bg-gray-100 dark:bg-white/10">
       {label}
     </Badge>
   );
@@ -376,13 +376,13 @@ function PublishedProductCard({ item, onRefresh }: { item: LibraryItem; onRefres
 function UnpublishedProductRow({ item, onRefresh }: { item: LibraryItem; onRefresh: () => void }) {
   const [showForm, setShowForm] = useState(false);
   return (
-    <div className="flex flex-col gap-1 py-3.5 border-b border-white/8 last:border-0">
+    <div className="flex flex-col gap-1 py-3.5 border-b border-gray-100 dark:border-white/8 last:border-0">
       <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-          <BookOpen className="w-3.5 h-3.5 text-gray-500" />
+        <div className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-[#2A2A2A] flex items-center justify-center shrink-0">
+          <BookOpen className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-900 truncate">{item.title}</p>
+          <p className="text-sm text-gray-900 dark:text-white truncate">{item.title}</p>
         </div>
         <FormatBadge format={item.format} />
         {!showForm && (
@@ -393,7 +393,7 @@ function UnpublishedProductRow({ item, onRefresh }: { item: LibraryItem; onRefre
       </div>
       {showForm && (
         <div className="pl-10">
-          <p className="text-xs text-gray-500 mb-1">Set a price to publish to your store</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Set a price to publish to your store</p>
           <PriceForm productId={item.id} isEdit={false}
             onSuccess={() => { setShowForm(false); onRefresh(); }}
             onCancel={() => setShowForm(false)}
