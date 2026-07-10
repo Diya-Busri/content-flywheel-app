@@ -27,9 +27,11 @@ export const maxDuration = 300; // Vercel Pro — product gen can take 2-4 min
 
 import { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
 import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
+import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { markOnboardingStep } from "@/lib/onboarding-auto-complete";
 import {
   generateProductOutline,
@@ -171,12 +173,21 @@ Return ONLY this JSON:
 
 /* ─── Main streaming function ───────────────────────────────────────────────── */
 
+interface BrandVoice {
+  brandName?: string | null;
+  tone?: string | null;
+  targetAudience?: string | null;
+  writingStyle?: string | null;
+  examplePhrases?: string | null;
+}
+
 function streamProductGeneration(
-  userId:    string,
-  goal:      string,
-  research:  ResearchInput,
-  apiKey:    string,
+  userId:      string,
+  goal:        string,
+  research:    ResearchInput,
+  apiKey:      string,
   preferences?: { productLength?: string; includeImages?: boolean; carouselCount?: number },
+  brandVoice?:  BrandVoice,
 ): Response {
   const encoder = new TextEncoder();
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
@@ -241,7 +252,30 @@ function streamProductGeneration(
         expertiseParts.push(`RECOMMENDED FIRST ACTION: ${actionPlan[0]?.action} — ${actionPlan[0]?.detail}`);
       }
 
+      // Inject brand voice so content sounds like the creator, not generic AI
+      if (brandVoice?.brandName) {
+        expertiseParts.push(`AUTHOR/BRAND: This product is written under the "${brandVoice.brandName}" brand name.`);
+      }
+      if (brandVoice?.targetAudience) {
+        expertiseParts.push(`TARGET READER: ${brandVoice.targetAudience} — write directly to this person throughout.`);
+      }
+      if (brandVoice?.writingStyle) {
+        expertiseParts.push(`WRITING STYLE: ${brandVoice.writingStyle}`);
+      }
+      if (brandVoice?.examplePhrases) {
+        expertiseParts.push(`BRAND VOICE EXAMPLES (echo this style and vocabulary): ${brandVoice.examplePhrases}`);
+      }
+
       const highOppKeywords = keywords.filter(k => k.opportunity === "High").slice(0, 5).map(k => k.term);
+
+      // Map brand voice tone to the customizationOptions tone type
+      const brandTone = brandVoice?.tone?.toLowerCase();
+      const resolvedTone: "professional" | "casual" | "academic" | "friendly" | undefined =
+        brandTone === "professional" ? "professional"
+        : brandTone === "casual"    ? "casual"
+        : brandTone === "academic"  ? "academic"
+        : brandTone === "friendly"  ? "friendly"
+        : undefined;
 
       const genParams: GenerateProductContentParams = {
         productName:         selection.productName,
@@ -260,6 +294,8 @@ function streamProductGeneration(
                        : preferences?.productLength === "long"  ? "long" : "medium") as "short" | "medium" | "long",
           contentStyle:  preferences?.includeImages
                        ? "text_with_ai_images" : "text_with_placeholders",
+          // Brand voice tone overrides the default if set
+          ...(resolvedTone ? { tone: resolvedTone } : {}),
         },
       };
 
@@ -472,7 +508,21 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: "goal is required" }), { status: 400 });
     }
 
-    return streamProductGeneration(userId, goal, research, apiKey, preferences);
+    // Fetch brand voice (non-fatal — missing brand voice is fine)
+    const [bv] = await db
+      .select({
+        brandName:      brandVoiceTable.brandName,
+        tone:           brandVoiceTable.tone,
+        targetAudience: brandVoiceTable.targetAudience,
+        writingStyle:   brandVoiceTable.writingStyle,
+        examplePhrases: brandVoiceTable.examplePhrases,
+      })
+      .from(brandVoiceTable)
+      .where(eq(brandVoiceTable.userId, userId))
+      .limit(1)
+      .catch(() => []);
+
+    return streamProductGeneration(userId, goal, research, apiKey, preferences, bv ?? undefined);
 
   } catch (err) {
     console.error("[launch/product]", err);
