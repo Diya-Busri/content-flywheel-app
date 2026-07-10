@@ -82,6 +82,53 @@ function inferFormat(type: string): string {
   return "ebook"; // safe default
 }
 
+/* ─── Smart price derivation ─────────────────────────────────────────────────
+   Parses price ranges like "£27", "£27-£47", "$47", "$37-$97" from research
+   product opportunity data and returns a market-anchored suggested price.
+   Strategy: take the median midpoint of all parsed ranges, then round to
+   the nearest common psychological price (£7/£17/£27/£37/£47/£57/£67/£97).
+──────────────────────────────────────────────────────────────────────────── */
+
+function deriveSmartPrice(
+  opps: Array<{ priceRange?: string }>,
+  format?: string,
+): string {
+  const PRICE_ANCHORS = [7, 17, 27, 37, 47, 57, 67, 97, 127, 197];
+  const currencyRe = /[£$€](\d+)/g;
+
+  const midpoints: number[] = [];
+  for (const opp of opps) {
+    if (!opp.priceRange) continue;
+    const matches = [...opp.priceRange.matchAll(currencyRe)].map(m => Number(m[1]));
+    if (matches.length === 1) midpoints.push(matches[0]!);
+    else if (matches.length >= 2) midpoints.push((matches[0]! + matches[1]!) / 2);
+  }
+
+  if (midpoints.length === 0) {
+    // Format-based sensible defaults when no data
+    const fmt = (format ?? "").toLowerCase();
+    if (fmt === "course")     return "£97";
+    if (fmt === "workbook")   return "£27";
+    if (fmt === "checklist")  return "£17";
+    if (fmt === "planner")    return "£17";
+    return "£37";
+  }
+
+  // Median midpoint
+  const sorted = [...midpoints].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)]!;
+
+  // Snap to nearest psychological anchor
+  const nearest = PRICE_ANCHORS.reduce((best, a) =>
+    Math.abs(a - median) < Math.abs(best - median) ? a : best,
+    PRICE_ANCHORS[0]!,
+  );
+
+  // Detect currency symbol from first opp that has a price
+  const firstCurrency = opps.find(o => o.priceRange && /[£$€]/.test(o.priceRange))?.priceRange?.match(/[£$€]/)?.[0] ?? "£";
+  return `${firstCurrency}${nearest}`;
+}
+
 /* ─── AI call helper ─────────────────────────────────────────────────────────── */
 
 async function aiSelectProduct(
@@ -101,13 +148,16 @@ async function aiSelectProduct(
   const insights = research.insights ?? [];
   const keywords = (research.keywords ?? []).filter(k => k.opportunity === "High").slice(0, 6).map(k => k.term);
 
+  // Derive a data-driven price from actual market ranges in research
+  const smartPrice = deriveSmartPrice(opps);
+
   // Fall back to the top opportunity without an AI call when no key
   const fallback = {
     productName:  opps[0]?.title  ?? goal,
     format:       inferFormat(opps[0]?.type ?? "ebook"),
     niche:        research.query  ?? goal,
     description:  opps[0]?.description ?? `A complete resource for ${goal}`,
-    pricePoint:   opps[0]?.priceRange ?? "£27",
+    pricePoint:   smartPrice,
     idealFor:     `People interested in ${goal}`,
     whyThisOne:   "Highest-demand product from research",
   };
@@ -132,6 +182,8 @@ ${opps.slice(0, 5).map((o, i) => `${i + 1}. ${o.title} (${o.type}) — ${o.descr
 High-opportunity keywords: ${keywords.join(", ")}
 Top insights: ${insights.slice(0, 4).join(" | ")}
 
+MARKET-DERIVED PRICE ANCHOR: Based on the competitor price ranges above, the market median is ${smartPrice}. Use this as your price unless the chosen format (e.g. short checklist vs. full course) strongly warrants a different tier.
+
 Pick the SINGLE best product to create right now. Choose a specific, marketable name — not generic.
 Return ONLY this JSON:
 {
@@ -139,7 +191,7 @@ Return ONLY this JSON:
   "format": "ebook|guide|workbook|checklist|planner|spreadsheet|journal|course|notion",
   "niche": "Specific niche phrase",
   "description": "2-3 sentence product pitch",
-  "pricePoint": "£XX",
+  "pricePoint": "${smartPrice.replace("£", "£").replace("$", "$")}",
   "idealFor": "Target buyer in one sentence",
   "whyThisOne": "One sentence: why build this now"
 }`,
@@ -157,12 +209,18 @@ Return ONLY this JSON:
     const raw  = data.choices?.[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(raw) as typeof fallback;
 
+    const chosenFormat = typeof parsed.format === "string" ? parsed.format : fallback.format;
+    // If GPT returned a price, use it; otherwise re-derive with the now-known format
+    const chosenPrice = typeof parsed.pricePoint === "string" && /[£$€]\d+/.test(parsed.pricePoint)
+      ? parsed.pricePoint
+      : deriveSmartPrice(opps, chosenFormat);
+
     return {
       productName:  typeof parsed.productName  === "string" ? parsed.productName  : fallback.productName,
-      format:       typeof parsed.format       === "string" ? parsed.format       : fallback.format,
+      format:       chosenFormat,
       niche:        typeof parsed.niche        === "string" ? parsed.niche        : fallback.niche,
       description:  typeof parsed.description  === "string" ? parsed.description  : fallback.description,
-      pricePoint:   typeof parsed.pricePoint   === "string" ? parsed.pricePoint   : fallback.pricePoint,
+      pricePoint:   chosenPrice,
       idealFor:     typeof parsed.idealFor     === "string" ? parsed.idealFor     : fallback.idealFor,
       whyThisOne:   typeof parsed.whyThisOne   === "string" ? parsed.whyThisOne   : fallback.whyThisOne,
     };
