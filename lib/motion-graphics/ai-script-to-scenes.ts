@@ -26,6 +26,7 @@ import type {
   ScriptToVideoRequest,
   TemplateDraft,
 } from "@/lib/motion-graphics/types";
+import { generateSpeech } from "@/lib/motion-graphics/voice-engine";
 
 const TAG = "[ai-script-to-scenes]";
 const FPS = 30;
@@ -220,6 +221,10 @@ export async function generateTemplateFromScript(request: ScriptToVideoRequest):
 
   const scenes = parsed.scenes.map((s, i) => toScene(s, i, request.aspectRatio));
 
+  if (request.voiceId) {
+    await attachVoiceovers(scenes, request.voiceId);
+  }
+
   return {
     name: parsed.suggestedTitle?.trim() || "AI Generated Template",
     category: request.category,
@@ -229,4 +234,28 @@ export async function generateTemplateFromScript(request: ScriptToVideoRequest):
     status: "draft",
     sourceScript: request.script,
   };
+}
+
+/**
+ * Generates real ElevenLabs voiceover audio for every scene's voiceover
+ * text, in parallel, mutating each scene's `voiceover.audioAssetUrl` in
+ * place. A single scene's TTS failure is logged and skipped rather than
+ * failing the whole AI generation — the admin can always retry that one
+ * scene later via the per-scene "Generate voice" button in the Scene
+ * Editor.
+ */
+async function attachVoiceovers(scenes: Scene[], voiceId: string): Promise<void> {
+  await Promise.all(
+    scenes.map(async (scene) => {
+      const text = scene.voiceover?.text?.trim();
+      if (!text) return;
+      try {
+        const { url } = await generateSpeech(text, voiceId);
+        scene.voiceover = { text, audioAssetUrl: url };
+      } catch (err) {
+        console.error(TAG, `voiceover generation failed for scene "${scene.name}":`, err);
+        // Leave voiceover text in place without audio — non-fatal.
+      }
+    })
+  );
 }

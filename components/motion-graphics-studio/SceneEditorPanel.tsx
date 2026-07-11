@@ -20,7 +20,7 @@
  * rather than in-scope for this first pass of the Scene Editor.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,7 +30,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AssetPicker } from "./AssetPicker";
-import { Plus, Trash2, Type, Image as ImageIcon, Video as VideoIcon, Shapes, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, Type, Image as ImageIcon, Video as VideoIcon, Shapes, ChevronDown, ChevronUp, Mic, Loader2 } from "lucide-react";
 import { ANIMATION_REGISTRY, ANIMATION_IDS } from "@/src/remotion/motion-graphics/animations";
 import type {
   AnimationId,
@@ -217,6 +217,118 @@ const ElementEditor: React.FC<{
           </Button>
         </div>
       )}
+    </div>
+  );
+};
+
+interface VoiceOption {
+  id: string;
+  name: string;
+  category?: string;
+}
+
+// Module-level cache so every scene's voice picker doesn't refire the same
+// GET /api/admin/motion-graphics/voice request when switching between scenes.
+let cachedVoices: VoiceOption[] | null = null;
+
+/**
+ * Voiceover script editor: text, a manual audio URL fallback (AssetPicker),
+ * an ElevenLabs voice picker, and a "Generate voice" button that calls
+ * POST /api/admin/motion-graphics/voice/generate and writes the resulting
+ * R2 URL straight into scene.voiceover.audioAssetUrl.
+ */
+const VoiceoverEditor: React.FC<{
+  text: string;
+  audioAssetUrl?: string;
+  onChange: (next: { text: string; audioAssetUrl?: string }) => void;
+}> = ({ text, audioAssetUrl, onChange }) => {
+  const [voices, setVoices] = useState<VoiceOption[]>(cachedVoices ?? []);
+  const [voiceId, setVoiceId] = useState<string>(cachedVoices?.[0]?.id ?? "");
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cachedVoices) return;
+    let cancelled = false;
+    fetch("/api/admin/motion-graphics/voice")
+      .then((res) => res.json())
+      .then((data: { voices?: VoiceOption[] }) => {
+        if (cancelled) return;
+        const list = data.voices ?? [];
+        cachedVoices = list;
+        setVoices(list);
+        setVoiceId((current) => current || list[0]?.id || "");
+      })
+      .catch((err) => {
+        console.error("Failed to load voices:", err);
+        if (!cancelled) setError("Couldn't load voice list");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleGenerate = async () => {
+    if (!text.trim() || !voiceId) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/motion-graphics/voice/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voiceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Voice generation failed");
+      onChange({ text, audioAssetUrl: data.url });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Voice generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div>
+      <Label>Voiceover script</Label>
+      <Textarea
+        value={text}
+        onChange={(e) => onChange({ text: e.target.value, audioAssetUrl })}
+        placeholder="Spoken line for this scene (also drives captions)"
+        className="mt-1 min-h-[70px]"
+      />
+
+      <div className="mt-2 flex gap-2">
+        <Select value={voiceId} onValueChange={setVoiceId}>
+          <SelectTrigger className="flex-1">
+            <SelectValue placeholder="Choose a voice" />
+          </SelectTrigger>
+          <SelectContent>
+            {voices.map((v) => (
+              <SelectItem key={v.id} value={v.id}>
+                {v.name}
+                {v.category ? ` — ${v.category}` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="secondary" disabled={generating || !text.trim() || !voiceId} onClick={handleGenerate}>
+          {generating ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Mic size={13} className="mr-1.5" />}
+          Generate voice
+        </Button>
+      </div>
+
+      {error && <p className="text-xs text-destructive mt-1.5">{error}</p>}
+
+      {audioAssetUrl && (
+        <audio controls src={audioAssetUrl} className="w-full mt-2 h-9">
+          Your browser does not support audio playback.
+        </audio>
+      )}
+
+      <div className="mt-1.5">
+        <AssetPicker kind="audio" value={audioAssetUrl || ""} onChange={(v) => onChange({ text, audioAssetUrl: v })} placeholder="Or paste a voiceover audio URL" />
+      </div>
     </div>
   );
 };
@@ -420,18 +532,11 @@ export const SceneEditorPanel: React.FC<{
             </Select>
           )}
 
-          <div>
-            <Label>Voiceover script</Label>
-            <Textarea
-              value={scene.voiceover?.text || ""}
-              onChange={(e) => onChange(updateScene(scene, { voiceover: { ...scene.voiceover, text: e.target.value } }))}
-              placeholder="Spoken line for this scene (also drives captions)"
-              className="mt-1 min-h-[70px]"
-            />
-            <div className="mt-1.5">
-              <AssetPicker kind="audio" value={scene.voiceover?.audioAssetUrl || ""} onChange={(v) => onChange(updateScene(scene, { voiceover: { text: scene.voiceover?.text || "", audioAssetUrl: v } }))} placeholder="Voiceover audio URL" />
-            </div>
-          </div>
+          <VoiceoverEditor
+            text={scene.voiceover?.text || ""}
+            audioAssetUrl={scene.voiceover?.audioAssetUrl}
+            onChange={(next) => onChange(updateScene(scene, { voiceover: next }))}
+          />
 
           <div>
             <Label>Background music</Label>

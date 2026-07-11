@@ -304,6 +304,12 @@ export interface ScriptToVideoRequest {
   aspectRatio: AspectRatio;
   /** Optional style hint, e.g. "energetic", "calm product demo". */
   tone?: string;
+  /**
+   * ElevenLabs voice id to auto-generate voiceover audio with. If omitted,
+   * scenes are still assigned voiceover text but no audio is generated —
+   * the admin can generate it later per-scene in the Scene Editor.
+   */
+  voiceId?: string;
 }
 
 // ─── Future AI Automation architecture ─────────────────────────────────────
