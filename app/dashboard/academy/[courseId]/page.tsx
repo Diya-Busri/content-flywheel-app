@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SupportCard } from "@/components/academy/support-card";
 import { auth } from "@clerk/nextjs/server";
 import { CheckCircle2, Circle, Clock, BookOpen, ArrowRight, PlayCircle } from "lucide-react";
 import {
@@ -129,6 +130,11 @@ export default async function CourseOverviewPage({ params }: { params: { courseI
           )}
         />
       )}
+
+      {/* Support card */}
+      <div className="mt-8">
+        <SupportCard />
+      </div>
     </div>
   );
 }

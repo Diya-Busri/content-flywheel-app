@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
+import { SupportCard } from "@/components/academy/support-card";
 import {
   GraduationCap, BookOpen, ArrowRight, Zap, Trophy, Star, Clock,
   Rocket, Target, TrendingUp, Settings2, CheckCircle2,
@@ -333,6 +334,11 @@ export default async function AcademyHomePage() {
           })}
         </div>
       )}
+
+      {/* Support card */}
+      <div className="mt-8">
+        <SupportCard />
+      </div>
     </div>
   );
 }

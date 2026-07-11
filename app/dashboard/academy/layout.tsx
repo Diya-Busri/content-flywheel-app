@@ -2,15 +2,13 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { BookOpen, Users, MessageCircle, BarChart2, Settings2 } from "lucide-react";
+import { BookOpen, Users, BarChart2, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   { href: "/dashboard/academy", label: "Courses", icon: BookOpen, exact: true },
   { href: "/dashboard/academy/community", label: "Community", icon: Users },
-  { href: "/dashboard/academy/members", label: "Members", icon: Users },
-  { href: "/dashboard/academy/messages", label: "Messages", icon: MessageCircle },
   { href: "/dashboard/academy/progress", label: "Progress", icon: BarChart2 },
 ];
 
@@ -22,23 +20,8 @@ const FULLSCREEN_PATTERNS = [
 
 export default function AcademyLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const isFullscreen = FULLSCREEN_PATTERNS.some((p) => p.test(pathname));
-
-  useEffect(() => {
-    fetch("/api/messages/unread")
-      .then((r) => r.json())
-      .then((d) => setUnreadCount(d.count ?? 0))
-      .catch(() => {});
-    const id = setInterval(() => {
-      fetch("/api/messages/unread")
-        .then((r) => r.json())
-        .then((d) => setUnreadCount(d.count ?? 0))
-        .catch(() => {});
-    }, 15000);
-    return () => clearInterval(id);
-  }, []);
 
   if (isFullscreen) return <>{children}</>;
 
@@ -62,16 +45,10 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
               >
                 <Icon className="h-4 w-4" />
                 {label}
-                {label === "Messages" && unreadCount > 0 && (
-                  <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                    {unreadCount}
-                  </span>
-                )}
               </Link>
             );
           })}
 
-          {/* Admin link — shown only to admin (checked client-side via a simple data attr trick) */}
           <AdminLink pathname={pathname} />
         </div>
       </div>
@@ -81,7 +58,6 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
   );
 }
 
-// Separate component so we can fetch admin status once
 function AdminLink({ pathname }: { pathname: string }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
