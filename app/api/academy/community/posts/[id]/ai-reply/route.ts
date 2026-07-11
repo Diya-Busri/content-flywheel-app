@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/db";
 import { academyCommunityPostsTable } from "@/db/schema/academy-schema";
 import { eq } from "drizzle-orm";
-import { getCommunityPost, listComments, insertAiComment } from "@/db/queries/academy-queries";
+import { getCommunityPostById, listComments, insertAiComment } from "@/db/queries/academy-queries";
 
 const CF_AI_SYSTEM_PROMPT = `You are the Content Flywheel Community Manager — a friendly, knowledgeable AI assistant inside the Content Flywheel Academy community.
 
@@ -65,7 +65,7 @@ export async function POST(
     const { id: postId } = await params;
 
     // Fetch post — abort if not found or already replied to
-    const post = await getCommunityPost(postId);
+    const post = await getCommunityPostById(postId);
     if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
     if (post.aiRepliedAt) return NextResponse.json({ ok: true, skipped: "already_replied" });
 

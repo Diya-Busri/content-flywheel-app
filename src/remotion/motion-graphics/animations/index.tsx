@@ -75,7 +75,9 @@ export interface AnimationRegistryEntry {
   category: AnimationCategory;
   kind: AnimationKind;
   description: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // Deliberately loose: registry entries hold components with wildly different
+  // prop shapes (children-based, text-based, items-based, JSON-config-based —
+  // see the "kind" discriminant above for how each is actually invoked).
   Component: React.ComponentType<any>;
   /** Sensible default config for both the Scene Editor form and the gallery preview. */
   defaultConfig: Record<string, unknown>;

@@ -169,8 +169,8 @@ function renderBaseContent(element: SceneElement): React.ReactNode {
     case "video":
       return <OffthreadVideo src={element.content} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 12 }} />;
     case "icon": {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const IconComp = ((LucideIcons as any)[element.content] || LucideIcons.HelpCircle) as React.FC<{ size?: number; color?: string }>;
+      const iconLookup = LucideIcons as unknown as Record<string, React.FC<{ size?: number; color?: string }> | undefined>;
+      const IconComp = iconLookup[element.content] || LucideIcons.HelpCircle;
       return (
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <IconComp size={Math.min(element.width, element.height) * 4 || 64} color={element.color || "#ffffff"} />
