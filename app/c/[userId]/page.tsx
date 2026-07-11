@@ -51,14 +51,20 @@ export default async function CreatorProfilePage({
 }) {
   const { userId } = await params;
 
-  // Guard: 404 for deleted or non-existent accounts
-  const [profile] = await db
-    .select({ deletedAt: profilesTable.deletedAt })
-    .from(profilesTable)
-    .where(eq(profilesTable.userId, userId))
-    .limit(1);
-  // Only 404 for explicitly deleted accounts — missing profile rows are fine (e.g. admin accounts)
-  if (profile && profile.deletedAt !== null) notFound();
+  // Guard: 404 for explicitly deleted accounts only.
+  // Wrapped in try/catch because the deleted_at column may not yet exist in all
+  // environments (migration: add-creator-moderation.sql). If the query throws,
+  // we treat it as "no profile" and allow the page to render.
+  try {
+    const [profile] = await db
+      .select({ deletedAt: profilesTable.deletedAt })
+      .from(profilesTable)
+      .where(eq(profilesTable.userId, userId))
+      .limit(1);
+    if (profile?.deletedAt) notFound();
+  } catch {
+    // DB column missing or query error — skip the check, render the store
+  }
 
   const [brandVoice, storeSettings] = await Promise.all([
     db.select().from(brandVoiceTable).where(eq(brandVoiceTable.userId, userId)).limit(1)
