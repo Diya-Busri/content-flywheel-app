@@ -17,7 +17,7 @@
  * will flicker or produce different output per render.
  */
 
-import { Easing, interpolate } from "remotion";
+import { Easing, interpolate, spring } from "remotion";
 
 // ─── Deterministic pseudo-random ───────────────────────────────────────────
 
@@ -70,6 +70,52 @@ export function easedProgress(
 export function sineWave(frame: number, periodInFrames: number, phase = 0): number {
   return Math.sin((frame / periodInFrames) * Math.PI * 2 + phase);
 }
+
+// ─── Spring overshoot (the "watchable" upgrade) ────────────────────────────
+//
+// easedProgress() eases smoothly *to* its target and stops — reliable, but
+// reads as "software." Real snap comes from overshooting past the target and
+// springing back, which is what springOvershoot() gives you: a 0→~1.05-1.15→1
+// curve instead of a flat 0→1. Use it to drive scale/position/rotation on
+// entrances; keep opacity on easedProgress() (opacity overshooting past 1 is
+// meaningless and just looks like a flicker).
+//
+// Built on Remotion's spring() rather than a hand-rolled curve because
+// spring() already handles the "fit this into an exact number of frames" math
+// via its `durationInFrames` option, and it's just as deterministic (a pure
+// function of frame/fps/config) as everything else in this file.
+
+export interface SpringOvershootConfig {
+  /** Lower = more bounce/oscillation. Remotion default is 10. */
+  damping?: number;
+  /** Higher = feels heavier/slower to settle. Remotion default is 1. */
+  mass?: number;
+  /** Higher = snappier initial pop. Remotion default is 100. */
+  stiffness?: number;
+}
+
+/**
+ * 0 → overshoot → 1 progress, fit to settle within roughly `durationInFrames`.
+ * `fps` must come from the calling component's useVideoConfig() — spring
+ * physics are time-based, not just frame-count-based.
+ */
+export function springOvershoot(
+  frame: number,
+  startFrame: number,
+  fps: number,
+  durationInFrames: number,
+  config: SpringOvershootConfig = {}
+): number {
+  return spring({
+    frame: Math.max(frame - startFrame, 0),
+    fps,
+    durationInFrames: Math.max(durationInFrames, 1),
+    config: { damping: 10, mass: 0.6, stiffness: 100, ...config },
+  });
+}
+
+/** Recommended default spacing (in frames) between staggered items — e.g. words, characters, cards — in a cascading reveal. */
+export const DEFAULT_STAGGER_FRAMES = 3;
 
 // ─── Shared prop shapes ─────────────────────────────────────────────────────
 

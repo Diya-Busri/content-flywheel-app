@@ -15,7 +15,7 @@
  *
  * Four tabs:
  *   - Templates          — saved/reusable templates, opens the Template Builder
- *   - Animation Library   — all 31 reusable animation components, live preview
+ *   - Animation Library   — all 32 reusable animation components, live preview
  *   - AI Script to Video  — paste a script, get a full draft template
  *   - Asset Library       — upload/manage images, video, logos, audio, music, SFX
  */

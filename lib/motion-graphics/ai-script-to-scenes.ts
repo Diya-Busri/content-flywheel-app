@@ -45,6 +45,7 @@ const TRANSITION_IDS: AnimationId[] = [
   "scaleIn",
   "blurReveal",
   "spotlightReveal",
+  "punchIn",
 ];
 const TEXT_ANIMATION_IDS: AnimationId[] = [
   "typewriterText",
@@ -52,6 +53,7 @@ const TEXT_ANIMATION_IDS: AnimationId[] = [
   "characterReveal",
   "fadeIn",
   "slideUp",
+  "punchIn",
 ];
 const CAMERA_MOVEMENTS: CameraMovement[] = ["none", "zoomIn", "zoomOut", "panLeft", "panRight"];
 const BACKGROUND_GRADIENTS = [

@@ -3,7 +3,7 @@
 /**
  * Admin → Motion Graphics Studio → Animation Library
  *
- * Renders all 31 reusable animation components from
+ * Renders all 32 reusable animation components from
  * src/remotion/motion-graphics/animations/index.tsx as live, looping
  * @remotion/player previews, grouped by category. This is a pure browser
  * preview — no server bundling/rendering needed, since @remotion/player

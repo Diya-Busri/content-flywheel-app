@@ -10,7 +10,7 @@
  */
 
 import React from "react";
-import { useCurrentFrame } from "remotion";
+import { useCurrentFrame, useVideoConfig } from "remotion";
 import {
   AnimationBaseProps,
   DEFAULT_DURATION,
@@ -18,6 +18,7 @@ import {
   EASE_OUT_EXPO,
   easedProgress,
   sineWave,
+  springOvershoot,
 } from "./primitives";
 
 const wrapperStyle = (opacity: number, transform: string, extra?: React.CSSProperties): React.CSSProperties => ({
@@ -71,22 +72,35 @@ interface SlideProps extends AnimationBaseProps {
   distance?: number;
   /** "in" (default) settles into place; "out" exits toward the same direction. */
   mode?: "in" | "out";
+  /** Whether the entrance overshoots slightly past its resting position before settling (default true — ignored for mode="out", which always exits cleanly). */
+  overshoot?: boolean;
 }
 
 function useSlideTransform(
   direction: SlideDirection,
-  { startFrame = DEFAULT_START, durationInFrames = DEFAULT_DURATION, distance = 120, mode = "in" }: SlideProps
+  {
+    startFrame = DEFAULT_START,
+    durationInFrames = DEFAULT_DURATION,
+    distance = 120,
+    mode = "in",
+    overshoot = true,
+  }: SlideProps
 ) {
   const frame = useCurrentFrame();
-  const t = easedProgress(frame, startFrame, durationInFrames);
-  const p = mode === "in" ? 1 - t : t; // 1 → 0 for "in", 0 → 1 for "out"
+  const { fps } = useVideoConfig();
+  // Opacity always follows a clean eased curve — overshooting past 1 would
+  // just read as a flicker, so it's kept separate from the position curve.
+  const opacityT = easedProgress(frame, startFrame, durationInFrames);
+  const positionT =
+    mode === "in" && overshoot ? springOvershoot(frame, startFrame, fps, durationInFrames) : opacityT;
+  const p = mode === "in" ? 1 - positionT : positionT; // overshoot on "in" briefly pushes p negative — settles past 0 and back
 
   const axis = direction === "left" || direction === "right" ? "X" : "Y";
   const sign =
     direction === "left" || direction === "up" ? 1 /* travels from + toward 0 */ : -1;
 
   const offset = sign * distance * p;
-  const opacity = mode === "in" ? t : 1 - t;
+  const opacity = mode === "in" ? opacityT : 1 - opacityT;
   return { transform: `translate${axis}(${offset}px)`, opacity };
 }
 
@@ -118,6 +132,8 @@ interface ScaleProps extends AnimationBaseProps {
   children: React.ReactNode;
   fromScale?: number;
   toScale?: number;
+  /** Whether the scale briefly overshoots toScale before settling — the "pop" that reads as snappy rather than merely smooth. Default true. */
+  overshoot?: boolean;
 }
 
 export const ScaleIn: React.FC<ScaleProps> = ({
@@ -125,15 +141,20 @@ export const ScaleIn: React.FC<ScaleProps> = ({
   durationInFrames = DEFAULT_DURATION,
   fromScale = 0.82,
   toScale = 1,
+  overshoot = true,
   className,
   style,
   children,
 }) => {
   const frame = useCurrentFrame();
-  const t = easedProgress(frame, startFrame, durationInFrames);
+  const { fps } = useVideoConfig();
+  const opacity = easedProgress(frame, startFrame, durationInFrames);
+  const t = overshoot
+    ? springOvershoot(frame, startFrame, fps, durationInFrames)
+    : opacity;
   const scale = fromScale + (toScale - fromScale) * t;
   return (
-    <div className={className} style={wrapperStyle(t, `scale(${scale})`, style)}>
+    <div className={className} style={wrapperStyle(opacity, `scale(${scale})`, style)}>
       {children}
     </div>
   );
@@ -168,6 +189,8 @@ interface RotateProps extends AnimationBaseProps {
   continuous?: boolean;
   degPerSecond?: number;
   fps?: number;
+  /** Whether the settle briefly overshoots toDeg before resting — off by default for continuous spins, on for one-off settles. */
+  overshoot?: boolean;
 }
 
 export const Rotate: React.FC<RotateProps> = ({
@@ -178,12 +201,18 @@ export const Rotate: React.FC<RotateProps> = ({
   continuous = false,
   degPerSecond = 90,
   fps = 30,
+  overshoot = true,
   className,
   style,
   children,
 }) => {
   const frame = useCurrentFrame();
-  const t = easedProgress(frame, startFrame, durationInFrames);
+  const { fps: videoFps } = useVideoConfig();
+  const opacity = easedProgress(frame, startFrame, durationInFrames);
+  const t =
+    overshoot && !continuous
+      ? springOvershoot(frame, startFrame, videoFps, durationInFrames, { damping: 11, mass: 0.5, stiffness: 120 })
+      : opacity;
   const settleDeg = fromDeg + (toDeg - fromDeg) * t;
   const continuousDeg = continuous
     ? ((Math.max(frame - startFrame, 0) / fps) * degPerSecond) % 360
@@ -191,7 +220,7 @@ export const Rotate: React.FC<RotateProps> = ({
   return (
     <div
       className={className}
-      style={wrapperStyle(t, `rotate(${settleDeg + continuousDeg}deg)`, style)}
+      style={wrapperStyle(opacity, `rotate(${settleDeg + continuousDeg}deg)`, style)}
     >
       {children}
     </div>

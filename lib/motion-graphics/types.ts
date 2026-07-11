@@ -52,7 +52,8 @@ export type AnimationId =
   | "logoReveal"
   | "ctaEnding"
   | "timelineProgress"
-  | "animatedBackground";
+  | "animatedBackground"
+  | "punchIn";
 
 /**
  * Plain-data mirror of the AnimationId union, kept in sync by hand (this file
@@ -96,6 +97,7 @@ export const ANIMATION_ID_LIST: AnimationId[] = [
   "ctaEnding",
   "timelineProgress",
   "animatedBackground",
+  "punchIn",
 ];
 
 export type AnimationCategory =

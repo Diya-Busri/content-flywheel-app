@@ -8,7 +8,7 @@
 
 import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
-import { AnimationBaseProps, DEFAULT_START, MOTION_FONT, clamp, easedProgress } from "./primitives";
+import { AnimationBaseProps, DEFAULT_START, MOTION_FONT, clamp, easedProgress, springOvershoot } from "./primitives";
 
 const baseTextStyle: React.CSSProperties = {
   fontFamily: MOTION_FONT,
@@ -77,13 +77,21 @@ export const WordByWordReveal: React.FC<WordByWordProps> = ({
     >
       {words.map((word, i) => {
         const wordStart = startFrame + i * framesPerWord;
-        const t = easedProgress(frame, wordStart, framesPerWord * 0.9);
+        // Opacity/rise stay on a clean ease; scale gets a spring overshoot
+        // "pop" — this is what makes a cascade of words feel punchy rather
+        // than just a staggered fade.
+        const opacity = easedProgress(frame, wordStart, framesPerWord * 0.9);
+        const pop = springOvershoot(frame, wordStart, fps, framesPerWord * 0.9, {
+          damping: 11,
+          mass: 0.5,
+          stiffness: 140,
+        });
         return (
           <span
             key={`${i}-${word}`}
             style={{
-              opacity: t,
-              transform: `translateY(${(1 - t) * 18}px)`,
+              opacity,
+              transform: `translateY(${(1 - opacity) * 18}px) scale(${0.85 + 0.15 * pop})`,
               display: "inline-block",
             }}
           >
@@ -120,14 +128,19 @@ export const CharacterReveal: React.FC<CharacterRevealProps> = ({
     <p className={className} style={{ ...baseTextStyle, fontSize: 56, ...style }}>
       {text.split("").map((char, i) => {
         const charStart = startFrame + i * framesPerChar;
-        const t = easedProgress(frame, charStart, framesPerChar * 4);
+        const opacity = easedProgress(frame, charStart, framesPerChar * 3);
+        const pop = springOvershoot(frame, charStart, fps, framesPerChar * 5, {
+          damping: 9,
+          mass: 0.4,
+          stiffness: 160,
+        });
         return (
           <span
             key={i}
             style={{
               display: "inline-block",
-              opacity: t,
-              transform: `translateY(${(1 - t) * 10}px) scale(${0.6 + 0.4 * t})`,
+              opacity,
+              transform: `translateY(${(1 - opacity) * 10}px) scale(${0.5 + 0.5 * pop})`,
             }}
           >
             {char === " " ? " " : char}

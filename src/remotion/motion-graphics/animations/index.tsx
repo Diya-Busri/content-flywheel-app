@@ -7,7 +7,7 @@
  *     render whatever animation a scene/element was configured with.
  *   - The Admin → Motion Graphics Studio → Animation Library tab uses it to
  *     render a live, looping <Player> preview + label/description for all
- *     31 animations, grouped by category.
+ *     32 animations, grouped by category.
  *   - The AI script-to-scenes step (lib/motion-graphics/ai-script-to-scenes.ts)
  *     validates the model's chosen animation ids against this registry's keys.
  *
@@ -59,12 +59,14 @@ import {
   TimelineProgress,
   AnimatedBackground,
 } from "./composite-elements";
+import { PunchIn } from "./impact-effects";
 
 export * from "./transitions";
 export * from "./text-effects";
 export * from "./camera-effects";
 export * from "./particle-effects";
 export * from "./composite-elements";
+export * from "./impact-effects";
 export * from "./primitives";
 
 export type AnimationKind = "wrapper" | "textContent" | "particle" | "composite" | "background";
@@ -362,6 +364,15 @@ export const ANIMATION_REGISTRY: Record<AnimationId, AnimationRegistryEntry> = {
     description: "A continuously looping background — gradient shift, grid, or waves.",
     Component: AnimatedBackground,
     defaultConfig: { variant: "gradientShift", colorA: "#0f0c29", colorB: "#302b63" },
+  },
+  punchIn: {
+    id: "punchIn",
+    label: "Punch In",
+    category: "transition",
+    kind: "wrapper",
+    description: "High-impact combo entrance: overshoot scale pop, a landing glow flash, and a brief shake — built for CTAs, stat reveals, and scene-opening headlines that need to grab attention immediately.",
+    Component: PunchIn,
+    defaultConfig: { durationInFrames: 24, color: "#F89520" },
   },
 };
 
