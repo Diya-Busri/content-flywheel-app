@@ -57,7 +57,8 @@ export default async function CreatorProfilePage({
     .from(profilesTable)
     .where(eq(profilesTable.userId, userId))
     .limit(1);
-  if (!profile || profile.deletedAt !== null) notFound();
+  // Only 404 for explicitly deleted accounts — missing profile rows are fine (e.g. admin accounts)
+  if (profile && profile.deletedAt !== null) notFound();
 
   const [brandVoice, storeSettings] = await Promise.all([
     db.select().from(brandVoiceTable).where(eq(brandVoiceTable.userId, userId)).limit(1)
