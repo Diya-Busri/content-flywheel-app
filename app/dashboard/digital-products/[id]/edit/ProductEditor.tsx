@@ -1676,6 +1676,28 @@ export default function ProductEditor({ productId }: { productId: string }) {
     });
   }, [product?.id, product?.title, product?.niche, placedElementsByPage.length, totalPages]);
 
+  /** Reset the back cover to the current default template, discarding any edits. */
+  const resetBackCover = useCallback(() => {
+    const backIdx = totalPages - 1;
+    recordUndo();
+    const backDefaults: PlacedElement[] = [
+      { id: "back-thanks", type: "text", content: "You've got this.", position: { x: CANVAS_WIDTH / 2 - 220, y: 320 }, size: { width: 440, height: 44 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 28, textAlign: "center" } },
+      { id: "back-msg", type: "text", content: "Thanks for reading — now go make it happen.", position: { x: CANVAS_WIDTH / 2 - 220, y: 390 }, size: { width: 440, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 15, textAlign: "center" } },
+      { id: "back-cta", type: "text", content: "Want more? Follow along for updates:", position: { x: CANVAS_WIDTH / 2 - 200, y: 470 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 13, textAlign: "center" } },
+      { id: "back-url", type: "text", content: "Add your website in brand profile", position: { x: CANVAS_WIDTH / 2 - 200, y: 510 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
+      { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 650 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 12, textAlign: "center" } },
+    ];
+    const nextPlacedByPage = placedElementsByPage.map((page, i) => (i === backIdx ? backDefaults : page));
+    setPlacedElementsByPage(nextPlacedByPage as PlacedElement[][]);
+    saveToServer({
+      designSettings: {
+        ...product?.designSettings,
+        placedElementsByPage: nextPlacedByPage,
+      },
+    });
+    toast({ title: "Back cover reset to defaults" });
+  }, [totalPages, recordUndo, placedElementsByPage, product?.designSettings, saveToServer, toast]);
+
   useEffect(() => {
     const page = pageBackgrounds[currentPageIndex];
     setBackgroundImage(page?.backgroundImage ?? null);
@@ -5152,7 +5174,17 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       {currentPageIndex === 0 ? (
                         <><Crown className="w-3.5 h-3.5 shrink-0" /> Cover</>
                       ) : currentPageIndex === totalPages - 1 ? (
-                        <><Star className="w-3.5 h-3.5 shrink-0" /> Back Cover</>
+                        <>
+                          <Star className="w-3.5 h-3.5 shrink-0" /> Back Cover
+                          <button
+                            type="button"
+                            onClick={resetBackCover}
+                            title="Reset back cover to defaults"
+                            className={`ml-0.5 p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity ${isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-700"}`}
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                          </button>
+                        </>
                       ) : (
                         <>Page {currentPageIndex + 1}</>
                       )}
