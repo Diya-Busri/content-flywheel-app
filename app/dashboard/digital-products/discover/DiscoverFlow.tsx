@@ -266,6 +266,226 @@ type ProductSalesGuide = {
   launchStrategy: string[];
 };
 
+// ── Ecosystem helpers ────────────────────────────────────────────────────────
+
+/** Price ranges [lo, hi] per format in GBP. */
+const FORMAT_PRICE_RANGES_GBP: Record<string, [number, number]> = {
+  ebook: [0, 12], checklist: [5, 12], journal: [9, 25],
+  spreadsheet: [12, 29], planner: [15, 35], notion: [15, 39],
+  workbook: [19, 39], course: [49, 149],
+};
+
+/** Compatibility score: 3 = highly compatible, 2 = good, 1 = possible, 0 = not recommended. */
+const FORMAT_COMPAT: Record<string, Record<string, number>> = {
+  spreadsheet: { ebook: 3, checklist: 3, workbook: 3, notion: 2, planner: 2, journal: 1, course: 1 },
+  ebook:       { checklist: 3, workbook: 3, course: 3, spreadsheet: 2, planner: 2, notion: 1, journal: 1 },
+  workbook:    { checklist: 3, ebook: 3, course: 3, spreadsheet: 2, planner: 2, notion: 1, journal: 1 },
+  notion:      { ebook: 3, spreadsheet: 3, course: 2, checklist: 2, workbook: 2, planner: 1, journal: 1 },
+  course:      { ebook: 3, checklist: 3, workbook: 3, spreadsheet: 2, notion: 2, planner: 1, journal: 1 },
+  checklist:   { ebook: 3, workbook: 3, spreadsheet: 3, course: 2, planner: 2, notion: 1, journal: 1 },
+  journal:     { planner: 3, checklist: 2, workbook: 2, ebook: 2, course: 1, spreadsheet: 1, notion: 1 },
+  planner:     { checklist: 3, journal: 3, workbook: 3, spreadsheet: 2, ebook: 2, course: 1, notion: 1 },
+};
+
+type EcosystemFunnelRole = "Lead magnet" | "Upsell" | "Premium upsell" | "Order bump" | "Bundle bonus";
+
+/** Funnel role for each add-on format given a core format. */
+const FORMAT_FUNNEL_ROLE: Record<string, Record<string, EcosystemFunnelRole>> = {
+  spreadsheet: { checklist: "Lead magnet", ebook: "Upsell", workbook: "Upsell", notion: "Bundle bonus", course: "Premium upsell", planner: "Bundle bonus", journal: "Bundle bonus" },
+  ebook:       { checklist: "Lead magnet", workbook: "Upsell", course: "Premium upsell", spreadsheet: "Upsell", planner: "Bundle bonus", notion: "Bundle bonus", journal: "Bundle bonus" },
+  workbook:    { checklist: "Lead magnet", ebook: "Order bump", course: "Premium upsell", spreadsheet: "Upsell", planner: "Bundle bonus", notion: "Bundle bonus", journal: "Bundle bonus" },
+  notion:      { checklist: "Lead magnet", ebook: "Lead magnet", spreadsheet: "Upsell", course: "Premium upsell", workbook: "Upsell", planner: "Bundle bonus", journal: "Bundle bonus" },
+  course:      { checklist: "Lead magnet", ebook: "Lead magnet", workbook: "Order bump", spreadsheet: "Upsell", notion: "Bundle bonus", planner: "Bundle bonus", journal: "Bundle bonus" },
+  checklist:   { ebook: "Upsell", workbook: "Upsell", spreadsheet: "Upsell", course: "Premium upsell", notion: "Bundle bonus", planner: "Bundle bonus", journal: "Bundle bonus" },
+  journal:     { planner: "Upsell", checklist: "Lead magnet", workbook: "Upsell", ebook: "Upsell", course: "Premium upsell", spreadsheet: "Bundle bonus", notion: "Bundle bonus" },
+  planner:     { checklist: "Lead magnet", journal: "Upsell", workbook: "Upsell", spreadsheet: "Upsell", ebook: "Upsell", course: "Premium upsell", notion: "Bundle bonus" },
+};
+
+function shortProductName(name: string, maxWords = 6): string {
+  const words = name.trim().split(/\s+/);
+  return words.length <= maxWords ? name : words.slice(0, maxWords).join(" ") + "…";
+}
+
+function currencySymbol(currency: string | undefined): string {
+  return currency === "USD" ? "$" : currency === "EUR" ? "€" : "£";
+}
+
+function formatPriceRange(id: string, sym: string): string {
+  const r = FORMAT_PRICE_RANGES_GBP[id];
+  if (!r) return "";
+  const [lo, hi] = r;
+  const mult = sym === "$" ? 1.25 : sym === "€" ? 1.15 : 1;
+  return lo === 0
+    ? `Free–${sym}${Math.round(hi * mult)}`
+    : `${sym}${Math.round(lo * mult)}–${sym}${Math.round(hi * mult)}`;
+}
+
+function getAddonBadge(role: EcosystemFunnelRole, compat: number): { label: string; cls: string } | null {
+  if (compat === 3) {
+    if (role === "Lead magnet") return { label: "Best lead magnet", cls: "text-green-600 dark:text-green-400 bg-green-500/10 border-green-500/30" };
+    if (role === "Order bump") return { label: "Best order bump", cls: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/30" };
+    if (role === "Upsell") return { label: "Best upsell", cls: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/30" };
+    if (role === "Premium upsell") return { label: "Premium option", cls: "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/30" };
+    return { label: "Recommended", cls: "text-orange-500 bg-orange-500/10 border-orange-500/30" };
+  }
+  if (compat === 2) return { label: "Good match", cls: "text-muted-foreground bg-muted border-border" };
+  return null;
+}
+
+function getAddonDescription(addonId: string, coreName: string, coreFormat: string, nicheName: string): string {
+  const short = shortProductName(coreName, 5);
+  switch (addonId) {
+    case "ebook":
+      if (coreFormat === "spreadsheet") return `A companion guide explaining the system in ${short}. Perfect as a free sign-up gift or a low-ticket upsell.`;
+      if (coreFormat === "checklist") return `Expand your checklist into a full how-to guide with explanations, examples, and step-by-step instructions.`;
+      if (coreFormat === "workbook") return `Covers the 'why' behind each exercise in ${short} — increases perceived value and expertise.`;
+      return `A written guide going deeper into the strategies and ideas behind ${short}.`;
+    case "checklist":
+      if (coreFormat === "spreadsheet") return `A quick-start action checklist for ${short} — ideal as a free lead magnet or bonus at checkout.`;
+      if (coreFormat === "course") return `A printable checklist summarising the key actions from your course — great as a free download.`;
+      return `A concise action checklist distilling the key steps from ${short} — high-converting as a free lead magnet.`;
+    case "workbook":
+      if (coreFormat === "ebook") return `Hands-on exercises and fill-in worksheets based on the strategies in ${short} — boosts completion and adds value.`;
+      if (coreFormat === "spreadsheet") return `Printable planning pages to help customers set intentions and track habits manually alongside ${short}.`;
+      return `Practical exercises and fill-in templates to help customers apply the system in ${short}.`;
+    case "spreadsheet":
+      if (["planner", "journal"].includes(coreFormat)) return `An automated tracker so customers can quantify the goals set in ${short} — adds a data layer for numbers-oriented buyers.`;
+      if (coreFormat === "ebook") return `A ready-made Excel/Sheets file so customers can start tracking straight away without building it themselves.`;
+      return `An Excel/Google Sheets file with formulas, sample data, and a dashboard — turns ${short} into a fully automated system.`;
+    case "notion":
+      if (coreFormat === "spreadsheet") return `A Notion workspace version of ${short} for customers who prefer a digital-first, drag-and-drop system.`;
+      return `A Notion template that brings ${short} into a flexible digital workspace — appeals to tech-savvy ${nicheName} customers.`;
+    case "course":
+      return `Turn the system in ${short} into a structured course. Your highest-ticket offer — video or text-based.`;
+    case "planner":
+      if (coreFormat === "journal") return `Goal-planning pages with structured monthly layouts and habit spreads — a natural companion to your journal.`;
+      if (coreFormat === "spreadsheet") return `A printed planning pad to help customers set intentions before they open ${short}.`;
+      return `A monthly or weekly planner to help customers follow through on the actions in ${short}.`;
+    case "journal":
+      if (coreFormat === "planner") return `Guided reflection prompts to pair with your planner — encourages deeper thinking and habit formation.`;
+      return `Guided writing prompts and reflection space to help customers track mindset shifts as they work through ${short}.`;
+    default:
+      return `An add-on to extend the value of ${short} for your ${nicheName} customers.`;
+  }
+}
+
+function getFunnelData(
+  coreFormat: string,
+  coreName: string,
+  sym: string
+): { desc: string; steps: Array<{ role: string; product: string; price?: string }>; suggestIds: string[] } {
+  const short = shortProductName(coreName, 5);
+  const pr = (id: string) => formatPriceRange(id, sym);
+  switch (coreFormat) {
+    case "spreadsheet":
+      return {
+        desc: "A tracker-led funnel converts well for tool-first buyers. Lead with a free checklist, sell the core tracker, then upsell a guide.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Quick-start checklist for ${short}` },
+          { role: "Core product", product: coreName, price: pr("spreadsheet") },
+          { role: "Upsell", product: `${short} — Companion Guide`, price: pr("ebook") },
+          { role: "Premium upsell", product: `Complete ${short} Course`, price: pr("course") },
+        ],
+        suggestIds: ["checklist", "ebook", "course"],
+      };
+    case "ebook":
+      return {
+        desc: "Knowledge-first buyers need action tools. Lead with a free checklist, sell the ebook, then upsell with a workbook.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Quick-start checklist for ${short}` },
+          { role: "Core product", product: coreName, price: pr("ebook") },
+          { role: "Upsell", product: `${short} — Action Workbook`, price: pr("workbook") },
+          { role: "Premium upsell", product: `${short} Complete Course`, price: pr("course") },
+        ],
+        suggestIds: ["checklist", "workbook", "course"],
+      };
+    case "workbook":
+      return {
+        desc: "Action-first buyers want exercises then deeper knowledge. Lead with a checklist, add a guide order bump, then sell the workbook.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Quick-start checklist for ${short}` },
+          { role: "Order bump (at checkout)", product: `${short} Companion Guide`, price: pr("ebook") },
+          { role: "Core product", product: coreName, price: pr("workbook") },
+          { role: "Premium upsell", product: `${short} Full Course`, price: pr("course") },
+        ],
+        suggestIds: ["checklist", "ebook", "course"],
+      };
+    case "course":
+      return {
+        desc: "Premium course buyers need warming up first. Lead with free content, sell a lower-ticket intro, then convert to your course.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Quick-start checklist for ${short}` },
+          { role: "Warm-up product", product: `${short} — Starter Guide`, price: pr("ebook") },
+          { role: "Core product (premium)", product: coreName, price: pr("course") },
+        ],
+        suggestIds: ["checklist", "ebook"],
+      };
+    case "checklist":
+      return {
+        desc: "Use your checklist as a free lead magnet to build your audience, then convert subscribers to paid products.",
+        steps: [
+          { role: "Lead magnet (free)", product: coreName },
+          { role: "First paid offer", product: `${short} — Full Guide`, price: pr("ebook") },
+          { role: "Upsell", product: `${short} Action Workbook`, price: pr("workbook") },
+          { role: "Premium upsell", product: `${short} Complete Course`, price: pr("course") },
+        ],
+        suggestIds: ["ebook", "workbook", "course"],
+      };
+    case "notion":
+      return {
+        desc: "Notion buyers love templates and systems. Pair with a guide and upsell a course for the full transformation.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Quick-start checklist for ${short}` },
+          { role: "Core product", product: coreName, price: pr("notion") },
+          { role: "Upsell", product: `${short} — How-to Guide`, price: pr("ebook") },
+          { role: "Premium upsell", product: `${short} Mastery Course`, price: pr("course") },
+        ],
+        suggestIds: ["checklist", "ebook", "course"],
+      };
+    case "planner":
+      return {
+        desc: "Planner buyers are goal-setters. Lead with a checklist, sell the planner, then upsell a workbook or tracker.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Quick-start checklist for ${short}` },
+          { role: "Core product", product: coreName, price: pr("planner") },
+          { role: "Upsell", product: `${short} — Workbook`, price: pr("workbook") },
+          { role: "Premium upsell", product: `${short} Progress Tracker`, price: pr("spreadsheet") },
+        ],
+        suggestIds: ["checklist", "workbook", "spreadsheet"],
+      };
+    case "journal":
+      return {
+        desc: "Journal buyers value reflection and growth. Pair with a planner for structure and a workbook for action.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Reflection starter checklist for ${short}` },
+          { role: "Core product", product: coreName, price: pr("journal") },
+          { role: "Upsell", product: `${short} — Planning Pages`, price: pr("planner") },
+          { role: "Premium upsell", product: `${short} Full System Workbook`, price: pr("workbook") },
+        ],
+        suggestIds: ["checklist", "planner", "workbook"],
+      };
+    default:
+      return {
+        desc: "Build a complete funnel from free content to premium product.",
+        steps: [
+          { role: "Lead magnet (free)", product: `Quick-start checklist for ${short}` },
+          { role: "Core product", product: coreName },
+          { role: "Premium upsell", product: `${short} Course`, price: pr("course") },
+        ],
+        suggestIds: ["checklist", "course"],
+      };
+  }
+}
+
+/** True if the productType string maps confidently to a known format keyword. */
+function coreFormatConfidence(productType: string): boolean {
+  const t = productType.toLowerCase();
+  const keywords = ["spreadsheet", "notion", "workbook", "course", "mini-course", "checklist", "journal", "planner", "ebook", "guide", "pdf"];
+  return keywords.some((kw) => t.includes(kw));
+}
+
+// ── End ecosystem helpers ────────────────────────────────────────────────────
+
 /** Maps Step-3 product type string to a PRODUCT_FORMATS id for auto-setting the core format. */
 function inferCoreFormat(productType: string): string {
   const t = productType.toLowerCase();
@@ -316,6 +536,8 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
   const [facelessOrPersonal, setFacelessOrPersonal] = useState<"faceless" | "personal" | null>(null);
   const [productFormat, setProductFormat] = useState<string | null>(null);
   const [additionalFormats, setAdditionalFormats] = useState<string[]>([]);
+  const [ecosystemGenerating, setEcosystemGenerating] = useState(false);
+  const [showMoreFormats, setShowMoreFormats] = useState(false);
   const [dontKnowYet, setDontKnowYet] = useState(false);
   const [customNiche, setCustomNiche] = useState("");
   const [customProductName, setCustomProductName] = useState("");
@@ -423,6 +645,8 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
     setFacelessOrPersonal(null);
     setProductFormat(null);
     setAdditionalFormats([]);
+    setEcosystemGenerating(false);
+    setShowMoreFormats(false);
     setCustomization(DEFAULT_CUSTOMIZATION);
     setShowAdvancedOptions(false);
     setDontKnowYet(false);
@@ -1141,6 +1365,85 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
       if (retryRes.ok) result = await pollBundleProductUntilDone(productId);
     }
     return result;
+  };
+
+  /** Generates the core product + all selected add-ons via /api/products/ecosystem. */
+  const startEcosystemGeneration = async () => {
+    if (!productFormat || !selectedProduct) return;
+    if (ecosystemGenerating || bundleGenerating) return;
+    setEcosystemGenerating(true);
+    setBundleError(null);
+    setBundleComplete(false);
+    setBundleDialogDismissed(false);
+    const nicheName = selectedNiche?.name ?? customNiche.trim();
+    const baseDescription = `${selectedProduct.included}. ${selectedProduct.why} Target: ${nicheName}.`;
+    const hooks = salesGuide?.hooks?.map((h) => ({ text: h.text, whyItWorks: h.whyItWorks })) ?? [];
+    const ctas = salesGuide?.ctas?.map((c) => ({ text: c.text, whyItWorks: c.whyItWorks })) ?? [];
+    try {
+      const res = await fetch("/api/products/ecosystem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          niche: selectedNiche ?? nicheName,
+          productName: selectedProduct.name,
+          productDescription: baseDescription,
+          productIncluded: selectedProduct.included ?? "",
+          productWhy: selectedProduct.why ?? "",
+          coreFormat: productFormat,
+          addonFormats: additionalFormats,
+          customizationOptions: customization,
+          creatorExpertise: creatorExpertise.trim() || undefined,
+          hooks,
+          ctas,
+        }),
+      });
+      const data = await parseJsonResponse<{
+        bundleId?: string;
+        items?: Array<{ productId: string; format: string; label: string; isCore: boolean }>;
+        error?: string;
+      }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Ecosystem generation failed");
+      const { items = [] } = data;
+      if (!items.length) throw new Error("No products were created");
+      setBundleNiche(nicheName);
+      setBundleItems(
+        items.map((item) => ({
+          productId: item.productId,
+          format: item.format,
+          label: item.label,
+          status: "generating" as const,
+        }))
+      );
+      const results = await Promise.all(
+        items.map(async (item) => {
+          const result = await pollBundleProductWithAutoRetry(item.productId, {
+            niche: nicheName,
+            productName: item.label,
+            format: item.format,
+          });
+          setBundleItems((prev) =>
+            prev.map((i) => (i.productId === item.productId ? { ...i, status: result } : i))
+          );
+          return { ...item, result };
+        })
+      );
+      setBundleComplete(true);
+      const failed = results.filter((r) => r.result === "failed").length;
+      if (failed === 0) {
+        const core = results.find((r) => r.isCore);
+        const dest = `/dashboard/digital-products${core ? `?generatingId=${core.productId}` : ""}`;
+        toast({ title: "Ecosystem complete!", description: `${results.length} product${results.length > 1 ? "s" : ""} created and ready in My Library.` });
+        router.push(dest);
+      } else {
+        toast({ title: "Partially complete", description: `${failed} format(s) failed. You can retry them in My Library.`, variant: "destructive" });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Ecosystem generation failed";
+      setBundleError(msg);
+      toast({ title: "Generation failed", description: msg, variant: "destructive" });
+    } finally {
+      setEcosystemGenerating(false);
+    }
   };
 
   /** Opens the design choice modal. Generation must only start after user picks an option. */
@@ -2550,132 +2853,286 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 6 of 7</h2>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Build your product ecosystem</h1>
-            <p className="text-muted-foreground mb-6">Your core product is locked in. Add optional formats to build a complete funnel — lead magnet, upsell, and more.</p>
+            <p className="text-muted-foreground mb-6">Your core product is locked in. Add optional formats to build a complete funnel — lead magnet, upsell, and premium tier.</p>
 
-            {/* Locked core product */}
-            {productFormat && (() => {
+            {/* ── Core product card ─────────────────────────────────────── */}
+            {(() => {
               const coreF = PRODUCT_FORMATS.find((f) => f.id === productFormat);
-              if (!coreF) return null;
-              const CoreIcon = coreF.icon;
+              const CoreIcon = coreF?.icon;
+              const coreTitle = selectedProduct?.name ?? customProductName.trim() || "Your Product";
+              const coreSummary = selectedProduct?.included ? shortProductName(selectedProduct.included, 14) : null;
+              const corePrice = selectedProduct?.price ?? null;
+              const isConfident = selectedProduct?.type ? coreFormatConfidence(selectedProduct.type) : true;
+              const currSym = currencySymbol(customization.spreadsheet?.currency);
+              const corePriceRange = productFormat ? formatPriceRange(productFormat, currSym) : null;
               return (
-                <Card className={`${cardClass} mb-6 border-orange-500`}>
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-orange-500 uppercase tracking-wider mb-3">Core Product</p>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                        <CoreIcon className="w-5 h-5 text-orange-500" />
+                <Card className={`${cardClass} mb-6 border-2 border-orange-500`}>
+                  <CardContent className="p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center gap-1.5 shrink-0">
+                        <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                          {CoreIcon && <CoreIcon className="w-5 h-5 text-orange-500" />}
+                        </div>
+                        <span className="text-[10px] font-semibold text-orange-500 bg-orange-500/10 border border-orange-500/30 rounded-full px-2 py-0.5">Locked</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground">{coreF.label}</p>
-                        <p className="text-xs text-muted-foreground">Auto-set from your product type — this is what we&apos;ll generate</p>
+                        <p className="text-xs font-semibold text-orange-500 uppercase tracking-wider mb-0.5">Core Product</p>
+                        <p className="font-bold text-foreground leading-snug mb-0.5">{coreTitle}</p>
+                        <p className="text-xs text-muted-foreground mb-1.5">Primary format: {coreF?.label ?? "Detecting…"}</p>
+                        {coreSummary && <p className="text-xs text-muted-foreground italic mb-1.5">{coreSummary}</p>}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {corePriceRange && <span className="text-xs font-semibold text-foreground">{corePriceRange}</span>}
+                          {corePrice && <span className="text-xs text-muted-foreground">(market: {corePrice})</span>}
+                        </div>
                       </div>
-                      <span className="text-xs bg-orange-500/10 text-orange-500 border border-orange-500/30 rounded-full px-2.5 py-0.5 font-medium shrink-0">Locked</span>
                     </div>
+                    {!isConfident && (
+                      <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                        <p className="text-xs text-amber-600">
+                          We couldn&apos;t confidently match &quot;{selectedProduct?.type}&quot; to a specific format. We&apos;ve defaulted to {coreF?.label ?? productFormat}. If this is wrong, go back to Step 3 and select a different product.
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
             })()}
 
-            {/* Add-on formats */}
-            <div className="mb-6">
-              <p className="font-semibold text-foreground mb-1">Add-on formats <span className="font-normal text-muted-foreground text-sm">(optional)</span></p>
-              <p className="text-sm text-muted-foreground mb-4">Tick formats to generate alongside your core product. Each one becomes a separate product in your library.</p>
-              <div className="space-y-2">
-                {PRODUCT_FORMATS.filter((f) => f.id !== productFormat).map((f) => {
-                  const AddonIcon = f.icon;
-                  const purposeMap: Record<string, string> = {
-                    ebook: "Free lead magnet or upsell guide",
-                    workbook: "Drive action and add practical depth",
-                    spreadsheet: "Track progress alongside the guide",
-                    notion: "Premium add-on for power users",
-                    course: "Premium upsell — highest price point",
-                    checklist: "Quick-win entry point or sign-up bonus",
-                    journal: "Pair for a journaling and reflection angle",
-                    planner: "Pair for goal-setting and accountability",
-                  };
-                  const isChecked = additionalFormats.includes(f.id);
-                  return (
-                    <label
-                      key={f.id}
-                      className={`flex items-center gap-3 rounded-xl border p-4 cursor-pointer transition-all ${
-                        isChecked ? "border-orange-500 bg-orange-500/10" : "border-border bg-card hover:border-muted-foreground/40"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) =>
-                          setAdditionalFormats((prev) =>
-                            e.target.checked ? [...prev, f.id] : prev.filter((id) => id !== f.id)
-                          )
-                        }
-                        className="rounded border-border bg-background text-orange-500"
-                      />
-                      <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center shrink-0">
-                        <AddonIcon className="w-4 h-4 text-orange-500" />
+            {/* ── Live ecosystem preview ─────────────────────────────────── */}
+            {additionalFormats.length > 0 && (() => {
+              const currSym = currencySymbol(customization.spreadsheet?.currency);
+              const allSelected = [productFormat, ...additionalFormats].filter(Boolean) as string[];
+              const roles: Record<string, string> = { [productFormat!]: "Core product" };
+              additionalFormats.forEach((id) => {
+                roles[id] = FORMAT_FUNNEL_ROLE[productFormat ?? ""]?.[id] ?? "Bundle bonus";
+              });
+              const items = allSelected.map((id) => {
+                const fmt = PRODUCT_FORMATS.find((f) => f.id === id);
+                const [lo, hi] = FORMAT_PRICE_RANGES_GBP[id] ?? [0, 0];
+                const mult = currSym === "$" ? 1.25 : currSym === "€" ? 1.15 : 1;
+                return { id, label: fmt?.label ?? id, role: roles[id], lo: Math.round(lo * mult), hi: Math.round(hi * mult) };
+              });
+              const totalLo = items.reduce((s, i) => s + i.lo, 0);
+              const totalHi = items.reduce((s, i) => s + i.hi, 0);
+              const bundleLo = Math.round(totalLo * 0.6);
+              const bundleHi = Math.round(totalHi * 0.65);
+              const coveredRoles = new Set(items.map((i) => i.role));
+              const hasLead = coveredRoles.has("Lead magnet");
+              const hasUpsell = coveredRoles.has("Upsell") || coveredRoles.has("Premium upsell") || coveredRoles.has("Order bump");
+              return (
+                <Card className={`${cardClass} mb-6`}>
+                  <CardContent className="p-4">
+                    <p className="font-semibold text-foreground text-sm mb-3">Your ecosystem ({items.length} product{items.length > 1 ? "s" : ""})</p>
+                    <div className="space-y-1.5 mb-3">
+                      {items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-xs">
+                          <span className="flex items-center gap-1.5 text-foreground">
+                            {item.role === "Core product" && <span className="text-orange-500 font-bold">★</span>}
+                            {item.label}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-[10px] hidden sm:inline">{item.role}</span>
+                            <span className="font-medium">
+                              {item.hi === 0 ? "Free" : item.lo === 0 ? `Free–${currSym}${item.hi}` : `${currSym}${item.lo}–${currSym}${item.hi}`}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t border-border pt-2 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Individual value (est.)</span>
+                        <span className="font-medium text-foreground">{currSym}{totalLo}–{currSym}{totalHi}</span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground text-sm">{f.label}</p>
-                        <p className="text-xs text-muted-foreground">{purposeMap[f.id] ?? f.desc}</p>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Suggested bundle price</span>
+                        <span className="font-semibold text-orange-500">{currSym}{bundleLo}–{currSym}{bundleHi}</span>
                       </div>
-                    </label>
-                  );
-                })}
+                      <p className="text-[10px] text-muted-foreground">Pricing is guidance only — not guaranteed market data.</p>
+                    </div>
+                    {(!hasLead || !hasUpsell) && (
+                      <div className="mt-2 space-y-1">
+                        {!hasLead && (
+                          <p className="text-[11px] text-amber-500 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" /> No lead magnet — consider adding a free Checklist to attract buyers.
+                          </p>
+                        )}
+                        {!hasUpsell && (
+                          <p className="text-[11px] text-amber-500 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" /> No upsell — adding a Workbook or Course increases average order value.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* ── Add-on formats ─────────────────────────────────────────── */}
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-semibold text-foreground">Add-on formats <span className="font-normal text-muted-foreground text-sm">(optional)</span></p>
+                {additionalFormats.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setAdditionalFormats([])}
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  >
+                    Clear selections
+                  </button>
+                )}
               </div>
+              <p className="text-sm text-muted-foreground mb-4">Select formats to generate alongside your core product.</p>
+
+              {/* Recommended add-ons (compat 3 + 2) */}
+              {(() => {
+                const currSym = currencySymbol(customization.spreadsheet?.currency);
+                const productName = selectedProduct?.name ?? customProductName.trim();
+                const nicheName = selectedNiche?.name ?? customNiche.trim();
+                const highCompat = PRODUCT_FORMATS
+                  .filter((f) => f.id !== productFormat && (FORMAT_COMPAT[productFormat ?? ""]?.[f.id] ?? 0) >= 2)
+                  .sort((a, b) => (FORMAT_COMPAT[productFormat ?? ""]?.[b.id] ?? 0) - (FORMAT_COMPAT[productFormat ?? ""]?.[a.id] ?? 0));
+                return (
+                  <div className="space-y-2">
+                    {highCompat.map((f) => {
+                      const AddonIcon = f.icon;
+                      const compat = FORMAT_COMPAT[productFormat ?? ""]?.[f.id] ?? 0;
+                      const role = FORMAT_FUNNEL_ROLE[productFormat ?? ""]?.[f.id] ?? "Bundle bonus";
+                      const badge = getAddonBadge(role as EcosystemFunnelRole, compat);
+                      const desc = getAddonDescription(f.id, productName, productFormat ?? "", nicheName);
+                      const priceStr = formatPriceRange(f.id, currSym);
+                      const isChecked = additionalFormats.includes(f.id);
+                      return (
+                        <label
+                          key={f.id}
+                          className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-all ${
+                            isChecked ? "border-orange-500 bg-orange-500/10" : "border-border bg-card hover:border-muted-foreground/40"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) =>
+                              setAdditionalFormats((prev) =>
+                                e.target.checked ? [...prev, f.id] : prev.filter((id) => id !== f.id)
+                              )
+                            }
+                            className="mt-0.5 rounded border-border bg-background text-orange-500 shrink-0"
+                          />
+                          <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center shrink-0">
+                            <AddonIcon className="w-4 h-4 text-orange-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                              <p className="font-medium text-foreground text-sm">{f.label}</p>
+                              {badge && (
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${badge.cls}`}>
+                                  {badge.label}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-muted-foreground border border-border rounded-full px-1.5 py-0.5">{role}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-1">{desc}</p>
+                            {priceStr && <p className="text-xs font-semibold text-foreground">{priceStr}</p>}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* More options (compat == 1) */}
+              {(() => {
+                const lowCompat = PRODUCT_FORMATS.filter(
+                  (f) => f.id !== productFormat && (FORMAT_COMPAT[productFormat ?? ""]?.[f.id] ?? 0) === 1
+                );
+                if (lowCompat.length === 0) return null;
+                const currSym = currencySymbol(customization.spreadsheet?.currency);
+                const productName = selectedProduct?.name ?? customProductName.trim();
+                const nicheName = selectedNiche?.name ?? customNiche.trim();
+                return (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowMoreFormats((b) => !b)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-2"
+                    >
+                      {showMoreFormats ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      More options ({lowCompat.length} less commonly paired)
+                    </button>
+                    {showMoreFormats && (
+                      <div className="space-y-2">
+                        {lowCompat.map((f) => {
+                          const AddonIcon = f.icon;
+                          const role = FORMAT_FUNNEL_ROLE[productFormat ?? ""]?.[f.id] ?? "Bundle bonus";
+                          const desc = getAddonDescription(f.id, productName, productFormat ?? "", nicheName);
+                          const priceStr = formatPriceRange(f.id, currSym);
+                          const isChecked = additionalFormats.includes(f.id);
+                          return (
+                            <label
+                              key={f.id}
+                              className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-all ${
+                                isChecked ? "border-orange-500 bg-orange-500/10" : "border-dashed border-border bg-card hover:border-muted-foreground/40 opacity-75 hover:opacity-100"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) =>
+                                  setAdditionalFormats((prev) =>
+                                    e.target.checked ? [...prev, f.id] : prev.filter((id) => id !== f.id)
+                                  )
+                                }
+                                className="mt-0.5 rounded border-border bg-background text-orange-500 shrink-0"
+                              />
+                              <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center shrink-0">
+                                <AddonIcon className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                                  <p className="font-medium text-foreground text-sm">{f.label}</p>
+                                  <span className="text-[10px] text-muted-foreground border border-border rounded-full px-1.5 py-0.5">{role}</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mb-1">{desc}</p>
+                                {priceStr && <p className="text-xs font-semibold text-foreground">{priceStr}</p>}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Recommended funnel card */}
+            {/* ── Recommended funnel ─────────────────────────────────────── */}
             {productFormat && (() => {
-              const funnelMap: Record<string, { desc: string; steps: string[]; suggestIds: string[] }> = {
-                spreadsheet: {
-                  desc: "The tracker-led funnel converts well for tool-first buyers.",
-                  steps: ["Free Checklist → lead magnet", "Spreadsheet Template → core paid product", "Ebook/Guide → upsell", "Course → premium tier"],
-                  suggestIds: ["checklist", "ebook", "course"],
-                },
-                ebook: {
-                  desc: "Start with knowledge, then add an action tool.",
-                  steps: ["Free Checklist → lead magnet", "Ebook/Guide → core paid product", "Workbook → action upsell", "Course → premium tier"],
-                  suggestIds: ["checklist", "workbook", "course"],
-                },
-                notion: {
-                  desc: "Notion buyers love templates and systems.",
-                  steps: ["Free Template → lead magnet", "Notion Template → core paid product", "Course → premium tier"],
-                  suggestIds: ["checklist", "course"],
-                },
-                workbook: {
-                  desc: "Action-oriented buyers want exercises and clear frameworks.",
-                  steps: ["Free Checklist → lead magnet", "Workbook → core paid product", "Course → premium tier"],
-                  suggestIds: ["checklist", "course"],
-                },
-                course: {
-                  desc: "Lead with free value, convert to your premium course.",
-                  steps: ["Free Checklist → lead magnet", "Ebook/Guide → warm-up product", "Course → core premium"],
-                  suggestIds: ["checklist", "ebook"],
-                },
-                checklist: {
-                  desc: "Checklist as lead magnet is a high-converting entry point.",
-                  steps: ["Checklist → free lead magnet", "Ebook/Guide → first paid product", "Course → premium tier"],
-                  suggestIds: ["ebook", "course"],
-                },
-              };
-              const funnel = funnelMap[productFormat] ?? {
-                desc: "Build a complete funnel from free content to premium product.",
-                steps: ["Free lead magnet", "Core product", "Premium upsell"],
-                suggestIds: ["checklist", "ebook", "course"],
-              };
+              const currSym = currencySymbol(customization.spreadsheet?.currency);
+              const productName = selectedProduct?.name ?? customProductName.trim() || "Your Product";
+              const funnel = getFunnelData(productFormat, productName, currSym);
               return (
-                <Card className="mb-6 border-dashed border-orange-500/40 bg-orange-500/[0.03]">
+                <Card className="mb-5 border-dashed border-orange-500/40 bg-orange-500/[0.03]">
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-1">
                       <Sparkles className="w-4 h-4 text-orange-500" />
                       <p className="font-semibold text-foreground text-sm">Recommended funnel</p>
                     </div>
                     <p className="text-xs text-muted-foreground mb-3">{funnel.desc}</p>
-                    <div className="space-y-1.5 mb-4">
+                    <div className="space-y-2 mb-4">
                       {funnel.steps.map((s, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-orange-500/10 text-orange-500 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                          <span className="text-xs text-foreground">{s}</span>
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="w-5 h-5 rounded-full bg-orange-500/10 text-orange-500 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{s.role}</p>
+                            <p className="text-xs font-medium text-foreground">
+                              {s.product}
+                              {s.price && <span className="font-normal text-muted-foreground"> — {s.price}</span>}
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -2684,9 +3141,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                       size="sm"
                       variant="outline"
                       className="border-orange-500/40 text-orange-500 hover:bg-orange-500/10 gap-1.5 text-xs"
-                      onClick={() =>
-                        setAdditionalFormats(funnel.suggestIds.filter((id) => id !== productFormat))
-                      }
+                      onClick={() => setAdditionalFormats(funnel.suggestIds.filter((id) => id !== productFormat))}
                     >
                       <CheckCircle2 className="w-3 h-3" />
                       Apply recommended funnel
@@ -2696,7 +3151,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
               );
             })()}
 
-            {/* Build complete product ecosystem — only shown when add-ons are selected */}
+            {/* ── Build complete ecosystem ────────────────────────────────── */}
             {additionalFormats.length > 0 && (
               <Card className="mb-6 border-orange-500/20 bg-orange-500/[0.04]">
                 <CardContent className="p-4">
@@ -2705,24 +3160,18 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-foreground text-sm mb-0.5">Generate all at once</p>
                       <p className="text-xs text-muted-foreground mb-3">
-                        Build your core {PRODUCT_FORMATS.find((f) => f.id === productFormat)?.label ?? "product"} plus {additionalFormats.length} add-on{additionalFormats.length > 1 ? "s" : ""} in one go.
+                        Build your core {PRODUCT_FORMATS.find((f) => f.id === productFormat)?.label ?? "product"} plus {additionalFormats.length} add-on{additionalFormats.length > 1 ? "s" : ""} in one go. Each appears separately in your library.
                       </p>
                       <Button
                         type="button"
                         className="bg-orange-500 hover:bg-orange-600 gap-2 text-sm"
-                        onClick={openDesignChoiceModal}
-                        disabled={bundleGenerating}
+                        onClick={startEcosystemGeneration}
+                        disabled={ecosystemGenerating || bundleGenerating}
                       >
-                        {bundleGenerating ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Building ecosystem…
-                          </>
+                        {ecosystemGenerating ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Building ecosystem…</>
                         ) : (
-                          <>
-                            <Layers className="w-4 h-4" />
-                            Build complete product ecosystem →
-                          </>
+                          <><Layers className="w-4 h-4" /> Build complete product ecosystem →</>
                         )}
                       </Button>
                     </div>
@@ -2742,11 +3191,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                 Next: Customize <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
-            {!productFormat && (
-              <p className="text-xs text-amber-500/90 mt-2">Detecting your core format…</p>
-            )}
-
-            {/* Bundle progress + design setup dialog is rendered once at the end of the page */}
+            {!productFormat && <p className="text-xs text-amber-500/90 mt-2">Detecting your core format…</p>}
           </>
         )}
 
@@ -2855,9 +3300,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
               <Card className={`${cardClass} mb-6`}>
                 <CardContent className="p-5 space-y-6">
                   {/* Ebook/Guide */}
-                  {(productFormat === "ebook" || productFormat === "guide") && (
+                  {(productFormat === "ebook" || productFormat === "guide" || additionalFormats.includes("ebook")) && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Ebook / Guide</p>
+                      <p className="font-medium text-foreground">Ebook / Guide{additionalFormats.includes("ebook") && productFormat !== "ebook" && productFormat !== "guide" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                         <input
                           type="checkbox"
@@ -2885,9 +3330,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </div>
                   )}
                   {/* Workbook */}
-                  {productFormat === "workbook" && (
+                  {(productFormat === "workbook" || additionalFormats.includes("workbook")) && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Workbook</p>
+                      <p className="font-medium text-foreground">Workbook{additionalFormats.includes("workbook") && productFormat !== "workbook" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <div>
                         <Label className="text-foreground text-sm">Exercises per section</Label>
                         <select
@@ -2912,9 +3357,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </div>
                   )}
                   {/* Checklist */}
-                  {productFormat === "checklist" && (
+                  {(productFormat === "checklist" || additionalFormats.includes("checklist")) && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Checklist Pack</p>
+                      <p className="font-medium text-foreground">Checklist Pack{additionalFormats.includes("checklist") && productFormat !== "checklist" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-foreground text-sm">Number of checklists</Label>
@@ -2936,9 +3381,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </div>
                   )}
                   {/* Course */}
-                  {productFormat === "course" && (
+                  {(productFormat === "course" || additionalFormats.includes("course")) && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Course Outline</p>
+                      <p className="font-medium text-foreground">Course Outline{additionalFormats.includes("course") && productFormat !== "course" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-foreground text-sm">Number of modules</Label>
@@ -2964,9 +3409,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </div>
                   )}
                   {/* Journal */}
-                  {productFormat === "journal" && (
+                  {(productFormat === "journal" || additionalFormats.includes("journal")) && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Journal</p>
+                      <p className="font-medium text-foreground">Journal{additionalFormats.includes("journal") && productFormat !== "journal" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <div>
                         <Label className="text-foreground text-sm">Number of prompts</Label>
                         <select value={customization.journal?.numPrompts ?? 20} onChange={(e) => setCustomization((c) => ({ ...c, journal: { ...(c.journal ?? DEFAULT_CUSTOMIZATION.journal!), numPrompts: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
@@ -2984,9 +3429,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </div>
                   )}
                   {/* Planner */}
-                  {productFormat === "planner" && (
+                  {(productFormat === "planner" || additionalFormats.includes("planner")) && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Planner</p>
+                      <p className="font-medium text-foreground">Planner{additionalFormats.includes("planner") && productFormat !== "planner" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <div>
                         <Label className="text-foreground text-sm">Duration</Label>
                         <select value={customization.planner?.duration ?? "monthly"} onChange={(e) => setCustomization((c) => ({ ...c, planner: { ...(c.planner ?? DEFAULT_CUSTOMIZATION.planner!), duration: e.target.value as "weekly" | "monthly" | "quarterly" | "yearly" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
@@ -3007,9 +3452,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </div>
                   )}
                   {/* Spreadsheet */}
-                  {productFormat === "spreadsheet" && (
+                  {(productFormat === "spreadsheet" || additionalFormats.includes("spreadsheet")) && (
                     <div className="space-y-4">
-                      <p className="font-medium text-foreground">Spreadsheet Settings</p>
+                      <p className="font-medium text-foreground">Spreadsheet Settings{additionalFormats.includes("spreadsheet") && productFormat !== "spreadsheet" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-foreground text-sm">Tracker tabs</Label>
@@ -3082,9 +3527,9 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                     </div>
                   )}
                   {/* Notion */}
-                  {productFormat === "notion" && (
+                  {(productFormat === "notion" || additionalFormats.includes("notion")) && (
                     <div className="space-y-3">
-                      <p className="font-medium text-foreground">Notion Template</p>
+                      <p className="font-medium text-foreground">Notion Template{additionalFormats.includes("notion") && productFormat !== "notion" ? <span className="text-xs font-normal text-muted-foreground ml-1">(add-on)</span> : null}</p>
                       <div>
                         <Label className="text-foreground text-sm">Number of databases/views</Label>
                         <select value={customization.notion?.numDatabases ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, notion: { ...(c.notion ?? DEFAULT_CUSTOMIZATION.notion!), numDatabases: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
