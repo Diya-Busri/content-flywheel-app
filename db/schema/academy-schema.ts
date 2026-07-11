@@ -80,6 +80,7 @@ export const academyCommunityPostsTable = pgTable("academy_community_posts", {
   scheduledFor: timestamp("scheduled_for"), // for scheduled announcements
   likesCount: integer("likes_count").default(0).notNull(),
   commentsCount: integer("comments_count").default(0).notNull(),
+  aiRepliedAt: timestamp("ai_replied_at"), // set when AI has responded — prevents duplicate replies
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
 });
@@ -90,6 +91,9 @@ export const academyCommunityCommentsTable = pgTable("academy_community_comments
   userId: text("user_id").notNull(),
   userEmail: text("user_email"),
   content: text("content").notNull(),
+  // AI community manager fields
+  isAiReply: boolean("is_ai_reply").default(false).notNull(),
+  isHelpful: boolean("is_helpful"), // null = not rated, true = helpful, false = not helpful
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

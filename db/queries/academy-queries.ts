@@ -278,6 +278,27 @@ export async function insertComment(data: InsertAcademyCommunityComment) {
   return row;
 }
 
+/** Insert an AI-generated reply. Uses a sentinel userId so it's never confused with a real user. */
+export async function insertAiComment(postId: string, content: string) {
+  const [row] = await db
+    .insert(academyCommunityCommentsTable)
+    .values({ postId, userId: "ai-community-manager", userEmail: null, content, isAiReply: true })
+    .returning();
+  await db
+    .update(academyCommunityPostsTable)
+    .set({ commentsCount: sql`${academyCommunityPostsTable.commentsCount} + 1`, aiRepliedAt: new Date() })
+    .where(eq(academyCommunityPostsTable.id, postId));
+  return row;
+}
+
+/** Mark that the AI has already replied to a post — prevents double-firing. */
+export async function markPostAiReplied(postId: string) {
+  await db
+    .update(academyCommunityPostsTable)
+    .set({ aiRepliedAt: new Date() })
+    .where(eq(academyCommunityPostsTable.id, postId));
+}
+
 export async function deleteCommentRow(id: string, postId: string): Promise<void> {
   await db.delete(academyCommunityCommentsTable).where(eq(academyCommunityCommentsTable.id, id));
   await db

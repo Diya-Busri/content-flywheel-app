@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { waitUntil } from "@vercel/functions";
 import { listCommunityPosts, insertCommunityPost, listLikedPostIds } from "@/db/queries/academy-queries";
 
 export async function GET(req: NextRequest) {
@@ -40,6 +41,19 @@ export async function POST(req: NextRequest) {
       category,
       imageUrls: body.imageUrls,
     });
+
+    // Trigger AI community manager reply in the background — doesn't block response
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
+    const secret  = process.env.AI_COMMUNITY_SECRET ?? "";
+    if (secret) {
+      waitUntil(
+        fetch(`${baseUrl}/api/academy/community/posts/${post.id}/ai-reply`, {
+          method:  "POST",
+          headers: { "x-ai-reply-secret": secret },
+        }).catch((e) => console.warn("[community] AI reply trigger failed:", e))
+      );
+    }
+
     return NextResponse.json({ post }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: "Failed to create post" }, { status: 500 });

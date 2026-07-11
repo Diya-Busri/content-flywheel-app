@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Heart, Send, Trash2, Loader2 } from "lucide-react";
+import { Heart, Send, Trash2, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
@@ -18,6 +18,7 @@ interface CommentRow {
   userEmail: string | null;
   userId: string;
   content: string;
+  isAiReply?: boolean;
   createdAt: Date | string;
 }
 
@@ -102,15 +103,38 @@ export function PostInteractions({
         <h2 className="mb-3 text-sm font-semibold text-foreground">Comments</h2>
         <div className="space-y-3">
           {comments.map((c) => (
-            <div key={c.id} className="rounded-lg border bg-card p-3">
+            <div
+              key={c.id}
+              className={`rounded-lg border p-3 ${
+                c.isAiReply
+                  ? "bg-orange-500/5 border-orange-500/20"
+                  : "bg-card"
+              }`}
+            >
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="truncate font-medium text-foreground">{c.userEmail ?? "User"}</span>
+                {c.isAiReply ? (
+                  <span className="inline-flex items-center gap-1 font-semibold text-orange-500">
+                    <Sparkles className="h-3 w-3" />
+                    CF AI
+                  </span>
+                ) : (
+                  <span className="truncate font-medium text-foreground">{c.userEmail ?? "User"}</span>
+                )}
                 <span>{timeAgo(c.createdAt)}</span>
-                {(isAdmin || c.userId === currentUserId) && (
+                {!c.isAiReply && (isAdmin || c.userId === currentUserId) && (
                   <button
                     onClick={() => handleDelete(c.id)}
                     className="ml-auto text-muted-foreground hover:text-red-500"
                     aria-label="Delete comment"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {c.isAiReply && isAdmin && (
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    className="ml-auto text-muted-foreground hover:text-red-500"
+                    aria-label="Delete AI comment"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
