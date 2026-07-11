@@ -716,6 +716,10 @@ export default function LaunchExecutionPage() {
   const [publishing,          setPublishing]          = useState(false);
   const [publishedOk,         setPublishedOk]         = useState(false);
   const [awaitingApproval,    setAwaitingApproval]    = useState(false);
+  // Snapshot of research results shown in the approval gate — captured from
+  // latestResultsRef at gate-open time so it reflects live pipeline data,
+  // not the stale project.stageResults loaded at page mount.
+  const [approvalResearch, setApprovalResearch] = useState<LaunchStageResults["research"] | null>(null);
   // Stores the Promise.resolve() that unblocks the pipeline after approval
   const approvalResolveRef = useRef<(() => void) | null>(null);
 
@@ -959,6 +963,9 @@ export default function LaunchExecutionPage() {
             [i]: `${insights} insights · ${opps} product opportunities found`,
           }));
           // ── Approval gate: pause pipeline and let the user review before continuing ──
+          // Capture live results NOW (project.stageResults is stale — it was loaded
+          // at page mount before the pipeline ran).
+          setApprovalResearch(results.research ?? null);
           setActiveIdx(-1);
           setAwaitingApproval(true);
           await new Promise<void>(resolve => { approvalResolveRef.current = resolve; });
@@ -1378,37 +1385,97 @@ export default function LaunchExecutionPage() {
         </div>
 
         {/* ── Approval gate — shown after Research, before Product ── */}
-        {awaitingApproval && project && (() => {
-          const r = project.stageResults?.research;
-          const topOpp = r?.productOpportunities?.[0];
-          const topInsight = r?.insights?.[0];
-          const smartPrice = topOpp?.priceRange ?? "£37";
+        {awaitingApproval && (() => {
+          const r        = approvalResearch;
+          const opps     = r?.productOpportunities ?? [];
+          const topOpp   = opps[0];
+          const insights = r?.insights ?? [];
+          const keywords = (r?.keywords ?? []).slice(0, 4);
+          const comps    = (r?.competitorInsights ?? []).slice(0, 2);
           return (
-            <div className="mt-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-500/8 via-amber-500/5 to-background p-5">
-              <div className="flex items-center gap-2 mb-3">
+            <div className="mt-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-500/8 via-amber-500/5 to-background p-5 space-y-4">
+
+              {/* Header */}
+              <div className="flex items-center gap-2">
                 <span className="text-lg">🔍</span>
                 <h3 className="text-[15px] font-black text-foreground">Research Complete — Review Before Building</h3>
               </div>
-              {topOpp && (
-                <div className="mb-4 p-3 rounded-xl bg-background/60 border border-border/50 text-left">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-1">Recommended Product</p>
-                  <p className="text-[14px] font-bold text-foreground">{topOpp.title}</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">{topOpp.description}</p>
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="text-[11px] font-semibold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full">{topOpp.type}</span>
-                    <span className="text-[11px] font-semibold text-muted-foreground">{smartPrice}</span>
-                  </div>
+
+              {/* Recommended product(s) */}
+              {opps.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                    {opps.length === 1 ? "Recommended Product" : `${opps.length} Product Opportunities Found`}
+                  </p>
+                  {opps.map((opp, oi) => (
+                    <div key={oi} className={`p-3 rounded-xl border text-left ${oi === 0 ? "bg-orange-500/5 border-orange-500/25" : "bg-background/40 border-border/40"}`}>
+                      {opps.length > 1 && (
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-0.5">Option {oi + 1}{oi === 0 ? " · Recommended" : ""}</p>
+                      )}
+                      <p className="text-[13px] font-bold text-foreground">{opp.title}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{opp.description}</p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <span className="text-[10px] font-semibold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full">{opp.type}</span>
+                        {opp.priceRange && <span className="text-[10px] font-semibold text-green-600 bg-green-500/10 px-2 py-0.5 rounded-full">{opp.priceRange}</span>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-              {topInsight && (
-                <p className="text-[12px] text-muted-foreground mb-4 italic">
-                  &ldquo;{topInsight.slice(0, 120)}{topInsight.length > 120 ? "…" : ""}&rdquo;
+
+              {/* Key insights */}
+              {insights.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-2">Key Insights</p>
+                  <ul className="space-y-1.5">
+                    {insights.slice(0, 4).map((ins, ii) => (
+                      <li key={ii} className="flex items-start gap-2 text-[11px] text-muted-foreground leading-relaxed">
+                        <span className="mt-0.5 shrink-0 text-orange-400">•</span>
+                        <span>{ins}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Competitor + keyword row */}
+              {(comps.length > 0 || keywords.length > 0) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {comps.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-1.5">Competitors</p>
+                      <div className="space-y-1.5">
+                        {comps.map((c, ci) => (
+                          <div key={ci} className="p-2 rounded-lg bg-background/50 border border-border/40">
+                            <p className="text-[11px] font-semibold text-foreground truncate">{c.name}</p>
+                            <p className="text-[10px] text-green-600 mt-0.5 leading-tight">{c.gap}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {keywords.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-1.5">Top Keywords</p>
+                      <div className="flex flex-wrap gap-1">
+                        {keywords.map((kw, ki) => (
+                          <span key={ki} className="text-[10px] px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border/40">{kw.term}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Summary blurb */}
+              {r?.reportSummary && (
+                <p className="text-[11px] text-muted-foreground leading-relaxed border-t border-border/30 pt-3 italic">
+                  {r.reportSummary.slice(0, 200)}{r.reportSummary.length > 200 ? "…" : ""}
                 </p>
               )}
-              <p className="text-[12px] text-muted-foreground mb-4">
-                The AI has identified your best product opportunity. Continue to generate your full digital product, or go back to adjust your goal.
-              </p>
-              <div className="flex items-center gap-3 flex-wrap">
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 flex-wrap pt-1">
                 <button
                   onClick={() => {
                     approvalResolveRef.current?.();
