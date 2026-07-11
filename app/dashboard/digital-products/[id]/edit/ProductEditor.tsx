@@ -1669,11 +1669,13 @@ export default function ProductEditor({ productId }: { productId: string }) {
     setPlacedElementsByPage((prev) => {
       const next = prev.map((pageArr, idx) => {
         if (idx === 0 && pageArr.length === 0) {
+          // White text + shadow — the cover always gets a background image so dark text would be invisible
+          const coverTextBase = { ...DEFAULT_TEXT_BOX, color: "#ffffff", textShadowEnabled: true, textShadowOffsetX: 0, textShadowOffsetY: 2, textShadowBlur: 8, textShadowColor: "rgba(0,0,0,0.7)" };
           const coverEls: PlacedElement[] = [
-            { id: "cover-title", type: "text", content: title, position: { x: CANVAS_WIDTH / 2 - 200, y: 380 }, size: { width: 400, height: 80 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 32, textAlign: "center" } },
-            { id: "cover-footer", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 1000 }, size: { width: 300, height: 24 }, rotation: 0, zIndex: 2, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
+            { id: "cover-title", type: "text", content: title, position: { x: CANVAS_WIDTH / 2 - 200, y: 380 }, size: { width: 400, height: 80 }, rotation: 0, zIndex: 1, textSettings: { ...coverTextBase, fontSize: 32, textAlign: "center", fontWeight: "500" } },
+            { id: "cover-footer", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 1020 }, size: { width: 300, height: 24 }, rotation: 0, zIndex: 2, textSettings: { ...DEFAULT_TEXT_BOX, color: "rgba(255,255,255,0.45)", fontSize: 13, textAlign: "center" } },
           ];
-          if (subtitle) coverEls.splice(1, 0, { id: "cover-subtitle", type: "text", content: subtitle, position: { x: CANVAS_WIDTH / 2 - 200, y: 480 }, size: { width: 400, height: 40 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 18, textAlign: "center" } });
+          if (subtitle) coverEls.splice(1, 0, { id: "cover-subtitle", type: "text", content: subtitle, position: { x: CANVAS_WIDTH / 2 - 200, y: 476 }, size: { width: 400, height: 40 }, rotation: 0, zIndex: 1, textSettings: { ...coverTextBase, color: "rgba(255,255,255,0.8)", fontSize: 18, textAlign: "center" } });
           return coverEls;
         }
         if (idx === totalPages - 1 && pageArr.length === 0) {

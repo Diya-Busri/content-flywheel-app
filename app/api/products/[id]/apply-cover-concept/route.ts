@@ -58,7 +58,39 @@ export async function POST(
         ? [coverPageBg, ...existingPages.slice(1)]
         : [coverPageBg];
 
-    const nextDesignSettings = { ...designSettings, pages: nextPages };
+    // Also flip cover text elements to white + shadow so they're readable against the dark background image
+    const existingPlacedByPage = Array.isArray(designSettings.placedElementsByPage)
+      ? (designSettings.placedElementsByPage as Record<string, unknown>[][])
+      : [];
+    const coverEls = existingPlacedByPage[0] ?? [];
+    const updatedCoverEls = coverEls.map((el) => {
+      if (el.type !== "text") return el;
+      const ts = (el.textSettings ?? {}) as Record<string, unknown>;
+      // Only update if still dark (don't overwrite user-customised white text)
+      const currentColor = String(ts.color ?? "#333333");
+      if (currentColor.startsWith("rgba(255") || currentColor === "#ffffff" || currentColor === "#fff") return el;
+      return {
+        ...el,
+        textSettings: {
+          ...ts,
+          color: "#ffffff",
+          textShadowEnabled: true,
+          textShadowOffsetX: 0,
+          textShadowOffsetY: 2,
+          textShadowBlur: 8,
+          textShadowColor: "rgba(0,0,0,0.7)",
+        },
+      };
+    });
+    const nextPlacedByPage = existingPlacedByPage.length > 0
+      ? [updatedCoverEls, ...existingPlacedByPage.slice(1)]
+      : [updatedCoverEls];
+
+    const nextDesignSettings = {
+      ...designSettings,
+      pages: nextPages,
+      ...(updatedCoverEls.length > 0 ? { placedElementsByPage: nextPlacedByPage } : {}),
+    };
 
     await db
       .update(productsTable)
