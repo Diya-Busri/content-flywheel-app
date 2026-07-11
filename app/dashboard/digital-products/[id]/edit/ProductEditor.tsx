@@ -294,6 +294,21 @@ const DEFAULT_TEXT_BOX: TextBoxSettings = {
   textStrokeColor: "#000000",
 };
 
+/** Back-cover dark background colour */
+const BACK_COVER_BG = "#0f172a";
+
+/** Returns the default placed elements for the back cover page.
+ *  @param accentColor – hex for the CTA / website link element */
+function BACK_COVER_DEFAULTS(accentColor: string) {
+  return [
+    { id: "back-thanks", type: "text" as const, content: "You've got this.", position: { x: CANVAS_WIDTH / 2 - 220, y: 320 }, size: { width: 440, height: 44 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, color: "#ffffff", fontSize: 28, textAlign: "center" as const } },
+    { id: "back-msg", type: "text" as const, content: "Thanks for reading — now go make it happen.", position: { x: CANVAS_WIDTH / 2 - 220, y: 388 }, size: { width: 440, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, color: "#94a3b8", fontSize: 15, textAlign: "center" as const } },
+    { id: "back-cta", type: "text" as const, content: "Want more? Follow along for updates:", position: { x: CANVAS_WIDTH / 2 - 200, y: 475 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, color: "#64748b", fontSize: 13, textAlign: "center" as const } },
+    { id: "back-url", type: "text" as const, content: "Add your website in brand profile", position: { x: CANVAS_WIDTH / 2 - 200, y: 510 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, color: accentColor, fontSize: 14, textAlign: "center" as const } },
+    { id: "back-brand", type: "text" as const, content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 650 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, color: "#334155", fontSize: 12, textAlign: "center" as const } },
+  ];
+}
+
 export type PlacedElement = {
   id: string;
   type: "icon" | "image" | "text" | "social";
@@ -1662,41 +1677,46 @@ export default function ProductEditor({ productId }: { productId: string }) {
           return coverEls;
         }
         if (idx === totalPages - 1 && pageArr.length === 0) {
-          return [
-            { id: "back-thanks", type: "text", content: "You've got this.", position: { x: CANVAS_WIDTH / 2 - 220, y: 320 }, size: { width: 440, height: 44 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 28, textAlign: "center" } },
-            { id: "back-msg", type: "text", content: "Thanks for reading — now go make it happen.", position: { x: CANVAS_WIDTH / 2 - 220, y: 390 }, size: { width: 440, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 15, textAlign: "center" } },
-            { id: "back-cta", type: "text", content: "Want more? Follow along for updates:", position: { x: CANVAS_WIDTH / 2 - 200, y: 470 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 13, textAlign: "center" } },
-            { id: "back-url", type: "text", content: "Add your website in brand profile", position: { x: CANVAS_WIDTH / 2 - 200, y: 510 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
-            { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 650 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 12, textAlign: "center" } },
-          ];
+          return BACK_COVER_DEFAULTS("#6366f1");
         }
         return pageArr;
       });
       return next as PlacedElement[][];
     });
+    // Also set a dark background on the back cover if it was empty
+    if (backEmpty) {
+      setPageBackgrounds((prev) => {
+        const next = [...prev];
+        const backIdx = totalPages - 1;
+        if (!next[backIdx]?.backgroundColor) {
+          next[backIdx] = { ...(next[backIdx] ?? {}), backgroundColor: BACK_COVER_BG };
+        }
+        return next;
+      });
+    }
   }, [product?.id, product?.title, product?.niche, placedElementsByPage.length, totalPages]);
 
   /** Reset the back cover to the current default template, discarding any edits. */
   const resetBackCover = useCallback(() => {
     const backIdx = totalPages - 1;
     recordUndo();
-    const backDefaults: PlacedElement[] = [
-      { id: "back-thanks", type: "text", content: "You've got this.", position: { x: CANVAS_WIDTH / 2 - 220, y: 320 }, size: { width: 440, height: 44 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 28, textAlign: "center" } },
-      { id: "back-msg", type: "text", content: "Thanks for reading — now go make it happen.", position: { x: CANVAS_WIDTH / 2 - 220, y: 390 }, size: { width: 440, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 15, textAlign: "center" } },
-      { id: "back-cta", type: "text", content: "Want more? Follow along for updates:", position: { x: CANVAS_WIDTH / 2 - 200, y: 470 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 13, textAlign: "center" } },
-      { id: "back-url", type: "text", content: "Add your website in brand profile", position: { x: CANVAS_WIDTH / 2 - 200, y: 510 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
-      { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 650 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 12, textAlign: "center" } },
-    ];
+    const accent = graphicsAccentColor || "#6366f1";
+    const backDefaults = BACK_COVER_DEFAULTS(accent) as PlacedElement[];
     const nextPlacedByPage = placedElementsByPage.map((page, i) => (i === backIdx ? backDefaults : page));
+    const nextPageBgs = pageBackgrounds.map((bg, i) =>
+      i === backIdx ? { ...bg, backgroundColor: BACK_COVER_BG, backgroundImage: null } : bg
+    );
     setPlacedElementsByPage(nextPlacedByPage as PlacedElement[][]);
+    setPageBackgrounds(nextPageBgs);
     saveToServer({
       designSettings: {
         ...product?.designSettings,
+        pages: nextPageBgs,
         placedElementsByPage: nextPlacedByPage,
       },
     });
     toast({ title: "Back cover reset to defaults" });
-  }, [totalPages, recordUndo, placedElementsByPage, product?.designSettings, saveToServer, toast]);
+  }, [totalPages, recordUndo, placedElementsByPage, pageBackgrounds, graphicsAccentColor, product?.designSettings, saveToServer, toast]);
 
   useEffect(() => {
     const page = pageBackgrounds[currentPageIndex];
