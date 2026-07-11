@@ -56,9 +56,10 @@ interface DesignAsset {
 }
 
 const REGULAR_ASSETS: DesignAsset[] = [
-  { id: "mockup",    label: "3D Mockup",       size: "1024x1024" },
-  { id: "thumbnail", label: "Store Thumbnail", size: "1024x1024" },
-  { id: "social",    label: "Social Preview",  size: "1024x1024" },
+  { id: "mockup",         label: "3D Mockup",              size: "1024x1024" },
+  { id: "thumbnail",      label: "Store Thumbnail",        size: "1024x1024" },
+  { id: "social",         label: "Social Preview",         size: "1024x1024" },
+  { id: "back-cover-bg",  label: "Back Cover Background",  size: "1024x1536" },
 ];
 
 /* ─── Prompt builder ─────────────────────────────────────────────────────────── */
@@ -82,6 +83,9 @@ function buildImagePrompt(
 
     case "social":
       return `Eye-catching square social media promotional image for "${name}". ${n} themed. Bold visual hierarchy. Shareable modern design. No real people. Clean contemporary aesthetic.`;
+
+    case "back-cover-bg":
+      return `Dark atmospheric textured background image for the back cover of a ${fmt} about "${name}". ${n} themed. Deep rich dark tones with subtle texture and depth. Abstract and moody — no text, no people, no UI elements. Cinematic full-bleed portrait crop.`;
 
     case "banner":
       return `Wide landscape storefront hero banner for a digital creator in the "${n}" niche. Inspired by the product "${name}". Clean minimal workspace or lifestyle scene. Soft natural lighting. Muted premium colour palette. No text overlays. No people. Cinematic wide crop.`;
@@ -591,6 +595,8 @@ function streamDesignGeneration(
         };
         const nichePalette = NICHE_PALETTE[detectedNiche] ?? NICHE_PALETTE.default;
 
+        const backBgUrl = generatedUrls["back-cover-bg"];
+
         const pages = Array.from({ length: totalPages }, (_, i) => {
           const existing = existingPages[i] ?? {};
           if (i === 0) {
@@ -605,12 +611,52 @@ function streamDesignGeneration(
               ...existing,
               ...(backCoverDesignId ? { designId: backCoverDesignId } : {}),
               backgroundColor: nichePalette.backCoverBg,
+              // If we generated a back cover background image, apply it with heavy
+              // blur + darkening so it reads as a moody texture, not a literal photo.
+              ...(backBgUrl ? {
+                backgroundImage:    backBgUrl,
+                backgroundSettings: { opacity: 1, blur: 22, brightness: 32, contrast: 100, saturation: 70, fit: "cover", position: "center" },
+                overlaySettings:    { color: nichePalette.overlayColor, opacity: 0.55 },
+              } : {}),
             };
           }
           return existing;
         });
 
         const existingColors = (existingDs.colors as Record<string, unknown> | undefined) ?? {};
+
+        // Seed back cover placed elements (text + CTA) server-side so the editor
+        // opens fully dressed — no client-side seeding step needed.
+        const existingPlacedByPage = Array.isArray(existingDs.placedElementsByPage)
+          ? (existingDs.placedElementsByPage as Record<string, unknown>[][])
+          : [];
+        const backIdx     = totalPages - 1;
+        const backAlready = existingPlacedByPage[backIdx];
+        const MID         = 400; // CANVAS_WIDTH / 2
+
+        const seededBackEls = (backAlready && backAlready.length > 0) ? backAlready : [
+          { id: "back-thanks", type: "text", content: "You've got this.",
+            position: { x: MID - 220, y: 320 }, size: { width: 440, height: 44 }, rotation: 0, zIndex: 1,
+            textSettings: { fontFamily: "Inter", fontSize: 28, fontWeight: "bold", fontStyle: "normal", textDecoration: "none", textAlign: "center", color: "#ffffff", lineHeight: 1.4, letterSpacing: 0, textShadowEnabled: false } },
+          { id: "back-msg", type: "text", content: "Thanks for reading — now go make it happen.",
+            position: { x: MID - 220, y: 388 }, size: { width: 440, height: 36 }, rotation: 0, zIndex: 1,
+            textSettings: { fontFamily: "Inter", fontSize: 15, fontWeight: "normal", fontStyle: "normal", textDecoration: "none", textAlign: "center", color: "#94a3b8", lineHeight: 1.5, letterSpacing: 0, textShadowEnabled: false } },
+          { id: "back-cta", type: "text", content: "Want more? Follow along for updates:",
+            position: { x: MID - 200, y: 475 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1,
+            textSettings: { fontFamily: "Inter", fontSize: 13, fontWeight: "normal", fontStyle: "normal", textDecoration: "none", textAlign: "center", color: "#64748b", lineHeight: 1.5, letterSpacing: 0, textShadowEnabled: false } },
+          { id: "back-url", type: "text", content: "Add your website in brand profile",
+            position: { x: MID - 200, y: 510 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1,
+            textSettings: { fontFamily: "Inter", fontSize: 14, fontWeight: "normal", fontStyle: "normal", textDecoration: "none", textAlign: "center", color: nichePalette.accent, lineHeight: 1.5, letterSpacing: 0, textShadowEnabled: false } },
+          { id: "back-brand", type: "text", content: "Created with Content Flywheel",
+            position: { x: MID - 150, y: 650 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1,
+            textSettings: { fontFamily: "Inter", fontSize: 12, fontWeight: "normal", fontStyle: "normal", textDecoration: "none", textAlign: "center", color: "#334155", lineHeight: 1.5, letterSpacing: 0, textShadowEnabled: false } },
+        ];
+
+        // Build the full placed-elements array — preserve all other pages, seed back cover
+        const nextPlacedByPage = Array.from({ length: totalPages }, (_, i) => {
+          if (i === backIdx) return seededBackEls;
+          return existingPlacedByPage[i] ?? [];
+        });
 
         await db
           .update(productsTable)
@@ -619,6 +665,7 @@ function streamDesignGeneration(
             designSettings:  {
               ...existingDs,
               pages,
+              placedElementsByPage: nextPlacedByPage,
               colors: { ...existingColors, graphics: nichePalette.accent },
             },
             designSource:    "ai",
@@ -658,12 +705,13 @@ function streamDesignGeneration(
       // Concepts are design records, not images — count them separately
       const assetsCount =
         successfulConcepts.length +
-        (thumbnailDesignId       ? 1 : 0) +
-        (backCoverDesignId       ? 1 : 0) +
-        (generatedUrls.mockup    ? 1 : 0) +
-        (generatedUrls.thumbnail ? 1 : 0) +
-        (generatedUrls.social    ? 1 : 0) +
-        (bannerUrl               ? 1 : 0);
+        (thumbnailDesignId                  ? 1 : 0) +
+        (backCoverDesignId                  ? 1 : 0) +
+        (generatedUrls.mockup               ? 1 : 0) +
+        (generatedUrls.thumbnail            ? 1 : 0) +
+        (generatedUrls.social               ? 1 : 0) +
+        (generatedUrls["back-cover-bg"]     ? 1 : 0) +
+        (bannerUrl                          ? 1 : 0);
 
       await send({
         type:             "done",
