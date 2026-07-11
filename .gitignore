@@ -35,6 +35,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# scratch tsconfigs used for scoped type-check verification (safe to delete)
+tsconfig.mgs-check.json
+tsconfig.check2.json
+
 # copied ffmpeg assets (see scripts/copy-ffmpeg-core.mjs)
 public/ffmpeg-core/*
 !public/ffmpeg-core/README.md

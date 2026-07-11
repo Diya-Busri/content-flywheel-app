@@ -5,6 +5,11 @@ import {
 	VideoEngineComposition,
 	type VideoEngineCompositionProps,
 } from './engine/VideoEngineComposition';
+import {
+	MotionGraphicsCompositionUntyped,
+	DEFAULT_MOTION_GRAPHICS_PROPS,
+	calculateMotionGraphicsMetadata,
+} from './motion-graphics/MotionGraphicsComposition';
 
 const compositionLength = 450;
 
@@ -47,6 +52,25 @@ export const ShowcaseVideo = () => {
 					);
 					return {
 						durationInFrames: Math.max(Math.ceil(totalSeconds * 30), 30),
+					};
+				}}
+			/>
+
+			{/* Motion Graphics Studio — admin-only template renderer (see app/dashboard/admin/motion-graphics-studio) */}
+			<Composition
+				id="MotionGraphicsStudio"
+				component={MotionGraphicsCompositionUntyped}
+				durationInFrames={150}
+				fps={30}
+				width={1080}
+				height={1920}
+				defaultProps={DEFAULT_MOTION_GRAPHICS_PROPS}
+				calculateMetadata={({props}) => {
+					const meta = calculateMotionGraphicsMetadata(props as unknown as typeof DEFAULT_MOTION_GRAPHICS_PROPS);
+					return {
+						durationInFrames: meta.durationInFrames,
+						width: meta.width,
+						height: meta.height,
 					};
 				}}
 			/>

@@ -146,6 +146,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       { href: "/dashboard/email-marketing", icon: <Mail size={18} />, label: "Email Marketing" },
       { href: "/dashboard/admin/finances", icon: <Wallet size={18} />, label: "Finance Tracker", activeWhenStartsWith: true },
       { href: "/dashboard/admin/video-agent", icon: <Clapperboard size={18} />, label: "Video Agent", activeWhenStartsWith: true },
+      { href: "/dashboard/admin/motion-graphics-studio", icon: <Film size={18} />, label: "Motion Graphics Studio", activeWhenStartsWith: true },
       { href: "/dashboard/admin/notes", icon: <NotebookPen size={18} />, label: "Notes", activeWhenStartsWith: true },
       { href: "/dashboard/admin/trust-scores", icon: <Shield size={18} />, label: "Trust Scores", activeWhenStartsWith: true },
     ]});

@@ -72,3 +72,4 @@ export * from "./agent-tasks-schema";
 export * from "./business-goals-schema";
 export * from "./orchestrator-decisions-schema";
 export * from "./launch-schema";
+export * from "./motion-graphics-schema";

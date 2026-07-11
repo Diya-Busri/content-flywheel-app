@@ -66,6 +66,11 @@ import { storeSettingsTable } from "./schema/store-settings-schema";
 import { creatorTrustScoresTable } from "./schema/creator-trust-scores-schema";
 import { creatorTrustScoreHistoryTable } from "./schema/creator-trust-score-history-schema";
 import { creatorReputationEventsTable } from "./schema/creator-reputation-events-schema";
+import {
+  motionGraphicsTemplatesTable,
+  motionGraphicsAssetsTable,
+  motionGraphicsRenderJobsTable,
+} from "./schema/motion-graphics-schema";
 
 // Define the schema properly
 const schema = {
@@ -139,6 +144,10 @@ const schema = {
   creatorTrustScores: creatorTrustScoresTable,
   creatorTrustScoreHistory: creatorTrustScoreHistoryTable,
   creatorReputationEvents: creatorReputationEventsTable,
+  // Motion Graphics Studio (admin only)
+  motionGraphicsTemplates: motionGraphicsTemplatesTable,
+  motionGraphicsAssets: motionGraphicsAssetsTable,
+  motionGraphicsRenderJobs: motionGraphicsRenderJobsTable,
 };
 
 // Connection options tuned for Supabase pgBouncer (port 6543 pooler).
