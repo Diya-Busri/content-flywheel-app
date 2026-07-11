@@ -196,7 +196,19 @@ export type CustomizationOptions = {
   course?: { numModules: number; lessonsPerModule: number; includeLearningObjectives: boolean; includeAssignments: boolean };
   journal?: { numPrompts: number; includeLinedSpace: boolean; includeReflectionQuestions: boolean };
   planner?: { duration: "weekly" | "monthly" | "quarterly" | "yearly"; includeGoalSetting: boolean; includeHabitTracker: boolean };
-  spreadsheet?: { numTutorials: number; difficulty: "beginner" | "intermediate" | "advanced"; includePracticeExercises: boolean };
+  spreadsheet?: {
+    numTabs: number;
+    currency: "GBP" | "USD" | "EUR";
+    includeDashboard: boolean;
+    includeCharts: boolean;
+    includeSampleData: boolean;
+    formulaComplexity: "basic" | "intermediate" | "advanced";
+    editableCategories: boolean;
+    monthlyAnnualView: "monthly" | "annual" | "both";
+    includeInstructionsSheet: boolean;
+    colourTheme: "orange" | "blue" | "green" | "purple" | "mono";
+    optionalPdfGuide: boolean;
+  };
   notion?: { numDatabases: number; includeSetupInstructions: boolean };
 };
 
@@ -211,7 +223,19 @@ const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
   course: { numModules: 4, lessonsPerModule: 3, includeLearningObjectives: true, includeAssignments: true },
   journal: { numPrompts: 12, includeLinedSpace: true, includeReflectionQuestions: true },
   planner: { duration: "monthly", includeGoalSetting: true, includeHabitTracker: true },
-  spreadsheet: { numTutorials: 4, difficulty: "beginner", includePracticeExercises: true },
+  spreadsheet: {
+    numTabs: 4,
+    currency: "GBP",
+    includeDashboard: true,
+    includeCharts: false,
+    includeSampleData: true,
+    formulaComplexity: "basic",
+    editableCategories: true,
+    monthlyAnnualView: "monthly",
+    includeInstructionsSheet: true,
+    colourTheme: "orange",
+    optionalPdfGuide: false,
+  },
   notion: { numDatabases: 4, includeSetupInstructions: true },
 };
 
@@ -241,6 +265,19 @@ type ProductSalesGuide = {
   contentStrategy: string[];
   launchStrategy: string[];
 };
+
+/** Maps Step-3 product type string to a PRODUCT_FORMATS id for auto-setting the core format. */
+function inferCoreFormat(productType: string): string {
+  const t = productType.toLowerCase();
+  if (t.includes("spreadsheet")) return "spreadsheet";
+  if (t.includes("notion")) return "notion";
+  if (t.includes("workbook")) return "workbook";
+  if (t.includes("course") || t.includes("mini-course")) return "course";
+  if (t.includes("checklist")) return "checklist";
+  if (t.includes("journal")) return "journal";
+  if (t.includes("planner")) return "planner";
+  return "ebook";
+}
 
 export default function DiscoverFlow({ initialTopic }: { initialTopic?: string } = {}) {
   const router = useRouter();
@@ -278,6 +315,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [facelessOrPersonal, setFacelessOrPersonal] = useState<"faceless" | "personal" | null>(null);
   const [productFormat, setProductFormat] = useState<string | null>(null);
+  const [additionalFormats, setAdditionalFormats] = useState<string[]>([]);
   const [dontKnowYet, setDontKnowYet] = useState(false);
   const [customNiche, setCustomNiche] = useState("");
   const [customProductName, setCustomProductName] = useState("");
@@ -384,6 +422,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
     setProductCurrentPage(0);
     setFacelessOrPersonal(null);
     setProductFormat(null);
+    setAdditionalFormats([]);
     setCustomization(DEFAULT_CUSTOMIZATION);
     setShowAdvancedOptions(false);
     setDontKnowYet(false);
@@ -1279,6 +1318,14 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
       })
       .finally(() => setApplyingDesign(false));
   }, [bundleComplete, bundleItems, bundleDesignChoice, designApplied, toast]);
+
+  // Auto-set core format from selectedProduct.type whenever step 6 is entered
+  useEffect(() => {
+    if (step === 6 && selectedProduct?.type) {
+      setProductFormat(inferCoreFormat(selectedProduct.type));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, selectedProduct?.type]);
 
   const handleCreateProduct = async (alsoGenerateVideos = false) => {
     if (!productFormat) {
@@ -2498,79 +2545,187 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
           </>
         )}
 
-        {/* STEP 6: Choose Product Format */}
+        {/* STEP 6: Build your product ecosystem */}
         {step === 6 && (
           <>
             <h2 className="text-lg font-medium text-orange-500 mb-1">Step 6 of 7</h2>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Choose product format</h1>
-            <p className="text-muted-foreground mb-8">How should we package your content? We&apos;ll generate a format-specific product.</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Build your product ecosystem</h1>
+            <p className="text-muted-foreground mb-6">Your core product is locked in. Add optional formats to build a complete funnel — lead magnet, upsell, and more.</p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              {PRODUCT_FORMATS.map((f) => {
-                const Icon = f.icon;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setProductFormat(f.id)}
-                    className={`rounded-xl border-2 p-5 text-left transition-all ${
-                      productFormat === f.id ? "border-orange-500 bg-orange-500/10" : "border-border bg-card hover:border-muted-foreground/40"
-                    }`}
-                  >
-                    <Icon className="w-8 h-8 text-orange-500 mb-3" />
-                    <p className="font-semibold text-foreground mb-1">{f.label}</p>
-                    <p className="text-xs text-muted-foreground">{f.desc}</p>
-                    <p className="text-xs text-orange-500 mt-2">{productFormat === f.id ? "Selected" : "Select"}</p>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mb-6">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
-                onClick={openDesignChoiceModal}
-                disabled={bundleGenerating}
-              >
-                {bundleGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating all 8…
-                  </>
-                ) : (
-                  <>
-                    <Layers className="w-4 h-4" />
-                    Generate all 8 formats at once →
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {productFormat === "course" && (
-              <Card className={`${cardClass} mb-6`}>
-                <CardContent className="p-5">
-                  <p className="font-medium text-foreground mb-3">Course options</p>
-                  <div className="space-y-3 text-sm">
-                    <label className="flex items-center gap-2 text-foreground cursor-pointer">
-                      <input type="checkbox" checked={courseIncludeAvatar} onChange={(e) => setCourseIncludeAvatar(e.target.checked)} className="rounded border-border bg-background text-orange-500" />
-                      Include avatar presenter
-                    </label>
-                    <label className="flex items-center gap-2 text-foreground cursor-pointer">
-                      <input type="checkbox" checked={courseVoiceOver} onChange={(e) => setCourseVoiceOver(e.target.checked)} className="rounded border-border bg-background text-orange-500" />
-                      Generate AI voiceover
-                    </label>
-                    {courseVoiceOver && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Voice:</span>
-                        <select value={courseVoiceType} onChange={(e) => setCourseVoiceType(e.target.value)} className="rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
-                          <option value="professional-female">Professional Female</option>
-                          <option value="professional-male">Professional Male</option>
-                          <option value="casual">Casual</option>
-                        </select>
+            {/* Locked core product */}
+            {productFormat && (() => {
+              const coreF = PRODUCT_FORMATS.find((f) => f.id === productFormat);
+              if (!coreF) return null;
+              const CoreIcon = coreF.icon;
+              return (
+                <Card className={`${cardClass} mb-6 border-orange-500`}>
+                  <CardContent className="p-4">
+                    <p className="text-xs font-semibold text-orange-500 uppercase tracking-wider mb-3">Core Product</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                        <CoreIcon className="w-5 h-5 text-orange-500" />
                       </div>
-                    )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-foreground">{coreF.label}</p>
+                        <p className="text-xs text-muted-foreground">Auto-set from your product type — this is what we&apos;ll generate</p>
+                      </div>
+                      <span className="text-xs bg-orange-500/10 text-orange-500 border border-orange-500/30 rounded-full px-2.5 py-0.5 font-medium shrink-0">Locked</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Add-on formats */}
+            <div className="mb-6">
+              <p className="font-semibold text-foreground mb-1">Add-on formats <span className="font-normal text-muted-foreground text-sm">(optional)</span></p>
+              <p className="text-sm text-muted-foreground mb-4">Tick formats to generate alongside your core product. Each one becomes a separate product in your library.</p>
+              <div className="space-y-2">
+                {PRODUCT_FORMATS.filter((f) => f.id !== productFormat).map((f) => {
+                  const AddonIcon = f.icon;
+                  const purposeMap: Record<string, string> = {
+                    ebook: "Free lead magnet or upsell guide",
+                    workbook: "Drive action and add practical depth",
+                    spreadsheet: "Track progress alongside the guide",
+                    notion: "Premium add-on for power users",
+                    course: "Premium upsell — highest price point",
+                    checklist: "Quick-win entry point or sign-up bonus",
+                    journal: "Pair for a journaling and reflection angle",
+                    planner: "Pair for goal-setting and accountability",
+                  };
+                  const isChecked = additionalFormats.includes(f.id);
+                  return (
+                    <label
+                      key={f.id}
+                      className={`flex items-center gap-3 rounded-xl border p-4 cursor-pointer transition-all ${
+                        isChecked ? "border-orange-500 bg-orange-500/10" : "border-border bg-card hover:border-muted-foreground/40"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) =>
+                          setAdditionalFormats((prev) =>
+                            e.target.checked ? [...prev, f.id] : prev.filter((id) => id !== f.id)
+                          )
+                        }
+                        className="rounded border-border bg-background text-orange-500"
+                      />
+                      <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center shrink-0">
+                        <AddonIcon className="w-4 h-4 text-orange-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground text-sm">{f.label}</p>
+                        <p className="text-xs text-muted-foreground">{purposeMap[f.id] ?? f.desc}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Recommended funnel card */}
+            {productFormat && (() => {
+              const funnelMap: Record<string, { desc: string; steps: string[]; suggestIds: string[] }> = {
+                spreadsheet: {
+                  desc: "The tracker-led funnel converts well for tool-first buyers.",
+                  steps: ["Free Checklist → lead magnet", "Spreadsheet Template → core paid product", "Ebook/Guide → upsell", "Course → premium tier"],
+                  suggestIds: ["checklist", "ebook", "course"],
+                },
+                ebook: {
+                  desc: "Start with knowledge, then add an action tool.",
+                  steps: ["Free Checklist → lead magnet", "Ebook/Guide → core paid product", "Workbook → action upsell", "Course → premium tier"],
+                  suggestIds: ["checklist", "workbook", "course"],
+                },
+                notion: {
+                  desc: "Notion buyers love templates and systems.",
+                  steps: ["Free Template → lead magnet", "Notion Template → core paid product", "Course → premium tier"],
+                  suggestIds: ["checklist", "course"],
+                },
+                workbook: {
+                  desc: "Action-oriented buyers want exercises and clear frameworks.",
+                  steps: ["Free Checklist → lead magnet", "Workbook → core paid product", "Course → premium tier"],
+                  suggestIds: ["checklist", "course"],
+                },
+                course: {
+                  desc: "Lead with free value, convert to your premium course.",
+                  steps: ["Free Checklist → lead magnet", "Ebook/Guide → warm-up product", "Course → core premium"],
+                  suggestIds: ["checklist", "ebook"],
+                },
+                checklist: {
+                  desc: "Checklist as lead magnet is a high-converting entry point.",
+                  steps: ["Checklist → free lead magnet", "Ebook/Guide → first paid product", "Course → premium tier"],
+                  suggestIds: ["ebook", "course"],
+                },
+              };
+              const funnel = funnelMap[productFormat] ?? {
+                desc: "Build a complete funnel from free content to premium product.",
+                steps: ["Free lead magnet", "Core product", "Premium upsell"],
+                suggestIds: ["checklist", "ebook", "course"],
+              };
+              return (
+                <Card className="mb-6 border-dashed border-orange-500/40 bg-orange-500/[0.03]">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-4 h-4 text-orange-500" />
+                      <p className="font-semibold text-foreground text-sm">Recommended funnel</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">{funnel.desc}</p>
+                    <div className="space-y-1.5 mb-4">
+                      {funnel.steps.map((s, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-orange-500/10 text-orange-500 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                          <span className="text-xs text-foreground">{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-orange-500/40 text-orange-500 hover:bg-orange-500/10 gap-1.5 text-xs"
+                      onClick={() =>
+                        setAdditionalFormats(funnel.suggestIds.filter((id) => id !== productFormat))
+                      }
+                    >
+                      <CheckCircle2 className="w-3 h-3" />
+                      Apply recommended funnel
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Build complete product ecosystem — only shown when add-ons are selected */}
+            {additionalFormats.length > 0 && (
+              <Card className="mb-6 border-orange-500/20 bg-orange-500/[0.04]">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <Layers className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground text-sm mb-0.5">Generate all at once</p>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Build your core {PRODUCT_FORMATS.find((f) => f.id === productFormat)?.label ?? "product"} plus {additionalFormats.length} add-on{additionalFormats.length > 1 ? "s" : ""} in one go.
+                      </p>
+                      <Button
+                        type="button"
+                        className="bg-orange-500 hover:bg-orange-600 gap-2 text-sm"
+                        onClick={openDesignChoiceModal}
+                        disabled={bundleGenerating}
+                      >
+                        {bundleGenerating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Building ecosystem…
+                          </>
+                        ) : (
+                          <>
+                            <Layers className="w-4 h-4" />
+                            Build complete product ecosystem →
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2588,7 +2743,7 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
               </Button>
             </div>
             {!productFormat && (
-              <p className="text-xs text-amber-500/90 mt-2">Select a format to continue</p>
+              <p className="text-xs text-amber-500/90 mt-2">Detecting your core format…</p>
             )}
 
             {/* Bundle progress + design setup dialog is rendered once at the end of the page */}
@@ -2853,28 +3008,77 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
                   )}
                   {/* Spreadsheet */}
                   {productFormat === "spreadsheet" && (
-                    <div className="space-y-3">
-                      <p className="font-medium text-foreground">Spreadsheet Template</p>
+                    <div className="space-y-4">
+                      <p className="font-medium text-foreground">Spreadsheet Settings</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-foreground text-sm">Number of tutorials</Label>
-                          <select value={customization.spreadsheet?.numTutorials ?? 5} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), numTutorials: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
-                            {[3, 5, 7].map((n) => <option key={n} value={n}>{n}</option>)}
+                          <Label className="text-foreground text-sm">Tracker tabs</Label>
+                          <select value={customization.spreadsheet?.numTabs ?? 4} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), numTabs: Number(e.target.value) } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
+                            {[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} tabs</option>)}
                           </select>
                         </div>
                         <div>
-                          <Label className="text-foreground text-sm">Difficulty</Label>
-                          <select value={customization.spreadsheet?.difficulty ?? "beginner"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), difficulty: e.target.value as "beginner" | "intermediate" | "advanced" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="advanced">Advanced</option>
+                          <Label className="text-foreground text-sm">Currency</Label>
+                          <select value={customization.spreadsheet?.currency ?? "GBP"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), currency: e.target.value as "GBP" | "USD" | "EUR" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
+                            <option value="GBP">£ GBP</option>
+                            <option value="USD">$ USD</option>
+                            <option value="EUR">€ EUR</option>
                           </select>
                         </div>
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                        <input type="checkbox" checked={customization.spreadsheet?.includePracticeExercises ?? true} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), includePracticeExercises: e.target.checked } }))} className="rounded border-border bg-background text-orange-500" />
-                        Include practice exercises
-                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-foreground text-sm">Formula complexity</Label>
+                          <select value={customization.spreadsheet?.formulaComplexity ?? "basic"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), formulaComplexity: e.target.value as "basic" | "intermediate" | "advanced" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
+                            <option value="basic">Basic (SUM, AVERAGE)</option>
+                            <option value="intermediate">Intermediate (IF, VLOOKUP)</option>
+                            <option value="advanced">Advanced (pivot-ready)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-foreground text-sm">Time view</Label>
+                          <select value={customization.spreadsheet?.monthlyAnnualView ?? "monthly"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), monthlyAnnualView: e.target.value as "monthly" | "annual" | "both" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
+                            <option value="monthly">Monthly view</option>
+                            <option value="annual">Annual view</option>
+                            <option value="both">Both</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-foreground text-sm">Colour theme</Label>
+                        <select value={customization.spreadsheet?.colourTheme ?? "orange"} onChange={(e) => setCustomization((c) => ({ ...c, spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), colourTheme: e.target.value as "orange" | "blue" | "green" | "purple" | "mono" } }))} className="mt-1 w-full rounded-lg bg-background border border-border text-foreground px-3 py-1.5 text-sm">
+                          <option value="orange">Orange</option>
+                          <option value="blue">Blue</option>
+                          <option value="green">Green</option>
+                          <option value="purple">Purple</option>
+                          <option value="mono">Monochrome</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        {(
+                          [
+                            { key: "includeDashboard" as const, label: "Include summary dashboard tab", defaultVal: true },
+                            { key: "includeCharts" as const, label: "Include chart suggestions", defaultVal: false },
+                            { key: "includeSampleData" as const, label: "Pre-fill with sample data", defaultVal: true },
+                            { key: "editableCategories" as const, label: "Editable category labels", defaultVal: true },
+                            { key: "includeInstructionsSheet" as const, label: "Include instructions sheet", defaultVal: true },
+                            { key: "optionalPdfGuide" as const, label: "Generate companion PDF guide", defaultVal: false },
+                          ] as const
+                        ).map(({ key, label, defaultVal }) => (
+                          <label key={key} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={customization.spreadsheet?.[key] ?? defaultVal}
+                              onChange={(e) => setCustomization((c) => ({
+                                ...c,
+                                spreadsheet: { ...(c.spreadsheet ?? DEFAULT_CUSTOMIZATION.spreadsheet!), [key]: e.target.checked },
+                              }))}
+                              className="rounded border-border bg-background text-orange-500"
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {/* Notion */}
@@ -2897,27 +3101,6 @@ export default function DiscoverFlow({ initialTopic }: { initialTopic?: string }
               </Card>
             )}
 
-            <div className="mb-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:border-orange-500 gap-2"
-                onClick={openDesignChoiceModal}
-                disabled={bundleGenerating}
-              >
-                {bundleGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating all 8…
-                  </>
-                ) : (
-                  <>
-                    <Layers className="w-4 h-4" />
-                    Generate all 8 formats at once →
-                  </>
-                )}
-              </Button>
-            </div>
             <div className="flex flex-col gap-3">
               <div className="flex justify-between">
                 <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => setStep(6)}>← Back</Button>
