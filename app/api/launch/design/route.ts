@@ -576,22 +576,51 @@ function streamDesignGeneration(
           ...(primaryDesignId               ? { coverDesignId:      primaryDesignId }         : {}),
         };
 
+        // Map the detected niche to a product palette so the cover overlay,
+        // back cover background, and accent colour all feel like one package.
+        const NICHE_PALETTE: Record<string, { accent: string; backCoverBg: string; overlayColor: string; overlayOpacity: number }> = {
+          fitness:      { accent: "#f97316", backCoverBg: "#1c0800", overlayColor: "#130400", overlayOpacity: 0.40 },
+          finance:      { accent: "#6366f1", backCoverBg: "#0f172a", overlayColor: "#000000", overlayOpacity: 0.35 },
+          food:         { accent: "#16a34a", backCoverBg: "#061209", overlayColor: "#021005", overlayOpacity: 0.40 },
+          children:     { accent: "#ec4899", backCoverBg: "#1a0511", overlayColor: "#12000c", overlayOpacity: 0.35 },
+          productivity: { accent: "#6366f1", backCoverBg: "#0f172a", overlayColor: "#000000", overlayOpacity: 0.35 },
+          photography:  { accent: "#94a3b8", backCoverBg: "#111318", overlayColor: "#000000", overlayOpacity: 0.30 },
+          tech:         { accent: "#0ea5e9", backCoverBg: "#001829", overlayColor: "#000d1a", overlayOpacity: 0.35 },
+          beauty:       { accent: "#ec4899", backCoverBg: "#1a0511", overlayColor: "#12000c", overlayOpacity: 0.35 },
+          default:      { accent: "#6366f1", backCoverBg: "#0f172a", overlayColor: "#000000", overlayOpacity: 0.35 },
+        };
+        const nichePalette = NICHE_PALETTE[detectedNiche] ?? NICHE_PALETTE.default;
+
         const pages = Array.from({ length: totalPages }, (_, i) => {
           const existing = existingPages[i] ?? {};
-          if (i === 0 && primaryDesignId) {
-            return { ...existing, designId: primaryDesignId };
+          if (i === 0) {
+            return {
+              ...existing,
+              ...(primaryDesignId ? { designId: primaryDesignId } : {}),
+              overlaySettings: { color: nichePalette.overlayColor, opacity: nichePalette.overlayOpacity },
+            };
           }
-          if (i === totalPages - 1 && backCoverDesignId) {
-            return { ...existing, designId: backCoverDesignId };
+          if (i === totalPages - 1) {
+            return {
+              ...existing,
+              ...(backCoverDesignId ? { designId: backCoverDesignId } : {}),
+              backgroundColor: nichePalette.backCoverBg,
+            };
           }
           return existing;
         });
+
+        const existingColors = (existingDs.colors as Record<string, unknown> | undefined) ?? {};
 
         await db
           .update(productsTable)
           .set({
             marketingAssets: updatedMarketing,
-            designSettings:  { ...existingDs, pages },
+            designSettings:  {
+              ...existingDs,
+              pages,
+              colors: { ...existingColors, graphics: nichePalette.accent },
+            },
             designSource:    "ai",
             updatedAt:       new Date(),
           })

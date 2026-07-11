@@ -1689,7 +1689,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
           return coverEls;
         }
         if (idx === totalPages - 1 && pageArr.length === 0) {
-          return BACK_COVER_DEFAULTS("#6366f1");
+          return BACK_COVER_DEFAULTS(graphicsAccentColor || "#6366f1");
         }
         return pageArr;
       });
@@ -1706,7 +1706,7 @@ export default function ProductEditor({ productId }: { productId: string }) {
         return next;
       });
     }
-  }, [product?.id, product?.title, product?.niche, placedElementsByPage.length, totalPages]);
+  }, [product?.id, product?.title, product?.niche, placedElementsByPage.length, totalPages, graphicsAccentColor]);
 
   /** Reset the back cover to the current default template, discarding any edits. */
   const resetBackCover = useCallback(() => {
