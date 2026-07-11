@@ -549,15 +549,26 @@ function streamDesignGeneration(
       /* ── Phase 4: Save to product record ── */
       await send({ type: "step", id: "saving", label: "Attaching assets to Digital Product..." });
 
-      const currentProduct = await db
-        .select({
-          marketingAssets: productsTable.marketingAssets,
-          designSettings:  productsTable.designSettings,
-          content:         productsTable.content,
-        })
-        .from(productsTable)
-        .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
-        .limit(1);
+      const [currentProduct, storeSettingsRow] = await Promise.all([
+        db
+          .select({
+            marketingAssets: productsTable.marketingAssets,
+            designSettings:  productsTable.designSettings,
+            content:         productsTable.content,
+          })
+          .from(productsTable)
+          .where(and(eq(productsTable.id, productId), eq(productsTable.userId, userId), isNull(productsTable.deletedAt)))
+          .limit(1),
+        db
+          .select({
+            customDomain:       storeSettingsTable.customDomain,
+            customDomainActive: storeSettingsTable.customDomainActive,
+            bannerImageUrl:     storeSettingsTable.bannerImageUrl,
+          })
+          .from(storeSettingsTable)
+          .where(eq(storeSettingsTable.userId, userId))
+          .limit(1),
+      ]);
 
       if (currentProduct[0]) {
         const existingMarketing = (currentProduct[0].marketingAssets ?? {}) as Record<string, unknown>;
@@ -634,6 +645,12 @@ function streamDesignGeneration(
         const backAlready = existingPlacedByPage[backIdx];
         const MID         = 400; // CANVAS_WIDTH / 2
 
+        // Resolve the creator's store URL — prefer active custom subdomain, else placeholder
+        const storeRow    = storeSettingsRow[0];
+        const storeUrl    = (storeRow?.customDomain)
+          ? `https://${storeRow.customDomain}`
+          : "yourstore.contentflywheel.co.uk";
+
         const seededBackEls = (backAlready && backAlready.length > 0) ? backAlready : [
           { id: "back-thanks", type: "text", content: "You've got this.",
             position: { x: MID - 220, y: 320 }, size: { width: 440, height: 44 }, rotation: 0, zIndex: 1,
@@ -644,7 +661,7 @@ function streamDesignGeneration(
           { id: "back-cta", type: "text", content: "Want more? Follow along for updates:",
             position: { x: MID - 200, y: 475 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1,
             textSettings: { fontFamily: "Inter", fontSize: 13, fontWeight: "normal", fontStyle: "normal", textDecoration: "none", textAlign: "center", color: "#64748b", lineHeight: 1.5, letterSpacing: 0, textShadowEnabled: false } },
-          { id: "back-url", type: "text", content: "Add your website in brand profile",
+          { id: "back-url", type: "text", content: storeUrl,
             position: { x: MID - 200, y: 510 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1,
             textSettings: { fontFamily: "Inter", fontSize: 14, fontWeight: "normal", fontStyle: "normal", textDecoration: "none", textAlign: "center", color: nichePalette.accent, lineHeight: 1.5, letterSpacing: 0, textShadowEnabled: false } },
           { id: "back-brand", type: "text", content: "Created with Content Flywheel",
@@ -677,11 +694,8 @@ function streamDesignGeneration(
       /* ── Set store banner (non-destructive — only if none already set) ── */
       if (bannerUrl) {
         try {
-          const [existingStore] = await db
-            .select({ bannerImageUrl: storeSettingsTable.bannerImageUrl })
-            .from(storeSettingsTable)
-            .where(eq(storeSettingsTable.userId, userId))
-            .limit(1);
+          // Reuse the store settings already fetched in Phase 4
+          const existingStore = storeSettingsRow[0];
 
           if (!existingStore?.bannerImageUrl) {
             await db
