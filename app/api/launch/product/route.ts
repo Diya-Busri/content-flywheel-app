@@ -72,10 +72,19 @@ const FORMAT_MAP: Record<string, string> = {
   "spreadsheet":       "spreadsheet",
   "journal":           "journal",
   "planner":           "planner",
+  "cookbook":          "cookbook",
+  "recipe book":       "cookbook",
+  "recipe-book":       "cookbook",
+  "recipe pack":       "cookbook",
+  "recipe":            "cookbook",
+  "meal plan":         "cookbook",
+  "meal prep guide":   "cookbook",
 };
 
 function inferFormat(type: string): string {
   const lower = type.toLowerCase();
+  // Check cookbook/recipe patterns first (before generic "ebook" fallback)
+  if (/cook\s*book|recipe\s*book|recipe\s*pack|meal\s*plan|meal\s*prep/.test(lower)) return "cookbook";
   for (const [key, fmt] of Object.entries(FORMAT_MAP)) {
     if (lower.includes(key)) return fmt;
   }
