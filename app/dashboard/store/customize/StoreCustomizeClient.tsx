@@ -115,7 +115,7 @@ function StorePreview({ settings, brandName }: { settings: StoreSettings; brandN
 
   let bannerBg: string;
   if (settings.bannerImageUrl) {
-    bannerBg = `url(${settings.bannerImageUrl}) ${settings.bannerImagePosition ?? "center 20%"}/cover no-repeat`;
+    bannerBg = `url(${settings.bannerImageUrl}) ${settings.bannerImagePosition ?? "center 50%"}/cover no-repeat`;
   } else if (settings.bannerGradient) {
     bannerBg = `linear-gradient(${settings.bannerGradient})`;
   } else {
@@ -135,7 +135,7 @@ function StorePreview({ settings, brandName }: { settings: StoreSettings; brandN
       )}
 
       {/* Banner */}
-      <div style={{ position: "relative", height: "110px", overflow: "hidden" }}>
+      <div style={{ position: "relative", height: "160px", overflow: "hidden" }}>
         <div style={{ width: "100%", height: "100%", background: bannerBg }} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40px", background: `linear-gradient(to bottom, transparent, ${t.page})` }} />
       </div>
@@ -312,7 +312,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
     layout: "grid",
     bannerImageUrl: null,
     bannerGradient: null,
-    bannerImagePosition: "center 40%",
+    bannerImagePosition: "center 50%",
     profileImageUrl: null,
     bio: null,
     storeName: null,
@@ -398,7 +398,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
             layout: data.layout ?? "grid",
             bannerImageUrl: data.bannerImageUrl ?? null,
             bannerGradient: data.bannerGradient ?? null,
-            bannerImagePosition: data.bannerImagePosition ?? "center 40%",
+            bannerImagePosition: data.bannerImagePosition ?? "center 50%",
             profileImageUrl: data.profileImageUrl ?? null,
             bio: data.bio ?? null,
             storeName: data.storeName ?? null,
@@ -928,7 +928,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                           src={settings.bannerImageUrl}
                           alt="Banner"
                           className="w-full h-20 object-cover"
-                          style={{ objectPosition: settings.bannerImagePosition ?? "center 20%" }}
+                          style={{ objectPosition: settings.bannerImagePosition ?? "center 50%" }}
                         />
                         <button onClick={() => set("bannerImageUrl", null)}
                           className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
@@ -941,7 +941,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                           <label className="text-[11px] font-medium text-gray-500">Vertical position</label>
                           <span className="text-[10px] text-gray-400">
                             {(() => {
-                              const pct = parseInt((settings.bannerImagePosition ?? "center 20%").match(/(\d+)%/)?.[1] ?? "20", 10);
+                              const pct = parseInt((settings.bannerImagePosition ?? "center 50%").match(/(\d+)%/)?.[1] ?? "50", 10);
                               if (pct <= 15) return "Top";
                               if (pct <= 40) return "Upper";
                               if (pct <= 60) return "Center";
@@ -955,7 +955,7 @@ export function StoreCustomizeClient({ userId, brandName }: StoreCustomizeClient
                           min={0}
                           max={100}
                           step={5}
-                          value={parseInt((settings.bannerImagePosition ?? "center 20%").match(/(\d+)%/)?.[1] ?? "20", 10)}
+                          value={parseInt((settings.bannerImagePosition ?? "center 50%").match(/(\d+)%/)?.[1] ?? "50", 10)}
                           onChange={(e) => set("bannerImagePosition", `center ${e.target.value}%`)}
                           className="w-full h-1.5 rounded-full accent-orange-500 cursor-pointer"
                         />
