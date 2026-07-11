@@ -1663,10 +1663,11 @@ export default function ProductEditor({ productId }: { productId: string }) {
         }
         if (idx === totalPages - 1 && pageArr.length === 0) {
           return [
-            { id: "back-thanks", type: "text", content: "Thank you", position: { x: CANVAS_WIDTH / 2 - 200, y: 350 }, size: { width: 400, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 22, textAlign: "center" } },
-            { id: "back-msg", type: "text", content: "Thank you for using this resource!", position: { x: CANVAS_WIDTH / 2 - 200, y: 420 }, size: { width: 400, height: 28 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 16, textAlign: "center" } },
-            { id: "back-url", type: "text", content: "Add your website in brand profile", position: { x: CANVAS_WIDTH / 2 - 200, y: 500 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
-            { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 620 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 12, textAlign: "center" } },
+            { id: "back-thanks", type: "text", content: "You've got this.", position: { x: CANVAS_WIDTH / 2 - 220, y: 320 }, size: { width: 440, height: 44 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 28, textAlign: "center" } },
+            { id: "back-msg", type: "text", content: "Thanks for reading — now go make it happen.", position: { x: CANVAS_WIDTH / 2 - 220, y: 390 }, size: { width: 440, height: 36 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 15, textAlign: "center" } },
+            { id: "back-cta", type: "text", content: "Want more? Follow along for updates:", position: { x: CANVAS_WIDTH / 2 - 200, y: 470 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 13, textAlign: "center" } },
+            { id: "back-url", type: "text", content: "Add your website in brand profile", position: { x: CANVAS_WIDTH / 2 - 200, y: 510 }, size: { width: 400, height: 24 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 14, textAlign: "center" } },
+            { id: "back-brand", type: "text", content: "Created with Content Flywheel", position: { x: CANVAS_WIDTH / 2 - 150, y: 650 }, size: { width: 300, height: 20 }, rotation: 0, zIndex: 1, textSettings: { ...DEFAULT_TEXT_BOX, fontSize: 12, textAlign: "center" } },
           ];
         }
         return pageArr;
@@ -1688,7 +1689,9 @@ export default function ProductEditor({ productId }: { productId: string }) {
 
   const isOnCoverPage = currentPageIndex === 0;
   const isOnBackPage = currentPageIndex === totalPages - 1;
-  const showCoverBackHint = !coverBackHintDismissed && (isOnCoverPage || isOnBackPage);
+  // Only show cover hint when there's genuinely nothing set (no background image)
+  const coverNeedsSetup = isOnCoverPage && !backgroundImage;
+  const showCoverBackHint = !coverBackHintDismissed && (coverNeedsSetup || isOnBackPage);
 
   const persistCurrentPageBackground = useCallback((updates: Partial<PageBackground>) => {
     setPageBackgrounds((prev) => {

@@ -332,7 +332,16 @@ export function DesignAssetPanel({ design, productId, launchId }: Props) {
         }),
       }).catch(() => { /* non-fatal */ });
     }
-  }, [roles, persist, launchId]);
+    // Apply the selected concept as the product editor cover page background so the
+    // PDF preview shows the designed cover, not a blank white page.
+    if (concept.url && productId) {
+      fetch(`/api/products/${productId}/apply-cover-concept`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ conceptUrl: concept.url }),
+      }).catch(() => { /* non-fatal */ });
+    }
+  }, [roles, persist, launchId, productId]);
 
   /* Select a thumbnail source */
   const selectThumb = useCallback(async (source: ThumbSource) => {
@@ -365,7 +374,7 @@ export function DesignAssetPanel({ design, productId, launchId }: Props) {
       {/* Status bar */}
       <div className="flex items-center justify-between min-h-[18px]">
         <p className="text-[11px] text-muted-foreground">
-          {hasConcepts ? "Click a concept to use it as your Product Cover" : "Assign assets below"}
+          {hasConcepts ? "Select a concept — it will be applied as your product cover and marketing thumbnail" : "Assign assets below"}
         </p>
         <div className="flex items-center gap-1.5">
           {saving && <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin" /> Saving…</span>}
