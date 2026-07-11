@@ -324,13 +324,21 @@ function streamProductGeneration(
         expertiseParts.push(`AUTHOR/BRAND: This product is written under the "${brandVoice.brandName}" brand name.`);
       }
       if (brandVoice?.targetAudience) {
-        expertiseParts.push(`TARGET READER: ${brandVoice.targetAudience} — write directly to this person throughout.`);
+        expertiseParts.push(`TARGET READER: ${brandVoice.targetAudience} — write directly to this person throughout. Use this persona for all worked examples and sample data.`);
       }
       if (brandVoice?.writingStyle) {
         expertiseParts.push(`WRITING STYLE: ${brandVoice.writingStyle}`);
       }
       if (brandVoice?.examplePhrases) {
         expertiseParts.push(`BRAND VOICE EXAMPLES (echo this style and vocabulary): ${brandVoice.examplePhrases}`);
+      }
+
+      // Locale enforcement: if the brand targets a UK audience or the product uses £, lock to UK locale
+      const isUkProduct = /\buk\b|united kingdom|british|£|england|scotland|wales/i.test(
+        [brandVoice?.targetAudience, brandVoice?.examplePhrases, goal, research.reportSummary].filter(Boolean).join(" ")
+      );
+      if (isUkProduct) {
+        expertiseParts.push(`LOCALE: UK audience. Use £ (not $), UK English spelling, UK place names. Do NOT use American dollar amounts or US-specific references in any examples or sample data.`);
       }
 
       const highOppKeywords = keywords.filter(k => k.opportunity === "High").slice(0, 5).map(k => k.term);

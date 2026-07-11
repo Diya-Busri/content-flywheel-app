@@ -14,6 +14,7 @@ function resolveFormat(format: string): string {
     guide: "ebook",
     journal: "ebook",
     planner: "ebook",
+    cookbook: "ebook",
     notion: "notion",
     spreadsheet: "spreadsheet",
     ebook: "ebook",

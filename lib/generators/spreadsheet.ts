@@ -98,7 +98,7 @@ export async function generateSpreadsheet(details: ProductDetails): Promise<Arra
   // Separate sections: instructions vs data tabs
   const instructionSections = sections.filter(
     (s) => FIXED_IDS.has(s.title?.toLowerCase().replace(/\s+/g, "-")) ||
-      /^(outcome|quick wins|framework|disclaimer|overview|introduction|tips|getting started)/i.test(s.title)
+      /^(outcome|quick wins|framework|disclaimer|overview|introduction|tips|getting started|how to use|setup|formula guide)/i.test(s.title)
   );
   const dataSections = sections.filter((s) => !instructionSections.includes(s));
 

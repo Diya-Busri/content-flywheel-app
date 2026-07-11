@@ -477,10 +477,24 @@ Chapter titles must be specific benefit-driven outcomes, not topic labels.`;
       formatStructureNote = "COURSE OUTLINE: modules with lessons — each module covers a different stage or skill.";
       break;
 
-    case "spreadsheet":
-      sectionCountHint = `outcome-promise, fast-start, overview, setup, tab1, tab2, tab3, formulas, tips, disclaimer`;
-      formatStructureNote = "SPREADSHEET TEMPLATE: Each section describes one tab or feature. Use <table> with real column headers and sample rows. Show actual formulas. Minimal prose — lead with the table structure.";
+    case "spreadsheet": {
+      const numTrackerTabs = params.bundleMode ? 3
+        : customizationOptions?.contentLength === "short" ? 3
+        : customizationOptions?.contentLength === "long"  ? 5 : 4;
+      const tabIds = Array.from({ length: numTrackerTabs }, (_, i) => `tracker-tab-${i + 1}`).join(", ");
+      sectionCountHint = `getting-started, ${tabIds}, disclaimer`;
+      formatStructureNote = `SPREADSHEET TEMPLATE (downloadable XLSX file — customers use this daily in Excel or Google Sheets):
+
+This product is a WORKING SPREADSHEET TRACKER, not an ebook. Generate ${numTrackerTabs} named tracker tabs specifically for: "${productName}" (${niche}).
+
+REQUIRED STRUCTURE:
+1. "getting-started" — title exactly "Getting Started" — brief setup text (150 words max)
+2. tracker-tab-1 through tracker-tab-${numTrackerTabs} — Each section = ONE named Excel tab. The title MUST be the EXACT TAB NAME customers will see in Excel (2-4 words). Based on "${productName}", decide what data they need to track and name each tab specifically. Good examples: "Income Tracker", "Monthly Expenses", "Budget Overview", "Bills & Subscriptions", "Savings Goals", "Debt Log", "Net Worth". BAD examples: "Tab 1", "Data", "Tracker".
+3. "disclaimer" — title exactly "Disclaimer" — one sentence: "For educational purposes only."
+
+All ${numTrackerTabs} tabs must track DIFFERENT data — no two tabs should overlap.`;
       break;
+    }
 
     default:
       sectionCountHint = `outcome-promise, fast-start, framework, intro, ${numChapters} sections (section-1–section-${numChapters}), disclaimer`;
@@ -504,7 +518,9 @@ Chapter titles must be specific benefit-driven outcomes, not topic labels.`;
                   ? "NOTION = dashboard, calendar-view, table-view, revenue-tracker, weekly-planning."
                   : normalizedFormat === "course"
                     ? "COURSE = mod1, mod2... Modules with lessons. Each module different skill."
-                    : "";
+                    : normalizedFormat === "spreadsheet"
+                      ? `SPREADSHEET = getting-started (title: "Getting Started") + tracker tab sections with REAL descriptive names (e.g. "Income Tracker", "Monthly Expenses", "Budget Overview") + disclaimer (title: "Disclaimer"). Each tab title = what users see in Excel.`
+                      : "";
 
   const prompt = `Product: "${productName}". Niche: ${niche}.
 ${ctx}
@@ -520,7 +536,9 @@ ${(normalizedFormat === "ebook" || normalizedFormat === "guide" || normalizedFor
     ? `CRITICAL: Exactly ${numChapters} main chapter/section(s) (ch1–ch${numChapters}). Each chapter title must describe a UNIQUE, SPECIFIC outcome or skill — not variations on the same theme.`
     : normalizedFormat === "cookbook"
       ? `CRITICAL: Include exactly ${numRecipes} recipe sections (recipe-1 through recipe-${numRecipes}). Each must have a REAL, SPECIFIC, APPETISING recipe title. No generic names. Vary proteins, cooking methods, and occasions.`
-      : ""}
+      : normalizedFormat === "spreadsheet"
+        ? `CRITICAL: Each tracker-tab section title must be a SPECIFIC, DESCRIPTIVE Excel tab name directly relevant to "${productName}". NO generic names like "Tab 1", "Data", or "Tracker". Title = what users see on the Excel tab. For income/expense trackers: try "Income Tracker", "Expenses Log", "Budget Overview", "Bills & Subscriptions", "Savings Goals".`
+        : ""}
 Section titles must be benefit-driven and specific to this product. No markdown, no explanation.`;
 
   const isNonPlanner = normalizedFormat !== "planner";
@@ -663,7 +681,12 @@ export async function generateSingleSectionBody(
     normalizedFormat === "journal" &&
     (/^daily\d+$/.test(section.id) || /^p\d+$/.test(section.id) || section.id.startsWith("daily") || section.id.startsWith("p") || (!isFixedSection && !isLastSection));
 
-  const isSpreadsheetSection = normalizedFormat === "spreadsheet" && !isFixedSection;
+  const isSpreadsheetFormat = normalizedFormat === "spreadsheet";
+  const isSpreadsheetTrackerTab = isSpreadsheetFormat && !isFixedSection && section.id.startsWith("tracker-tab");
+  const isSpreadsheetSetup = isSpreadsheetFormat && !isFixedSection && (section.id === "getting-started" || section.id === "overview" || section.id === "setup");
+  // Legacy: handle old-style IDs (tab1, tab2, tab3) in case of previously saved products
+  const isSpreadsheetLegacyTab = isSpreadsheetFormat && !isFixedSection && /^(tab\d+|formulas?|tips?)$/.test(section.id);
+  const isSpreadsheetSection = isSpreadsheetTrackerTab || isSpreadsheetSetup || isSpreadsheetLegacyTab;
   const spreadsheetDifficulty = customizationOptions?.spreadsheet?.difficulty ?? "beginner";
   const spreadsheetIncludePractice = customizationOptions?.spreadsheet?.includePracticeExercises ?? true;
 
@@ -927,13 +950,98 @@ This is a CHECKLIST PACK section. Output ONLY checkbox lists. Format: <ul class=
   const courseInstruction = isCourseModule ? `
 This is a COURSE OUTLINE module. Output: module overview (1–2 paragraphs), <h3>Learning objectives</h3><ul>...</ul>, <h3>Lessons</h3><ol><li>Lesson title: short description.</li></ol>, <h3>Resources</h3>, key takeaways. Use benefit-driven lesson titles. 500–700 words of HTML.` : "";
 
-  // SPREADSHEET: Real table structure with column headers, sample rows, formulas
-  const spreadsheetInstruction = isSpreadsheetSection ? `
-This is a SPREADSHEET TEMPLATE section (difficulty: ${spreadsheetDifficulty}). Lead with a <table> showing real column headers and 3–5 sample data rows with realistic values. Explain each column briefly. Include at least 2 real formulas using <code>: ${spreadsheetDifficulty === "beginner" ? "=SUM(), =AVERAGE(), =COUNT()" : spreadsheetDifficulty === "intermediate" ? "=IF(), =COUNTIF(), =VLOOKUP()" : "=ARRAYFORMULA(), =QUERY(), =INDEX(MATCH())"}. Minimal prose — the table IS the content.${spreadsheetIncludePractice ? " End with a short 'Practice Exercise' box." : ""} 300–500 words of HTML.` : "";
+  // SPREADSHEET: Tracker tab = proper table; Setup section = brief text
+  const spreadsheetInstruction = isSpreadsheetTrackerTab || isSpreadsheetLegacyTab ? `
+This is an EXCEL/GOOGLE SHEETS TRACKER TAB for the spreadsheet product "${productName}".
+Tab name: "${section.title}"
+
+MANDATORY: Output MUST start with a complete <table> immediately. This table IS the product.
+
+<table>
+  <tr>
+    <th>[Column 1 — choose the most relevant column headers for "${section.title}" in a ${niche} context]</th>
+    <th>[Column 2]</th>
+    <th>[Column 3]</th>
+    ... (4–7 columns total)
+  </tr>
+  <tr>
+    <td>[Sample row 1 — realistic data values, NOT placeholders like "XXX" or "[amount]"]</td>
+    ...
+  </tr>
+  <tr>
+    <td>[Sample row 2]</td>
+    ...
+  </tr>
+  <tr>
+    <td>[Sample row 3]</td>
+    ...
+  </tr>
+</table>
+
+Column rules:
+- Include a Date or Month column where relevant
+- For financial data: use UK pounds (£), realistic values (e.g. 1200.00 not just "100")
+- Column names must be specific (not just "Amount" — use "Amount (£)", "Monthly Cost (£)", etc.)
+- Sample rows must contain REAL values a user would actually enter (dates like "01/01/2024", categories like "Groceries", amounts like "345.80")
+- If the CREATOR EXPERTISE / TARGET READER block above mentions a specific persona (e.g. income amounts, job type, family situation), use consistent sample data that reflects that exact persona throughout your sample rows
+- Keep sample data consistent across rows — if row 1 is for "January", don't mix with "March" in row 2
+
+After the table, add:
+<h3>Key Formulas for This Tab</h3>
+<ul>
+  <li><strong>Total:</strong> <code>=SUM(D2:D100)</code> — [explain what this sums for this specific tab]</li>
+  <li><strong>[Useful formula]:</strong> <code>=[formula relevant to this tab's data]</code> — [what it calculates]</li>
+</ul>
+<p><small>💡 Tip: [One practical tip for using this tab effectively]</small></p>
+
+Keep all prose minimal. The table is the deliverable.
+` : isSpreadsheetSetup ? `
+Generate brief "Getting Started" instructions for the spreadsheet product "${productName}".
+
+Output 150–180 words of HTML covering:
+- What this spreadsheet tracks and why it's useful for ${niche}
+- A bullet list of the tabs included (use the actual product-relevant tab names)
+- Which tab to start with and how to enter data
+- One note about formulas (they calculate automatically — just enter data)
+
+Use <p> and <ul>. No marketing language. No padding.
+` : "";
 
   // JOURNAL: Date field, unique prompts, writing space
   const journalInstruction = isJournalPrompt ? `
 This is a JOURNAL page. Include: (1) Date field: "Date: _______________", (2) 2–3 reflection prompts as <h3> or <p> (UNIQUE to this day — not repeated from other pages), (3) <div class="writing-space"> for writing space, (4) Affirmation. Mindset/reflective tone. Minimal HTML. No long paragraphs.` : "";
+
+  // DISCLAIMER: Always output a proper disclaimer with correct language per product type
+  const isFinancialProduct = /financ|budget|expense|income|money|debt|saving|invest|tax|pension|credit|afford/i.test(productName + " " + niche);
+  const disclaimerInstruction = section.id === "disclaimer" ? `
+Write a brief disclaimer section for "${productName}" (2–3 short paragraphs, max 150 words total).
+
+${isFinancialProduct ? `FINANCIAL PRODUCT DISCLAIMER — include all of the following:
+- "This spreadsheet/guide is for educational and organisational purposes only. It is not financial advice."
+- "Always consult a qualified financial adviser before making financial decisions."
+- "Figures used as examples are illustrative only and do not represent actual financial advice."
+- A short empowerment statement: "Use this as a starting point to build your own financial clarity."` : `Include:
+- A one-sentence statement that this product is for educational/informational purposes only
+- A note that readers are responsible for applying the information to their own situation
+- A short empowerment statement encouraging action`}
+
+${productName.match(/\[|YOUR|WEBSITE|HANDLE/i) ? "" : `End with a basic copyright line:
+<p><em>© [YEAR] [AUTHOR NAME]. All rights reserved.</em></p>
+<p><em>Website: [YOUR WEBSITE] | Follow us: @[YOUR SOCIAL HANDLE]</em></p>`}
+
+Use <p> tags only. No bold headings. Keep it brief and professional.
+` : "";
+
+  // SPREADSHEET FIXED SECTIONS: outcome-promise / fast-start / framework get brief practical content (not ebook essays)
+  const spreadsheetFixedInstruction = isSpreadsheetFormat && isFixedSection && section.id !== "disclaimer" ? `
+Write a short, practical "${section.title}" section for the spreadsheet product "${productName}" (80–120 words, HTML only).
+
+${section.id === "outcome-promise" ? `This should state what the user will be able to TRACK and UNDERSTAND after using this spreadsheet. Be specific: mention the key things this tracker helps with (e.g. "Track all income sources in one place", "See where money goes each month", "Spot budget gaps before payday"). 3–4 short bullet points using <ul><li>. One opening sentence only — no padding.`
+  : section.id === "fast-start" ? `Title exactly: "Quick Start: 3 Steps to Get Going". Output 3 numbered steps for using this spreadsheet immediately: (1) which tab to start with, (2) what to enter first, (3) what to check after filling in one week/month. Use <ol><li>. Each step: one sentence. No padding.`
+  : `A simple framework for this product. One short paragraph + 3 bullet points. Keep it practical, not motivational.`}
+
+No ebook-style essays. No "transform your life" language. Just practical guidance.
+` : "";
 
   // Select the format-specific instruction
   const formatSpecificRequirement =
@@ -946,7 +1054,9 @@ This is a JOURNAL page. Include: (1) Date field: "Date: _______________", (2) 2�
     checklistInstruction ||
     courseInstruction ||
     journalInstruction ||
-    spreadsheetInstruction;
+    spreadsheetInstruction ||
+    spreadsheetFixedInstruction ||
+    disclaimerInstruction;
 
   const baseRequirements = formatSpecificRequirement
     ? formatSpecificRequirement
@@ -970,7 +1080,9 @@ This is a JOURNAL page. Include: (1) Date field: "Date: _______________", (2) 2�
                   : normalizedFormat === "course"
                     ? "Format is COURSE: module with lessons, objectives, resources."
                     : normalizedFormat === "spreadsheet"
-                      ? "Format is SPREADSHEET: table structure with column headers, sample data, and real formulas."
+                      ? (isSpreadsheetTrackerTab || isSpreadsheetLegacyTab
+                          ? "Format is SPREADSHEET TRACKER TAB: start immediately with a complete <table> with real column headers and realistic sample data rows. Add formula examples in <code>. Minimal prose."
+                          : "Format is SPREADSHEET SETUP: brief practical text instructions. No table required.")
                       : "";
 
   const prompt = `Product: "${productName}". Niche: ${niche}.
@@ -1007,7 +1119,7 @@ Return ONLY valid JSON: {"body": "<html content here>"}. No code fences. No mark
               : normalizedFormat === "notion"
                 ? "You write Notion setup guide content. Describe databases, views, filters, templates. No workbook-style content. Return only valid JSON with body and optional imagePrompt. No markdown."
                 : normalizedFormat === "spreadsheet"
-                  ? "You write spreadsheet template content. Lead every section with an HTML <table> showing real column headers and sample data rows. Include actual formula examples using <code>. Return only valid JSON with body and optional imagePrompt. No markdown."
+                  ? "You write Excel/Google Sheets tracker content. For tracker tab sections, output a complete <table> with real column headers and realistic sample data rows — no placeholders. For setup sections, output brief instructional text. Include formula examples in <code> tags. Return only valid JSON with body field. No markdown."
                   : SYSTEM_PREMIUM;
 
   const tokenLimit = isRecipeSection ? COOKBOOK_RECIPE_TOKENS : MAX_SECTION_TOKENS;
