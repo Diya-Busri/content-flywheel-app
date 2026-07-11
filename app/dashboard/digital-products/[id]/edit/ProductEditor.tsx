@@ -297,6 +297,16 @@ const DEFAULT_TEXT_BOX: TextBoxSettings = {
 /** Back-cover dark background colour */
 const BACK_COVER_BG = "#0f172a";
 
+type ProductPalette = { id: string; label: string; accent: string; backCoverBg: string; overlayColor: string; overlayOpacity: number };
+const PRODUCT_PALETTES: ProductPalette[] = [
+  { id: "midnight", label: "Midnight", accent: "#6366f1", backCoverBg: "#0f172a", overlayColor: "#000000", overlayOpacity: 0.35 },
+  { id: "forest",   label: "Forest",   accent: "#16a34a", backCoverBg: "#061209", overlayColor: "#021005", overlayOpacity: 0.40 },
+  { id: "ember",    label: "Ember",    accent: "#f97316", backCoverBg: "#1c0800", overlayColor: "#130400", overlayOpacity: 0.40 },
+  { id: "rose",     label: "Rose",     accent: "#ec4899", backCoverBg: "#1a0511", overlayColor: "#12000c", overlayOpacity: 0.35 },
+  { id: "ocean",    label: "Ocean",    accent: "#0ea5e9", backCoverBg: "#001829", overlayColor: "#000d1a", overlayOpacity: 0.35 },
+  { id: "slate",    label: "Slate",    accent: "#94a3b8", backCoverBg: "#111318", overlayColor: "#000000", overlayOpacity: 0.30 },
+];
+
 /** Returns the default placed elements for the back cover page.
  *  @param accentColor – hex for the CTA / website link element */
 function BACK_COVER_DEFAULTS(accentColor: string) {
@@ -1719,6 +1729,50 @@ export default function ProductEditor({ productId }: { productId: string }) {
     });
     toast({ title: "Back cover reset to defaults" });
   }, [totalPages, recordUndo, placedElementsByPage, pageBackgrounds, graphicsAccentColor, product?.designSettings, saveToServer, toast]);
+
+  /** Apply a product palette — syncs accent color, cover overlay tint, and back cover background in one shot. */
+  const applyProductPalette = useCallback((palette: ProductPalette) => {
+    recordUndo();
+    const newOverlay = { color: palette.overlayColor, opacity: palette.overlayOpacity };
+
+    // Compute updated page backgrounds
+    const nextPageBgs = pageBackgrounds.map((bg, i) => {
+      if (i === 0) return { ...bg, overlaySettings: newOverlay };
+      if (i === totalPages - 1) return { ...bg, backgroundColor: palette.backCoverBg };
+      return bg;
+    });
+    // Ensure cover + back entries exist if pageBackgrounds was short
+    while (nextPageBgs.length < totalPages) {
+      nextPageBgs.push(nextPageBgs.length === totalPages - 1 ? { backgroundColor: palette.backCoverBg } : {});
+    }
+    if (nextPageBgs.length > 0) nextPageBgs[0] = { ...nextPageBgs[0], overlaySettings: newOverlay };
+
+    // Update accent on back-url element
+    const nextPlacedByPage = placedElementsByPage.map((page, i) => {
+      if (i !== totalPages - 1) return page;
+      return page.map((el) =>
+        el.id === "back-url"
+          ? { ...el, textSettings: { ...(el.textSettings ?? {}), color: palette.accent } }
+          : el
+      );
+    });
+
+    setGraphicsAccentColor(palette.accent);
+    setCustomColor(palette.accent);
+    setPageBackgrounds(nextPageBgs);
+    setPlacedElementsByPage(nextPlacedByPage as PlacedElement[][]);
+    if (isOnCoverPage) setOverlaySettings(newOverlay);
+
+    saveToServer({
+      designSettings: {
+        ...product?.designSettings,
+        colors: { ...product?.designSettings?.colors, graphics: palette.accent },
+        pages: nextPageBgs,
+        placedElementsByPage: nextPlacedByPage,
+      },
+    });
+    toast({ title: `${palette.label} palette applied` });
+  }, [recordUndo, pageBackgrounds, placedElementsByPage, totalPages, isOnCoverPage, product?.designSettings, saveToServer, toast]);
 
   useEffect(() => {
     const page = pageBackgrounds[currentPageIndex];
@@ -6034,6 +6088,32 @@ export default function ProductEditor({ productId }: { productId: string }) {
                       <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{t.desc}</p>
                     </button>
                   ))}
+                </div>
+
+                {/* Product Palette — one click sets cover overlay, back cover bg, and accent consistently */}
+                <div className={`mt-4 pt-4 border-t ${isDark ? "border-[#2A2A2A]" : "border-gray-200"}`}>
+                  <h3 className={`text-sm font-semibold mb-1 ${isDark ? "text-white" : "text-gray-900"}`}>Product palette</h3>
+                  <p className={`text-xs mb-3 ${isDark ? "text-gray-400" : "text-gray-500"}`}>Sets the accent colour, cover overlay tint, and back cover background together — so all pages feel like one package.</p>
+                  <div className="flex gap-3 flex-wrap">
+                    {PRODUCT_PALETTES.map((palette) => {
+                      const isActive = graphicsAccentColor === palette.accent;
+                      return (
+                        <button
+                          key={palette.id}
+                          type="button"
+                          onClick={() => applyProductPalette(palette)}
+                          title={palette.label}
+                          className="flex flex-col items-center gap-1 group"
+                        >
+                          <div
+                            className={`w-10 h-10 rounded-full transition-all ${isActive ? "ring-2 ring-orange-500 ring-offset-2 scale-110" : "hover:scale-105"}`}
+                            style={{ background: `conic-gradient(${palette.accent} 0deg 180deg, ${palette.backCoverBg} 180deg 360deg)` }}
+                          />
+                          <span className={`text-[10px] ${isActive ? "font-semibold text-orange-500" : isDark ? "text-gray-400 group-hover:text-gray-200" : "text-gray-500 group-hover:text-gray-700"}`}>{palette.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {sections.length > 0 && (
