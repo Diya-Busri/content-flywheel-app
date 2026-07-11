@@ -1,4 +1,7 @@
-import { Download, Info, AlertTriangle, CheckCircle2, Lightbulb, Square } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Download, Info, AlertTriangle, CheckCircle2, Lightbulb, CheckSquare, Square, ExternalLink } from "lucide-react";
 import type { Block } from "@/lib/academy-blocks";
 import { youTubeEmbedUrl } from "@/lib/academy";
 
@@ -20,6 +23,49 @@ const CALLOUT_STYLES: Record<string, { box: string; icon: React.ReactNode }> = {
     icon: <Lightbulb className="h-5 w-5 text-purple-500" />,
   },
 };
+
+function InteractiveChecklist({ items }: { items: string[] }) {
+  const filtered = items.filter((i) => i.trim());
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const toggle = (i: number) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  const allDone = checked.size === filtered.length && filtered.length > 0;
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-foreground">Action Checklist</p>
+        <span className="text-xs text-muted-foreground">{checked.size}/{filtered.length}</span>
+      </div>
+      <ul className="space-y-2">
+        {filtered.map((item, i) => (
+          <li
+            key={i}
+            onClick={() => toggle(i)}
+            className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50 transition-colors"
+          >
+            {checked.has(i) ? (
+              <CheckSquare className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+            ) : (
+              <Square className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <span className={`text-sm ${checked.has(i) ? "text-muted-foreground line-through" : "text-foreground"}`}>
+              {item}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {allDone && (
+        <p className="mt-3 text-xs font-semibold text-green-600 flex items-center gap-1">
+          <CheckCircle2 className="h-3.5 w-3.5" /> All done — great work!
+        </p>
+      )}
+    </div>
+  );
+}
 
 function BlockView({ block }: { block: Block }) {
   switch (block.type) {
@@ -87,17 +133,7 @@ function BlockView({ block }: { block: Block }) {
       );
     }
     case "checklist": {
-      const items = block.items ?? [];
-      return (
-        <ul className="space-y-2">
-          {items.filter((i) => i.trim()).map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-foreground">
-              <Square className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      );
+      return <InteractiveChecklist items={block.items ?? []} />;
     }
     case "divider":
       return <hr className="border-border" />;
@@ -105,22 +141,24 @@ function BlockView({ block }: { block: Block }) {
       const style = CALLOUT_STYLES[block.calloutType ?? "info"] ?? CALLOUT_STYLES.info;
       return (
         <div className={`flex gap-3 rounded-lg border p-4 ${style.box}`}>
-          <div className="shrink-0">{style.icon}</div>
+          <div className="shrink-0 mt-0.5">{style.icon}</div>
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{block.content}</p>
         </div>
       );
     }
     case "button": {
       if (!block.buttonUrl) return null;
+      const isInternal = block.buttonUrl.startsWith("/");
       return (
         <div>
           <a
             href={block.buttonUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            target={isInternal ? undefined : "_blank"}
+            rel={isInternal ? undefined : "noopener noreferrer"}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
             {block.buttonLabel || "Open"}
+            {!isInternal && <ExternalLink className="h-3.5 w-3.5" />}
           </a>
         </div>
       );

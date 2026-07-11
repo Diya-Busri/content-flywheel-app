@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Download, FileText } from "lucide-react";
+import { FileText, ArrowRight, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import {
   getCourseById,
   getLessonById,
@@ -48,6 +49,11 @@ export default async function LessonViewerPage({
 
   const currentIndex = publishedLessons.findIndex((l) => l.id === lesson.id);
   const nextLesson = currentIndex >= 0 ? publishedLessons[currentIndex + 1] : undefined;
+  const isLastLesson = currentIndex === publishedLessons.length - 1;
+  const lessonNumber = currentIndex + 1;
+
+  const blocks = parseLessonBlocks(lesson.content);
+  const isInternal = lesson.ctaRoute?.startsWith("/");
 
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row">
@@ -66,28 +72,34 @@ export default async function LessonViewerPage({
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
-          <h1 className="text-xl font-bold text-foreground">{lesson.title}</h1>
+          {/* Lesson header */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Lesson {lessonNumber} of {publishedLessons.length}
+              {lesson.durationMinutes && ` · ${lesson.durationMinutes} min`}
+            </p>
+            <h1 className="text-xl font-bold text-foreground">{lesson.title}</h1>
+          </div>
 
-          {/* Legacy YouTube field — only shown for older lessons that predate block content */}
+          {/* Legacy YouTube field */}
           {lesson.videoUrl && (
-            <div className="mt-4">
+            <div className="mb-6">
               <LessonPlayer videoUrl={lesson.videoUrl} />
             </div>
           )}
 
-          {(() => {
-            const blocks = parseLessonBlocks(lesson.content);
-            return blocks.length > 0 ? (
-              <div className="mt-6">
-                <BlockViewer blocks={blocks} />
-              </div>
-            ) : null;
-          })()}
+          {/* Block content */}
+          {blocks.length > 0 && (
+            <div className="mb-6">
+              <BlockViewer blocks={blocks} />
+            </div>
+          )}
 
+          {/* Resources */}
           {resources.length > 0 && (
-            <div className="mt-6">
-              <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <FileText className="h-4 w-4" /> Resources
+            <div className="mb-6 rounded-xl border bg-card p-4">
+              <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                <FileText className="h-4 w-4 text-orange-500" /> Resources
               </h2>
               <ul className="space-y-2">
                 {resources.map((r) => (
@@ -96,9 +108,9 @@ export default async function LessonViewerPage({
                       href={r.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm hover:bg-muted"
+                      className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm hover:bg-muted"
                     >
-                      <Download className="h-4 w-4 text-muted-foreground" />
+                      <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="flex-1 text-foreground">{r.title}</span>
                       {r.fileType && (
                         <span className="text-[11px] uppercase text-muted-foreground">{r.fileType}</span>
@@ -110,12 +122,45 @@ export default async function LessonViewerPage({
             </div>
           )}
 
-          <div className="mt-8 border-t pt-6">
+          {/* Action CTA — open the relevant CF tool */}
+          {lesson.ctaRoute && lesson.ctaLabel && (
+            <div className="mb-6 rounded-xl border-2 border-orange-500/30 bg-orange-500/[0.04] p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-orange-500 mb-1">
+                Now it&apos;s your turn
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Apply what you just learned — open the tool and try it with your own idea.
+              </p>
+              {isInternal ? (
+                <Link
+                  href={lesson.ctaRoute}
+                  className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+                >
+                  {lesson.ctaLabel} <ArrowRight className="h-4 w-4" />
+                </Link>
+              ) : (
+                <a
+                  href={lesson.ctaRoute}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+                >
+                  {lesson.ctaLabel} <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Complete / Next */}
+          <div className="border-t pt-6">
             <LessonComplete
               lessonId={lesson.id}
               courseId={course.id}
               alreadyComplete={completedSet.has(lesson.id)}
               nextLessonId={nextLesson?.id ?? null}
+              isLastLesson={isLastLesson}
+              totalLessons={publishedLessons.length}
+              completedCount={completedIds.length}
             />
           </div>
         </div>

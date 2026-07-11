@@ -40,6 +40,10 @@ export const academyLessonsTable = pgTable("academy_lessons", {
   orderIndex: integer("order_index").default(0).notNull(),
   isPublished: boolean("is_published").default(true).notNull(),
   durationMinutes: integer("duration_minutes"),
+  /** Short label for the action CTA button shown at lesson end (e.g. "Generate My Niche"). */
+  ctaLabel: text("cta_label"),
+  /** Internal route or URL the action CTA opens (e.g. "/dashboard/digital-products/discover"). */
+  ctaRoute: text("cta_route"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
 });

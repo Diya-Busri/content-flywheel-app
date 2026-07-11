@@ -33,6 +33,8 @@ export function LessonEditorClient({
 
   const [title, setTitle] = useState(lesson.title ?? "");
   const [blocks, setBlocks] = useState<Block[]>(parseLessonBlocks(lesson.content));
+  const [ctaLabel, setCtaLabel] = useState<string>(lesson.ctaLabel ?? "");
+  const [ctaRoute, setCtaRoute] = useState<string>(lesson.ctaRoute ?? "");
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const backHref = `/dashboard/academy/admin/courses/${courseId}`;
@@ -43,6 +45,8 @@ export function LessonEditorClient({
       const res = await updateLessonAction(lesson.id, {
         title: title.trim() || "Untitled lesson",
         content: serializeLessonBlocks(blocks),
+        ctaLabel: ctaLabel.trim() || null,
+        ctaRoute: ctaRoute.trim() || null,
       });
       setSaving(false);
       if (res.isSuccess) {
@@ -51,7 +55,7 @@ export function LessonEditorClient({
         toast({ title: "Error", description: res.message, variant: "destructive" });
       }
     },
-    [lesson.id, title, blocks, toast]
+    [lesson.id, title, blocks, ctaLabel, ctaRoute, toast]
   );
 
   async function handleAISuggest() {
@@ -155,6 +159,38 @@ export function LessonEditorClient({
         <Separator />
 
         <BlockEditor blocks={blocks} onChange={setBlocks} />
+
+        <Separator />
+
+        {/* Action CTA settings */}
+        <div className="rounded-xl border bg-card p-4 space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground mb-0.5">Action CTA</p>
+            <p className="text-xs text-muted-foreground">
+              Shown at the end of the lesson to send learners to a CF tool to apply what they learned.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <Label className="mb-1.5 block text-xs">Button label</Label>
+              <Input
+                placeholder="e.g. Try AI Coach →"
+                value={ctaLabel}
+                onChange={(e) => setCtaLabel(e.target.value)}
+                onBlur={() => save(true)}
+              />
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-xs">Route / URL</Label>
+              <Input
+                placeholder="e.g. /dashboard/ai-coach or https://..."
+                value={ctaRoute}
+                onChange={(e) => setCtaRoute(e.target.value)}
+                onBlur={() => save(true)}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
