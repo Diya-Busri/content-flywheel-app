@@ -13,18 +13,20 @@ WHERE user_id IN (
 
 -- 2. Remove featured_products entries whose product belongs to a deleted seller
 --    (catches cases where user_id on the product differs from featured row)
+--    Cast products.id (uuid) to text to match featured_products.product_id (text)
 DELETE FROM featured_products fp
 WHERE fp.product_id IN (
-  SELECT p.id
+  SELECT p.id::text
   FROM products p
   JOIN profiles pr ON pr.user_id = p.user_id
   WHERE pr.deleted_at IS NOT NULL
 );
 
 -- 3. Remove wishlist saves for products whose creator is deleted
+--    Cast products.id (uuid) to text to match product_wishlists.product_id (text)
 DELETE FROM product_wishlists
 WHERE product_id IN (
-  SELECT p.id
+  SELECT p.id::text
   FROM products p
   JOIN profiles pr ON pr.user_id = p.user_id
   WHERE pr.deleted_at IS NOT NULL
@@ -43,28 +45,32 @@ WHERE follower_id IN (
 );
 
 -- 6. Remove leaderboard / creator score rows for deleted accounts
-DELETE FROM creator_scores
-WHERE user_id IN (
-  SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL
-);
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'creator_scores') THEN
+    DELETE FROM creator_scores WHERE user_id IN (SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL);
+  END IF;
+END $$;
 
 -- 7. Remove trust score rows for deleted accounts
-DELETE FROM creator_trust_scores
-WHERE user_id IN (
-  SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL
-);
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'creator_trust_scores') THEN
+    DELETE FROM creator_trust_scores WHERE user_id IN (SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL);
+  END IF;
+END $$;
 
 -- 8. Remove trust score history for deleted accounts
-DELETE FROM creator_trust_score_history
-WHERE user_id IN (
-  SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL
-);
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'creator_trust_score_history') THEN
+    DELETE FROM creator_trust_score_history WHERE user_id IN (SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL);
+  END IF;
+END $$;
 
 -- 9. Remove reputation events for deleted accounts
-DELETE FROM creator_reputation_events
-WHERE user_id IN (
-  SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL
-);
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'creator_reputation_events') THEN
+    DELETE FROM creator_reputation_events WHERE user_id IN (SELECT user_id FROM profiles WHERE deleted_at IS NOT NULL);
+  END IF;
+END $$;
 
 -- 10. Remove affiliate links created by deleted sellers
 DELETE FROM affiliate_links
