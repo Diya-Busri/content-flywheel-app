@@ -32,7 +32,11 @@ function ModeSwitcherContent({ isAdmin }: { isAdmin: boolean }) {
         params.set("mode", "tasks");
       }
       const qs = params.toString();
-      router.replace(qs ? `/dashboard/ai-coach?${qs}` : "/dashboard/ai-coach", { scroll: false });
+      // push (not replace) so the Chat<->Tasks toggle is a real history entry —
+      // browser back/forward should move between modes. Sub-navigation *within*
+      // Task Mode (e.g. run id changes in useTaskRun) still uses replace, so
+      // polling/approval flow doesn't spam history.
+      router.push(qs ? `/dashboard/ai-coach?${qs}` : "/dashboard/ai-coach", { scroll: false });
     },
     [router, searchParams],
   );
@@ -66,8 +70,21 @@ function ModeSwitcherContent({ isAdmin }: { isAdmin: boolean }) {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1">
-        {mode === "chat" ? <AICoachPageClient isAdmin={isAdmin} /> : <TaskModeClient />}
+      {/*
+        Both panels stay mounted at all times (toggled with CSS, not
+        conditional rendering) so switching tabs never unmounts
+        AICoachPageClient — that would wipe its in-memory state (active
+        session selection, unsent draft text, in-progress recording/voice
+        call, scroll position) since it only persists finished sessions to
+        localStorage, not the live UI state. Task Mode keeping polling in
+        the background while hidden is fine — a run should keep progressing
+        regardless of which tab is visible.
+      */}
+      <div className={`min-h-0 flex-1 ${mode === "chat" ? "" : "hidden"}`}>
+        <AICoachPageClient isAdmin={isAdmin} />
+      </div>
+      <div className={`min-h-0 flex-1 ${mode === "tasks" ? "" : "hidden"}`}>
+        <TaskModeClient />
       </div>
     </div>
   );
