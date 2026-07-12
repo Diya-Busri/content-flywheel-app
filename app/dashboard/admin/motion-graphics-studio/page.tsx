@@ -11,7 +11,7 @@
  *   - Asset Library      — upload/manage images, video, logos, audio, music, SFX
  */
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -113,10 +113,56 @@ const ProjectsList: React.FC = () => {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function MotionGraphicsStudioPage() {
+// Separate component so useSearchParams() is isolated inside a Suspense boundary
+function StudioTabs() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(searchParams?.get("tab") ?? "ai");
 
+  return (
+    <Tabs value={tab} onValueChange={setTab}>
+      <TabsList>
+        <TabsTrigger value="ai" className="gap-1.5">
+          <Sparkles size={14} />
+          AI Script to Video
+        </TabsTrigger>
+        <TabsTrigger value="projects" className="gap-1.5">
+          <Film size={14} />
+          Content Projects
+        </TabsTrigger>
+        <TabsTrigger value="templates" className="gap-1.5">
+          <LayoutTemplate size={14} />
+          Templates
+        </TabsTrigger>
+        <TabsTrigger value="animations" className="gap-1.5">
+          <Sparkles size={14} />
+          Animation Library
+        </TabsTrigger>
+        <TabsTrigger value="assets" className="gap-1.5">
+          <FolderOpen size={14} />
+          Asset Library
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="ai" className="mt-5">
+        <ScriptToVideoPanel />
+      </TabsContent>
+      <TabsContent value="projects" className="mt-5">
+        <ProjectsList />
+      </TabsContent>
+      <TabsContent value="templates" className="mt-5">
+        <TemplatesList />
+      </TabsContent>
+      <TabsContent value="animations" className="mt-5">
+        <AnimationLibraryGrid />
+      </TabsContent>
+      <TabsContent value="assets" className="mt-5">
+        <AssetLibraryPanel />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+export default function MotionGraphicsStudioPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
@@ -129,46 +175,9 @@ export default function MotionGraphicsStudioPage() {
         </p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="ai" className="gap-1.5">
-            <Sparkles size={14} />
-            AI Script to Video
-          </TabsTrigger>
-          <TabsTrigger value="projects" className="gap-1.5">
-            <Film size={14} />
-            Content Projects
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="gap-1.5">
-            <LayoutTemplate size={14} />
-            Templates
-          </TabsTrigger>
-          <TabsTrigger value="animations" className="gap-1.5">
-            <Sparkles size={14} />
-            Animation Library
-          </TabsTrigger>
-          <TabsTrigger value="assets" className="gap-1.5">
-            <FolderOpen size={14} />
-            Asset Library
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="ai" className="mt-5">
-          <ScriptToVideoPanel />
-        </TabsContent>
-        <TabsContent value="projects" className="mt-5">
-          <ProjectsList />
-        </TabsContent>
-        <TabsContent value="templates" className="mt-5">
-          <TemplatesList />
-        </TabsContent>
-        <TabsContent value="animations" className="mt-5">
-          <AnimationLibraryGrid />
-        </TabsContent>
-        <TabsContent value="assets" className="mt-5">
-          <AssetLibraryPanel />
-        </TabsContent>
-      </Tabs>
+      <Suspense fallback={<div className="h-10" />}>
+        <StudioTabs />
+      </Suspense>
     </div>
   );
 }
