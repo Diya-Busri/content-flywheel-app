@@ -10,6 +10,12 @@ import {
 	DEFAULT_MOTION_GRAPHICS_PROPS,
 	calculateMotionGraphicsMetadata,
 } from './motion-graphics/MotionGraphicsComposition';
+import {
+	RedditReactionCompositionUntyped,
+	DEFAULT_REDDIT_REACTION_PROPS,
+	calculateRedditReactionMetadata,
+} from './motion-graphics/reddit-reaction/RedditReactionComposition';
+import type { RedditReactionCompositionProps } from '@/lib/motion-graphics/types';
 
 const compositionLength = 450;
 
@@ -67,6 +73,28 @@ export const ShowcaseVideo = () => {
 				defaultProps={DEFAULT_MOTION_GRAPHICS_PROPS}
 				calculateMetadata={({props}) => {
 					const meta = calculateMotionGraphicsMetadata(props as unknown as typeof DEFAULT_MOTION_GRAPHICS_PROPS);
+					return {
+						durationInFrames: meta.durationInFrames,
+						width: meta.width,
+						height: meta.height,
+					};
+				}}
+			/>
+
+			{/* Reddit Reaction — AI content production template for faceless short-form videos */}
+			<Composition
+				id="RedditReaction"
+				component={RedditReactionCompositionUntyped}
+				durationInFrames={900}
+				fps={30}
+				width={1080}
+				height={1920}
+				defaultProps={DEFAULT_REDDIT_REACTION_PROPS}
+				calculateMetadata={({props}) => {
+					const meta = calculateRedditReactionMetadata(
+						props as unknown as RedditReactionCompositionProps,
+						30
+					);
 					return {
 						durationInFrames: meta.durationInFrames,
 						width: meta.width,

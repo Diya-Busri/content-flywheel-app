@@ -389,3 +389,178 @@ export interface AutomationPipelineInput {
   aspectRatio: AspectRatio;
   format: ExportFormat;
 }
+
+// ─── Content Production System — AI Content Flywheel ───────────────────────
+// Phase 1–10 types for the repeatable AI content-production system.
+// Content flows: Reddit post → structured analysis → storyboard → Remotion.
+
+export type ContentMode =
+  | "reddit-reaction"
+  | "creator-complaint"
+  | "startup-breakdown"
+  | "digital-product-advice"
+  | "product-demo"
+  | "tutorial"
+  | "storytime"
+  | "short-form"
+  | "long-form-youtube"
+  | "custom";
+
+export type CfMentionMode = "off" | "subtle" | "direct";
+
+/** Visual types for each storyboard scene — drives the Reddit Reaction composition. */
+export type StoryboardVisualType =
+  | "reddit-card"
+  | "kinetic-text"
+  | "icon-scene"
+  | "diagram"
+  | "screen-recording"
+  | "app-demo"
+  | "b-roll-placeholder"
+  | "quote-card"
+  | "outro";
+
+/** A single scene in the AI-generated storyboard, before compilation to Remotion Scene. */
+export interface StoryboardScene {
+  id: string;
+  /** Seconds from video start. */
+  startTime: number;
+  /** Seconds — endTime - startTime = scene duration. */
+  endTime: number;
+  narration: string;
+  onScreenText: string;
+  visualType: StoryboardVisualType;
+  animationPreset: AnimationId;
+  transitionPreset: AnimationId;
+  /** Human-readable suggestions for what asset to upload/select. */
+  assetSuggestions: string[];
+  soundEffect?: string;
+  /** Words to highlight/emphasise in captions. */
+  emphasisWords?: string[];
+  /** Asset URL selected by the user from Asset Library or uploaded. */
+  assetUrl?: string;
+  /** True when the scene requires an asset but none has been assigned yet. */
+  missingAsset?: boolean;
+  /**
+   * Reddit-card only: the real username to show.
+   * Never auto-generated — only set if the user supplied it.
+   */
+  redditAuthor?: string;
+  /**
+   * Reddit-card only: when true, the author is shown as "u/[hidden]"
+   * even if redditAuthor is set.
+   */
+  anonymiseAuthor?: boolean;
+}
+
+/** AI analysis of the source content (Reddit post, complaint, etc.). */
+export interface ContentAnalysis {
+  coreProblem: string;
+  emotionalAngle: string;
+  audience: string;
+  keyInsight: string;
+  contentOpportunity: string;
+}
+
+/** The 30–60 second short-form video plan. */
+export interface ShortFormOutput {
+  title: string;
+  hook: string;
+  /** Full narration script. */
+  script: string;
+  durationSeconds: number;
+  callToAction: string;
+  scenes: StoryboardScene[];
+}
+
+/** A single chapter in the long-form plan. */
+export interface LongFormChapter {
+  title: string;
+  /** What this chapter needs to accomplish. */
+  purpose: string;
+  /** Full narration draft for this chapter. */
+  narration: string;
+  visualPlan: string[];
+  bRollSuggestions: string[];
+  appDemoSteps?: string[];
+  estimatedDurationSeconds: number;
+}
+
+/** The 5–10 minute long-form video plan (no full renderer yet — planning only). */
+export interface LongFormOutput {
+  titleOptions: string[];
+  thumbnailTextOptions: string[];
+  openingHook: string;
+  estimatedDurationMinutes: number;
+  chapters: LongFormChapter[];
+  conclusion: string;
+  callToAction: string;
+}
+
+export type ContentProjectStatus =
+  | "draft"
+  | "needs_assets"
+  | "ready_to_render"
+  | "rendering"
+  | "complete"
+  | "failed";
+
+/** A full AI content project — persisted as motion_graphics_projects. */
+export interface ContentProject {
+  id: string;
+  userId: string;
+  name: string;
+  contentMode: ContentMode;
+  sourceText: string;
+  sourceUrl?: string;
+  targetAudience?: string;
+  mainOpinion?: string;
+  desiredCta?: string;
+  cfMention: CfMentionMode;
+  videoDuration?: string;
+  tone?: string;
+  aspectRatio: AspectRatio;
+  analysis?: ContentAnalysis;
+  shortForm?: ShortFormOutput;
+  longForm?: LongFormOutput;
+  /** Linked template id (created when user triggers render). */
+  templateId?: string;
+  /** Linked render job id. */
+  renderJobId?: string;
+  /** Output URL once rendered. */
+  outputUrl?: string;
+  status: ContentProjectStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Request body for POST /api/admin/motion-graphics/ai/reddit-generate. */
+export interface RedditGenerateRequest {
+  contentMode: ContentMode;
+  sourceText: string;
+  sourceUrl?: string;
+  targetAudience?: string;
+  mainOpinion?: string;
+  desiredCta?: string;
+  cfMention: CfMentionMode;
+  videoDuration?: string;
+  tone?: string;
+  aspectRatio: AspectRatio;
+}
+
+/** Props for the Reddit Reaction Remotion composition. */
+export interface RedditReactionCompositionProps {
+  projectName: string;
+  aspectRatio: AspectRatio;
+  scenes: StoryboardScene[];
+  brandAccent: string;
+  brandBg: string;
+}
+
+export const DEFAULT_REDDIT_REACTION_PROPS: RedditReactionCompositionProps = {
+  projectName: "",
+  aspectRatio: "9:16",
+  scenes: [],
+  brandAccent: "#F89520",
+  brandBg: "#0d0d0d",
+};
