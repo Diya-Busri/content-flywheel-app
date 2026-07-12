@@ -116,3 +116,49 @@ export const strategyAiOutputSchema = z
   })
   .strict();
 export type StrategyAiOutput = z.infer<typeof strategyAiOutputSchema>;
+
+/* ─── save_content_campaign input — only the content fields needed to
+   persist each approved asset type, not the full ProposedAsset shape
+   (status/edited/savedRef are orchestrator/DB concerns, not tool input). ─── */
+
+export const videoScriptForSaveSchema = z
+  .object({
+    id: z.string(),
+    type: z.literal("video_script"),
+    platform: z.string().min(1).max(40),
+    title: z.string().min(1).max(200),
+    hook: z.string().min(1).max(400),
+    script: z.string().min(1).max(4000),
+    cta: z.string().min(1).max(300),
+  })
+  .strict();
+
+export const carouselForSaveSchema = z
+  .object({
+    id: z.string(),
+    type: z.literal("carousel"),
+    platform: z.string().min(1).max(40),
+    title: z.string().min(1).max(200),
+    slides: z.array(z.string().min(1).max(300)).min(1).max(10),
+    caption: z.string().min(1).max(1000),
+    hashtags: z.array(z.string().min(1).max(40)).max(15),
+  })
+  .strict();
+
+export const emailForSaveSchema = z
+  .object({
+    id: z.string(),
+    type: z.literal("email"),
+    name: z.string().min(1).max(200),
+    subject: z.string().min(1).max(200),
+    previewText: z.string().min(1).max(200),
+    bodyHtml: z.string().min(1).max(8000),
+  })
+  .strict();
+
+export const assetForSaveSchema = z.discriminatedUnion("type", [
+  videoScriptForSaveSchema,
+  carouselForSaveSchema,
+  emailForSaveSchema,
+]);
+export type AssetForSave = z.infer<typeof assetForSaveSchema>;

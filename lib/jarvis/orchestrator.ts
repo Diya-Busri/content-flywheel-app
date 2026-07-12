@@ -13,13 +13,16 @@ import type {
   ProposedCarousel,
   ProposedEmail,
   JarvisToolName,
+  JarvisFinalSummary,
 } from "@/db/schema/jarvis-schema";
 import type {
   BusinessProfileSummary,
   ProductSummary,
   MemorySummary,
   ExistingContentSummary,
+  AssetForSave,
 } from "./tools/schemas";
+import type { SaveResultItem } from "./tools/save-content-campaign";
 
 export type PhaseResult =
   | { status: "ok"; run: SelectExecutionRun; skipped: boolean }
@@ -226,6 +229,160 @@ export async function runGenerationPhase(
     return { status: "ok", run: finished, skipped: false };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Generation phase failed unexpectedly";
+    return failRun(userId, runId, message);
+  }
+}
+
+function toSaveInput(asset: ProposedAsset): AssetForSave {
+  if (asset.type === "video_script") {
+    return {
+      id: asset.id,
+      type: "video_script",
+      platform: asset.platform,
+      title: asset.title,
+      hook: asset.hook,
+      script: asset.script,
+      cta: asset.cta,
+    };
+  }
+  if (asset.type === "carousel") {
+    return {
+      id: asset.id,
+      type: "carousel",
+      platform: asset.platform,
+      title: asset.title,
+      slides: asset.slides,
+      caption: asset.caption,
+      hashtags: asset.hashtags,
+    };
+  }
+  return {
+    id: asset.id,
+    type: "email",
+    name: asset.name,
+    subject: asset.subject,
+    previewText: asset.previewText,
+    bodyHtml: asset.bodyHtml,
+  };
+}
+
+/**
+ * Save phase: persists approved assets into the user's library and marks
+ * the run completed. Runs entirely within a single call.
+ *
+ * Idempotent + gate-aware, same pattern as generation: the compare-and-swap
+ * requires the run to be in awaiting_approval/asset_review (or failed, to
+ * allow retry) — a run that's already completed, or a concurrent duplicate
+ * approve click, gets the current (already-saved) state back instead of
+ * saving anything twice. The actual DB writes additionally happen inside
+ * one transaction (lib/jarvis/tools/save-content-campaign.ts) — either
+ * every approved asset in this call is saved, or none are, so the run's
+ * bookkeeping can never disagree with what's actually in the library.
+ *
+ * `approvedAssetIds` is optional so a retry-after-failure can omit it and
+ * reuse whatever was already marked "approved" on the previous attempt;
+ * when provided, it's authoritative and re-marks every asset accordingly
+ * (this is also how a deselected asset ends up "rejected" and never saved).
+ */
+export async function runSavePhase(
+  userId: string,
+  runId: string,
+  approvedAssetIds?: string[],
+): Promise<PhaseResult> {
+  const existing = await getRunForUser(userId, runId);
+  if (!existing) return { status: "not_found" };
+
+  if (!existing.plan || existing.assets.length === 0) {
+    return {
+      status: "invalid_state",
+      run: existing,
+      message: "No generated assets are available to approve for this run.",
+    };
+  }
+
+  const approvedIds = approvedAssetIds
+    ? new Set(approvedAssetIds)
+    : new Set(existing.assets.filter((a) => a.status === "approved").map((a) => a.id));
+
+  if (approvedIds.size === 0) {
+    return {
+      status: "invalid_state",
+      run: existing,
+      message: "No assets were selected for approval.",
+    };
+  }
+
+  const markedAssets: ProposedAsset[] = existing.assets.map((a) =>
+    a.status === "saved" ? a : { ...a, status: approvedIds.has(a.id) ? "approved" : "rejected" },
+  );
+
+  const claimed = await transitionRunStatus(
+    userId,
+    runId,
+    ["awaiting_approval", "failed"],
+    "running",
+    { assets: markedAssets, error: null },
+    ["asset_review", null],
+  );
+  if (!claimed) {
+    return { status: "ok", run: existing, skipped: true };
+  }
+
+  const ctx: ToolContext = { userId, runId };
+  const approvedAssets = claimed.assets.filter((a) => a.status === "approved");
+
+  try {
+    const saveResult = await runToolLogged(getTool("save_content_campaign"), ctx, {
+      assets: approvedAssets.map(toSaveInput),
+    });
+
+    if (!saveResult.success) return failRun(userId, runId, saveResult.error);
+
+    const results = (saveResult.data as { results: SaveResultItem[] }).results;
+    const byAssetId = new Map(results.map((r) => [r.assetId, r]));
+
+    const savedCounts = { videoScripts: 0, carousels: 0, emails: 0 };
+    const savedAssetIds: string[] = [];
+    const failedAssetIds: string[] = [];
+
+    const finalAssets: ProposedAsset[] = claimed.assets.map((a) => {
+      const r = byAssetId.get(a.id);
+      if (!r) return a; // rejected assets never appear in results
+      if (r.success) {
+        savedAssetIds.push(a.id);
+        if (a.type === "video_script") savedCounts.videoScripts++;
+        else if (a.type === "carousel") savedCounts.carousels++;
+        else savedCounts.emails++;
+        return { ...a, status: "saved", savedRefTable: r.table, savedRefId: r.savedId };
+      }
+      failedAssetIds.push(a.id);
+      return { ...a, saveError: r.error };
+    });
+
+    const finalSummary: JarvisFinalSummary = {
+      completedAt: new Date().toISOString(),
+      savedCounts,
+      savedAssetIds,
+      failedAssetIds,
+      message:
+        failedAssetIds.length === 0
+          ? `Saved ${savedAssetIds.length} asset${savedAssetIds.length === 1 ? "" : "s"} to your library.`
+          : `Saved ${savedAssetIds.length} asset(s); ${failedAssetIds.length} failed to save.`,
+    };
+
+    const finished = await transitionRunStatus(userId, runId, ["running"], "completed", {
+      assets: finalAssets,
+      finalSummary,
+      currentGate: null,
+    });
+    if (!finished) {
+      const current = await getRunForUser(userId, runId);
+      return current ? { status: "ok", run: current, skipped: true } : { status: "not_found" };
+    }
+
+    return { status: "ok", run: finished, skipped: false };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Save phase failed unexpectedly";
     return failRun(userId, runId, message);
   }
 }
