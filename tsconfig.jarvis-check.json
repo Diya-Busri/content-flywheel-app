@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/jarvis/**/*.ts",
+    "db/schema/jarvis-schema.ts",
+    "db/schema/index.ts",
+    "db/db.ts",
+    "app/api/jarvis/**/*.ts",
+    "app/jarvis/**/*.tsx",
+    "app/jarvis/**/*.ts",
+    "components/jarvis/**/*.tsx",
+    "hooks/useJarvisRun.ts",
+    "components/sidebar.tsx"
+  ]
+}
