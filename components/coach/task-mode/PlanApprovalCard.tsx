@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import type { JarvisRunDTO } from "@/hooks/useJarvisRun";
+import type { TaskRunDTO } from "@/hooks/useTaskRun";
 
 const ASSET_TYPE_LABEL: Record<string, string> = {
   video_script: "Video scripts",
@@ -15,7 +15,7 @@ const ASSET_TYPE_LABEL: Record<string, string> = {
 };
 
 /**
- * Approval gate 1: shows the strategy Jarvis built before it spends any AI
+ * Approval gate 1: shows the strategy Task Mode built before it spends any AI
  * calls generating actual assets. If the plan flagged genuinely missing
  * information, those questions are asked here — answers are sent along with
  * the "Generate assets" click, not before.
@@ -25,7 +25,7 @@ export function PlanApprovalCard({
   onGenerate,
   pending,
 }: {
-  run: JarvisRunDTO;
+  run: TaskRunDTO;
   onGenerate: (answers?: Record<string, string>) => void;
   pending: boolean;
 }) {
@@ -70,7 +70,7 @@ export function PlanApprovalCard({
         )}
 
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Jarvis will generate</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">This will generate</p>
           <div className="flex flex-wrap gap-2">
             {plan.assetPlan.map((item, i) => (
               <Badge key={i} variant="outline" className="border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-400">
@@ -91,7 +91,7 @@ export function PlanApprovalCard({
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
             <div className="mb-2 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">A few things Jarvis needs first</p>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">A few things needed first</p>
             </div>
             <div className="space-y-3">
               {plan.missingInfo.map((q) => (

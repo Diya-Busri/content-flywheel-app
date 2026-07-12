@@ -1,5 +1,5 @@
 import { currentUser } from "@clerk/nextjs/server";
-import AICoachPageClient from "./AICoachPageClient";
+import AICoachModeSwitcher from "./AICoachModeSwitcher";
 
 export default async function AICoachPage() {
   const user = await currentUser();
@@ -7,5 +7,5 @@ export default async function AICoachPage() {
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() ?? "";
   const isAdmin = !!adminEmail && userEmail === adminEmail;
 
-  return <AICoachPageClient isAdmin={isAdmin} />;
+  return <AICoachModeSwitcher isAdmin={isAdmin} />;
 }

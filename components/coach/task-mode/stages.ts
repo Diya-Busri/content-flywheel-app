@@ -1,5 +1,5 @@
 import type { JarvisToolName, ExecutionStepStatus } from "@/db/schema/jarvis-schema";
-import type { JarvisStepDTO } from "@/hooks/useJarvisRun";
+import type { TaskStepDTO } from "@/hooks/useTaskRun";
 
 /** The 5 tool-backed stages shown in the live execution panel, in order. */
 export type ExecutionStageKey =
@@ -41,8 +41,8 @@ export type StageStatus = "pending" | "running" | "completed" | "failed";
 
 /** Latest step per tool name (steps are append-only, so the last one wins —
  * this is what makes a retry show its new attempt instead of the stale one). */
-export function latestStepByTool(steps: JarvisStepDTO[]): Map<JarvisToolName, JarvisStepDTO> {
-  const map = new Map<JarvisToolName, JarvisStepDTO>();
+export function latestStepByTool(steps: TaskStepDTO[]): Map<JarvisToolName, TaskStepDTO> {
+  const map = new Map<JarvisToolName, TaskStepDTO>();
   for (const step of steps) {
     const existing = map.get(step.toolName);
     if (!existing || new Date(step.createdAt) >= new Date(existing.createdAt)) {
@@ -52,8 +52,8 @@ export function latestStepByTool(steps: JarvisStepDTO[]): Map<JarvisToolName, Ja
   return map;
 }
 
-export function stageStatus(tools: JarvisToolName[], latest: Map<JarvisToolName, JarvisStepDTO>): StageStatus {
-  const relevant = tools.map((t) => latest.get(t)).filter((s): s is JarvisStepDTO => Boolean(s));
+export function stageStatus(tools: JarvisToolName[], latest: Map<JarvisToolName, TaskStepDTO>): StageStatus {
+  const relevant = tools.map((t) => latest.get(t)).filter((s): s is TaskStepDTO => Boolean(s));
   if (relevant.length === 0) return "pending";
   const statuses = relevant.map((s) => s.status);
   if (statuses.some((s) => s === "failed")) return "failed";

@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { SuggestedGoals } from "./SuggestedGoals";
 
-export function GoalInput({
+export function TaskGoalInput({
   onSubmit,
   pending,
   error,
@@ -31,10 +31,10 @@ export function GoalInput({
           <Sparkles className="h-5 w-5" />
         </span>
         <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">
-          What would you like Jarvis to accomplish?
+          What would you like your AI Coach to accomplish?
         </h1>
         <p className="max-w-md text-sm text-gray-500 dark:text-gray-400">
-          Jarvis reads your business profile, products, and memory, builds a plan, and generates content for your
+          Task Mode reads your business profile, products, and memory, builds a plan, and generates content for your
           review — nothing gets saved or published without your approval.
         </p>
       </div>

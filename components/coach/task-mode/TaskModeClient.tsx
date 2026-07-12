@@ -3,16 +3,25 @@
 import { Suspense } from "react";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useJarvisRun } from "@/hooks/useJarvisRun";
-import { GoalInput } from "@/components/jarvis/GoalInput";
-import { RecentRuns } from "@/components/jarvis/RecentRuns";
-import { ExecutionPanel } from "@/components/jarvis/ExecutionPanel";
-import { PlanApprovalCard } from "@/components/jarvis/PlanApprovalCard";
-import { AssetApprovalScreen } from "@/components/jarvis/AssetApprovalScreen";
-import { CampaignResultsScreen } from "@/components/jarvis/CampaignResultsScreen";
-import { ErrorRetryPanel } from "@/components/jarvis/ErrorRetryPanel";
+import { useTaskRun } from "@/hooks/useTaskRun";
+import { TaskGoalInput } from "./TaskGoalInput";
+import { RecentTasks } from "./RecentTasks";
+import { ExecutionPanel } from "./ExecutionPanel";
+import { PlanApprovalCard } from "./PlanApprovalCard";
+import { AssetApprovalScreen } from "./AssetApprovalScreen";
+import { CampaignResultsScreen } from "./CampaignResultsScreen";
+import { ErrorRetryPanel } from "./ErrorRetryPanel";
 
-function JarvisContent() {
+/**
+ * AI Coach — Task Mode. Embedded inside app/dashboard/ai-coach (see
+ * AICoachModeSwitcher.tsx), not a standalone page — this component owns no
+ * page chrome of its own, just fills whatever panel it's given.
+ *
+ * All orchestration is server-side (lib/jarvis/*, /api/jarvis/*, unchanged
+ * from the original standalone build) — this is purely the presentation
+ * layer, driven entirely by useTaskRun's server-fetched state.
+ */
+function TaskModeContent() {
   const {
     run,
     steps,
@@ -27,7 +36,7 @@ function JarvisContent() {
     editAsset,
     startNewTask,
     openRun,
-  } = useJarvisRun();
+  } = useTaskRun();
 
   if (loading) {
     return (
@@ -40,8 +49,8 @@ function JarvisContent() {
   if (!run) {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 pb-16">
-        <GoalInput onSubmit={(goal) => void startRun(goal)} pending={actionPending} error={actionError} />
-        <RecentRuns onOpen={openRun} />
+        <TaskGoalInput onSubmit={(goal) => void startRun(goal)} pending={actionPending} error={actionError} />
+        <RecentTasks onOpen={openRun} />
       </div>
     );
   }
@@ -120,16 +129,18 @@ function JarvisContent() {
   );
 }
 
-export function JarvisClient() {
+export function TaskModeClient() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-        </div>
-      }
-    >
-      <JarvisContent />
-    </Suspense>
+    <div className="h-full min-h-0 overflow-y-auto bg-[#F9FAFB] dark:bg-[#0F0F0F]">
+      <Suspense
+        fallback={
+          <div className="flex min-h-[50vh] items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+          </div>
+        }
+      >
+        <TaskModeContent />
+      </Suspense>
+    </div>
   );
 }

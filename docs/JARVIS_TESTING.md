@@ -1,5 +1,12 @@
 # Jarvis Phase 1 — manual verification checklist
 
+> **UI location update:** the standalone `/jarvis` page has been removed.
+> The same execution engine now lives inside **AI Coach → Tasks** at
+> `/dashboard/ai-coach?mode=tasks`. The backend (`lib/jarvis/*`,
+> `/api/jarvis/*`, `execution_runs`/`execution_steps`) is unchanged — only
+> the entry point moved. Wherever this doc says "go to `/jarvis`," read it
+> as "go to AI Coach and click the **Tasks** tab" instead.
+
 This sandbox that built Jarvis has no network route to Supabase, so none of
 this could be executed automatically — everything below needs to be run
 against a real `npm run dev` with a real database. Migration has already

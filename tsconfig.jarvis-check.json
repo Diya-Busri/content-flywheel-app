@@ -7,10 +7,9 @@
     "db/schema/index.ts",
     "db/db.ts",
     "app/api/jarvis/**/*.ts",
-    "app/jarvis/**/*.tsx",
-    "app/jarvis/**/*.ts",
-    "components/jarvis/**/*.tsx",
-    "hooks/useJarvisRun.ts",
+    "app/dashboard/ai-coach/AICoachModeSwitcher.tsx",
+    "components/coach/task-mode/**/*.tsx",
+    "hooks/useTaskRun.ts",
     "components/sidebar.tsx"
   ]
 }

@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import type { JarvisRunDTO } from "@/hooks/useJarvisRun";
+import type { TaskRunDTO } from "@/hooks/useTaskRun";
 import type { ProposedAsset } from "@/db/schema/jarvis-schema";
 
 const TYPE_META: Record<ProposedAsset["type"], { label: string; icon: typeof Video }> = {
@@ -139,7 +139,7 @@ export function AssetApprovalScreen({
   onEditAsset,
   pending,
 }: {
-  run: JarvisRunDTO;
+  run: TaskRunDTO;
   onApprove: (approvedAssetIds: string[]) => void;
   onEditAsset: (assetId: string, patch: Record<string, unknown>) => Promise<string | null>;
   pending: boolean;

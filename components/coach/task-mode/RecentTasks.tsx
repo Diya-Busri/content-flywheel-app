@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { JarvisRunDTO } from "@/hooks/useJarvisRun";
+import type { TaskRunDTO } from "@/hooks/useTaskRun";
 
 const STATUS_VARIANT: Record<string, string> = {
   completed: "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400",
@@ -22,8 +22,8 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-export function RecentRuns({ onOpen }: { onOpen: (runId: string) => void }) {
-  const [runs, setRuns] = useState<JarvisRunDTO[] | null>(null);
+export function RecentTasks({ onOpen }: { onOpen: (runId: string) => void }) {
+  const [runs, setRuns] = useState<TaskRunDTO[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
