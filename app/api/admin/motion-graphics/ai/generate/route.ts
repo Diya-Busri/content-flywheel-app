@@ -1,12 +1,14 @@
 /**
  * POST /api/admin/motion-graphics/ai/generate
  *
- * Body: ScriptToVideoRequest { script, category, aspectRatio, tone? }
+ * Body: ScriptToVideoRequest { script, category, aspectRatio, tone?, voiceId? }
  *
  * Splits the pasted script into scenes via OpenAI, picks animations/
  * transitions from the real Animation Library, drafts captions, and saves
  * the result as a new draft Template — ready to open straight in the
- * Template Builder / render immediately.
+ * Template Builder / render immediately. If voiceId is provided, every
+ * scene's voiceover is also generated as real ElevenLabs audio (see
+ * lib/motion-graphics/ai-script-to-scenes.ts's attachVoiceovers()).
  *
  * Admin-only (see lib/motion-graphics/guard.ts).
  */

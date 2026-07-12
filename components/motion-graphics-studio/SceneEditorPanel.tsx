@@ -30,6 +30,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AssetPicker } from "./AssetPicker";
+import { useVoiceOptions } from "./useVoiceOptions";
 import { Plus, Trash2, Type, Image as ImageIcon, Video as VideoIcon, Shapes, ChevronDown, ChevronUp, Mic, Loader2 } from "lucide-react";
 import { ANIMATION_REGISTRY, ANIMATION_IDS } from "@/src/remotion/motion-graphics/animations";
 import type {
@@ -221,16 +222,6 @@ const ElementEditor: React.FC<{
   );
 };
 
-interface VoiceOption {
-  id: string;
-  name: string;
-  category?: string;
-}
-
-// Module-level cache so every scene's voice picker doesn't refire the same
-// GET /api/admin/motion-graphics/voice request when switching between scenes.
-let cachedVoices: VoiceOption[] | null = null;
-
 /**
  * Voiceover script editor: text, a manual audio URL fallback (AssetPicker),
  * an ElevenLabs voice picker, and a "Generate voice" button that calls
@@ -242,31 +233,14 @@ const VoiceoverEditor: React.FC<{
   audioAssetUrl?: string;
   onChange: (next: { text: string; audioAssetUrl?: string }) => void;
 }> = ({ text, audioAssetUrl, onChange }) => {
-  const [voices, setVoices] = useState<VoiceOption[]>(cachedVoices ?? []);
-  const [voiceId, setVoiceId] = useState<string>(cachedVoices?.[0]?.id ?? "");
+  const { voices, error: voicesError } = useVoiceOptions();
+  const [voiceId, setVoiceId] = useState<string>("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (cachedVoices) return;
-    let cancelled = false;
-    fetch("/api/admin/motion-graphics/voice")
-      .then((res) => res.json())
-      .then((data: { voices?: VoiceOption[] }) => {
-        if (cancelled) return;
-        const list = data.voices ?? [];
-        cachedVoices = list;
-        setVoices(list);
-        setVoiceId((current) => current || list[0]?.id || "");
-      })
-      .catch((err) => {
-        console.error("Failed to load voices:", err);
-        if (!cancelled) setError("Couldn't load voice list");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    setVoiceId((current) => current || voices[0]?.id || "");
+  }, [voices]);
 
   const handleGenerate = async () => {
     if (!text.trim() || !voiceId) return;
@@ -318,7 +292,7 @@ const VoiceoverEditor: React.FC<{
         </Button>
       </div>
 
-      {error && <p className="text-xs text-destructive mt-1.5">{error}</p>}
+      {(error || voicesError) && <p className="text-xs text-destructive mt-1.5">{error || voicesError}</p>}
 
       {audioAssetUrl && (
         <audio controls src={audioAssetUrl} className="w-full mt-2 h-9">

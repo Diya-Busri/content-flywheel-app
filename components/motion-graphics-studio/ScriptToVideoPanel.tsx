@@ -18,6 +18,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Loader2 } from "lucide-react";
 import type { AspectRatio, TemplateCategory } from "@/lib/motion-graphics/types";
+import { useVoiceOptions } from "./useVoiceOptions";
+
+const NO_VOICE = "__none";
 
 const CATEGORY_OPTIONS: { id: TemplateCategory; label: string }[] = [
   { id: "tiktok", label: "TikTok" },
@@ -36,8 +39,10 @@ export const ScriptToVideoPanel: React.FC = () => {
   const [category, setCategory] = useState<TemplateCategory>("tiktok");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
   const [tone, setTone] = useState("");
+  const [voiceId, setVoiceId] = useState<string>(NO_VOICE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { voices, error: voicesError } = useVoiceOptions();
 
   const handleGenerate = async () => {
     if (!script.trim()) {
@@ -50,7 +55,13 @@ export const ScriptToVideoPanel: React.FC = () => {
       const res = await fetch("/api/admin/motion-graphics/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, category, aspectRatio, tone: tone || undefined }),
+        body: JSON.stringify({
+          script,
+          category,
+          aspectRatio,
+          tone: tone || undefined,
+          voiceId: voiceId === NO_VOICE ? undefined : voiceId,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
@@ -117,6 +128,29 @@ export const ScriptToVideoPanel: React.FC = () => {
               placeholder="e.g. energetic, calm product demo, playful"
               className="mt-1.5"
             />
+          </div>
+
+          <div>
+            <Label>Voiceover voice (optional)</Label>
+            <Select value={voiceId} onValueChange={setVoiceId}>
+              <SelectTrigger className="mt-1.5">
+                <SelectValue placeholder="Choose a voice" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_VOICE}>No voiceover — add it later per scene</SelectItem>
+                {voices.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}
+                    {v.category ? ` — ${v.category}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Pick a voice and every scene gets real ElevenLabs audio automatically. Leave as "No voiceover" to just
+              get text + captions — you can generate audio per scene later in the Template Builder.
+            </p>
+            {voicesError && <p className="text-xs text-destructive mt-1">{voicesError}</p>}
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
