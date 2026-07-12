@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight, Rocket, Shield } from "lucide-react";
+import { Home, Settings, Package, ShoppingBag, Store, CheckSquare, Target, CreditCard, Library, Sun, Moon, Star, PanelLeftClose, PanelLeft, Film, MessageCircle, LayoutTemplate, Mail, Calendar, Gift, Users, TrendingUp, Flag, Activity, LayoutDashboard, BarChart2, Inbox, Bell, Megaphone, Tag, Send, FlaskConical, TrendingDown, Receipt, Wallet, Youtube, Shirt, Palette, BookMarked, Link2, Zap, ListTodo, MoreHorizontal, X, Brush, Video, Clapperboard, HelpCircle, NotebookPen, GraduationCap, UserPlus, ChevronDown, ChevronRight, Rocket, Shield, Sparkles } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -82,6 +82,7 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
       items: [
         { href: "/dashboard/academy", icon: <GraduationCap size={18} />, label: "Academy", activeWhenStartsWith: true },
         { href: "/dashboard/ai-coach", icon: <MessageCircle size={18} />, label: "AI Coach", featureKey: "ai_coach" },
+        { href: "/jarvis", icon: <Sparkles size={18} />, label: "Jarvis" },
         { href: "/dashboard/design-studio", icon: <Palette size={18} />, label: "Design Studio", activeWhenStartsWith: true, featureKey: "design_studio" },
         { href: "/dashboard/template-studio", icon: <LayoutTemplate size={18} />, label: "Template Studio", activeWhenStartsWith: true, featureKey: "template_studio" },
         { href: "/dashboard/video-timeline", icon: <Video size={18} />, label: "Video Timeline", featureKey: "video_timeline" },

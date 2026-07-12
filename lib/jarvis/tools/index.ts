@@ -10,7 +10,7 @@
  * Populated (Checkpoint 3 — generation):
  *   generate_video_scripts, generate_carousel_copy, generate_email_campaign
  *
- * Still to come (Checkpoint 4 — saving):
+ * Populated (Checkpoint 4 — saving):
  *   save_content_campaign
  */
 import { registerTool } from "../tool-registry";
@@ -23,6 +23,7 @@ import { createContentStrategyTool } from "./create-content-strategy";
 import { generateVideoScriptsTool } from "./generate-video-scripts";
 import { generateCarouselCopyTool } from "./generate-carousel-copy";
 import { generateEmailCampaignTool } from "./generate-email-campaign";
+import { saveContentCampaignTool } from "./save-content-campaign";
 
 registerTool(getBusinessProfileTool);
 registerTool(getProductDetailsTool);
@@ -33,5 +34,6 @@ registerTool(createContentStrategyTool);
 registerTool(generateVideoScriptsTool);
 registerTool(generateCarouselCopyTool);
 registerTool(generateEmailCampaignTool);
+registerTool(saveContentCampaignTool);
 
 export {};
