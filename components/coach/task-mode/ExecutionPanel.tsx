@@ -2,21 +2,25 @@
 
 import { Check, Loader2, X, Circle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import type { TaskRunDTO, TaskStepDTO } from "@/hooks/useTaskRun";
-import { EXECUTION_STAGES, latestStepByTool, stageStatus, type StageStatus } from "./stages";
+import { EXECUTION_STAGES, latestStepByTool, stageStatus, timeAgo, type StageStatus } from "./stages";
 
 function StageIcon({ status }: { status: StageStatus }) {
   if (status === "completed") {
     return (
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white transition-colors duration-300">
         <Check className="h-3.5 w-3.5" />
       </span>
     );
   }
   if (status === "running") {
     return (
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
+        <span className="absolute inset-0 animate-ping rounded-full bg-orange-300 opacity-40 dark:bg-orange-700" />
+        <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        </span>
       </span>
     );
   }
@@ -28,9 +32,46 @@ function StageIcon({ status }: { status: StageStatus }) {
     );
   }
   return (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 text-gray-300 dark:border-gray-700 dark:text-gray-600">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 text-gray-300 transition-colors duration-300 dark:border-gray-700 dark:text-gray-600">
       <Circle className="h-2.5 w-2.5 fill-current" />
     </span>
+  );
+}
+
+function Connector({ status }: { status: StageStatus }) {
+  return (
+    <div className="ml-3 flex h-4 w-px items-stretch">
+      <div className={`w-full transition-colors duration-500 ${status === "completed" ? "bg-orange-400" : "bg-gray-200 dark:bg-gray-700"}`} />
+    </div>
+  );
+}
+
+function StageRow({
+  status,
+  label,
+  caption,
+  error,
+}: {
+  status: StageStatus;
+  label: string;
+  caption?: string;
+  error?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <StageIcon status={status} />
+      <div className="min-w-0 pt-0.5">
+        <p
+          className={`text-sm font-medium transition-colors duration-300 ${
+            status === "pending" ? "text-gray-400 dark:text-gray-600" : "text-gray-900 dark:text-gray-100"
+          }`}
+        >
+          {label}
+        </p>
+        {caption && <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{caption}</p>}
+        {error && <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      </div>
+    </div>
   );
 }
 
@@ -40,6 +81,11 @@ function StageIcon({ status }: { status: StageStatus }) {
  * product / Creating strategy / Generating assets / Waiting for approval /
  * Saving. Driven entirely by DB state (run + steps), so a page refresh
  * re-renders exactly where things left off.
+ *
+ * Presentational-only pass: same status logic as before, now shown as an
+ * animated connected timeline with an overall progress bar instead of a
+ * flat checklist, so it's easier to tell at a glance how far along things
+ * are and what's happening right now.
  */
 export function ExecutionPanel({ run, steps }: { run: TaskRunDTO; steps: TaskStepDTO[] }) {
   const latest = latestStepByTool(steps);
@@ -53,6 +99,8 @@ export function ExecutionPanel({ run, steps }: { run: TaskRunDTO; steps: TaskSte
           ? "failed"
           : "completed";
 
+  const stageStatuses = EXECUTION_STAGES.map((stage) => stageStatus(stage.tools, latest));
+
   const waitingApprovalStatus: StageStatus =
     run.status === "awaiting_approval"
       ? "running"
@@ -60,44 +108,52 @@ export function ExecutionPanel({ run, steps }: { run: TaskRunDTO; steps: TaskSte
         ? "completed"
         : "pending";
 
+  const allStatuses = [planningStatus, ...stageStatuses, waitingApprovalStatus];
+  const completedCount = allStatuses.filter((s) => s === "completed").length;
+  const progressPct = Math.round((completedCount / allStatuses.length) * 100);
+
+  const runningIndex = allStatuses.findIndex((s) => s === "running");
+  const runningLabel =
+    runningIndex === 0
+      ? "Planning"
+      : runningIndex === allStatuses.length - 1
+        ? "Waiting for approval"
+        : runningIndex > 0
+          ? EXECUTION_STAGES[runningIndex - 1]?.label
+          : undefined;
+
   return (
     <Card className="border-gray-200 dark:border-gray-800">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold">Working on it</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-start gap-3">
-          <StageIcon status={planningStatus} />
-          <div className="min-w-0 pt-0.5">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Planning</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">&ldquo;{run.goal}&rdquo;</p>
-          </div>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base font-semibold">Working on it</CardTitle>
+          <span className="text-xs font-medium text-gray-400">{completedCount}/{allStatuses.length}</span>
         </div>
+        <Progress value={progressPct} className="h-1.5" />
+        {runningLabel && (
+          <p className="text-xs text-orange-600 dark:text-orange-400">{runningLabel}…</p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-0">
+        <StageRow status={planningStatus} label="Planning" caption={`"${run.goal}"`} />
+        <Connector status={planningStatus} />
 
-        {EXECUTION_STAGES.map((stage) => {
-          const status = stageStatus(stage.tools, latest);
+        {EXECUTION_STAGES.map((stage, i) => {
+          const status = stageStatuses[i]!;
+          const step = stage.tools.map((t) => latest.get(t)).find((s): s is TaskStepDTO => Boolean(s));
           const failedStep = stage.tools
             .map((t) => latest.get(t))
             .find((s): s is TaskStepDTO => Boolean(s) && s!.status === "failed");
+          const caption = status === "running" && step?.startedAt ? `Started ${timeAgo(step.startedAt)}` : undefined;
           return (
-            <div key={stage.key} className="flex items-start gap-3">
-              <StageIcon status={status} />
-              <div className="min-w-0 pt-0.5">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{stage.label}</p>
-                {failedStep?.error && (
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{failedStep.error}</p>
-                )}
-              </div>
+            <div key={stage.key}>
+              <StageRow status={status} label={stage.label} caption={caption} error={failedStep?.error ?? undefined} />
+              <Connector status={status} />
             </div>
           );
         })}
 
-        <div className="flex items-start gap-3">
-          <StageIcon status={waitingApprovalStatus} />
-          <div className="min-w-0 pt-0.5">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Waiting for approval</p>
-          </div>
-        </div>
+        <StageRow status={waitingApprovalStatus} label="Waiting for approval" />
       </CardContent>
     </Card>
   );

@@ -58,7 +58,7 @@ function TaskModeContent() {
   const canCancel = ["queued", "planning", "awaiting_approval"].includes(run.status);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 sm:py-10">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:py-10">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm text-gray-500 dark:text-gray-400">&ldquo;{run.goal}&rdquo;</p>
