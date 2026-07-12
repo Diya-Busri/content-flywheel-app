@@ -20,6 +20,7 @@
     "db:brand-workspaces": "node scripts/run-brand-workspaces-migration.mjs",
     "db:coach-memory": "node scripts/run-coach-migrations.mjs",
     "db:motion-graphics": "node scripts/run-motion-graphics-migration.mjs",
+    "db:jarvis": "node scripts/run-jarvis-migration.mjs",
     "type-check": "tsc --noEmit",
     "video": "remotion studio",
     "render": "remotion render src/remotion/index.tsx ShowcaseVideo out/video.mp4"
