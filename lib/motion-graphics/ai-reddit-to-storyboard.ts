@@ -307,54 +307,12 @@ function mapLongForm(raw: RawLongForm): LongFormOutput {
 
 // ─── AI call ─────────────────────────────────────────────────────────────────
 
-async function callClaude(prompt: string): Promise<RawAiResponse> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4000,
-      system:
-        "You are a precise JSON API for video production planning. Only ever respond with valid JSON, no prose, no markdown fences.",
-      messages: [{ role: "user", content: prompt }],
-    }),
-    signal: AbortSignal.timeout(60_000),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Claude API error ${res.status}: ${err.slice(0, 300)}`);
-  }
-
-  const data = (await res.json()) as {
-    content?: Array<{ type: string; text: string }>;
-  };
-  const raw = data.content?.find((b) => b.type === "text")?.text?.trim();
-  if (!raw) throw new Error("Claude returned an empty response");
-
-  // Strip markdown code fences if Claude adds them despite the instruction
-  const cleaned = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-
-  let parsed: RawAiResponse;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (err) {
-    console.error(TAG, "JSON parse error. Raw:", cleaned.slice(0, 500));
-    throw new Error(`AI response was not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  return parsed;
-}
-
 async function callOpenAI(prompt: string): Promise<RawAiResponse> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+
   const { default: OpenAI } = await import("openai");
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = new OpenAI({ apiKey });
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -396,14 +354,7 @@ export async function generateStoryboardFromReddit(
   const prompt = buildPrompt(req);
   console.log(TAG, `generating storyboard — mode=${req.contentMode} length=${req.sourceText.length}`);
 
-  let parsed: RawAiResponse;
-  if (process.env.ANTHROPIC_API_KEY) {
-    parsed = await callClaude(prompt);
-  } else if (process.env.OPENAI_API_KEY) {
-    parsed = await callOpenAI(prompt);
-  } else {
-    throw new Error("Neither ANTHROPIC_API_KEY nor OPENAI_API_KEY is configured");
-  }
+  const parsed = await callOpenAI(prompt);
 
   if (!parsed.analysis || !parsed.shortForm || !parsed.longForm) {
     throw new Error("AI response was missing required fields (analysis, shortForm, or longForm)");

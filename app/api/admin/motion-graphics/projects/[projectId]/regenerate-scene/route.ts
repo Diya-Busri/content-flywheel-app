@@ -17,7 +17,6 @@ import type { StoryboardScene, StoryboardVisualType, AnimationId } from "@/lib/m
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
-const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 const OPENAI_API = "https://api.openai.com/v1/chat/completions";
 
 const VALID_TRANSITIONS: AnimationId[] = [
@@ -29,42 +28,30 @@ function pickTransition(v: unknown): AnimationId {
 }
 
 async function callAI(prompt: string): Promise<string> {
-  if (process.env.ANTHROPIC_API_KEY) {
-    const res = await fetch(ANTHROPIC_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    const d = await res.json();
-    return d.content?.[0]?.text ?? "";
-  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
-  if (process.env.OPENAI_API_KEY) {
-    const res = await fetch(OPENAI_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        max_tokens: 512,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    const d = await res.json();
-    return d.choices?.[0]?.message?.content ?? "";
-  }
+  const res = await fetch(OPENAI_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      max_tokens: 512,
+      messages: [
+        {
+          role: "system",
+          content: "You are a short-form video script writer. Return ONLY valid JSON, no prose.",
+        },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
 
-  throw new Error("No AI API key configured");
+  const d = await res.json();
+  return d.choices?.[0]?.message?.content ?? "";
 }
 
 export async function POST(request: NextRequest, { params }: Ctx) {
