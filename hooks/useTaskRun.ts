@@ -12,7 +12,15 @@ import type {
   JarvisToolName,
 } from "@/db/schema/jarvis-schema";
 
-export type JarvisRunDTO = {
+/**
+ * Frontend data hook for AI Coach's Task Mode. Talks to the existing
+ * /api/jarvis/* backend (execution engine, tools, approval gates — all
+ * unchanged; only the frontend moved from a standalone /jarvis page into
+ * AI Coach). Type names here are DTOs for the client, kept distinct from
+ * the backend's db/schema/jarvis-schema.ts types they're shaped from.
+ */
+
+export type TaskRunDTO = {
   id: string;
   userId: string;
   goal: string;
@@ -26,7 +34,7 @@ export type JarvisRunDTO = {
   updatedAt: string;
 };
 
-export type JarvisStepDTO = {
+export type TaskStepDTO = {
   id: string;
   runId: string;
   toolName: JarvisToolName;
@@ -41,10 +49,11 @@ export type JarvisStepDTO = {
 
 const ACTIVE_STATUSES = new Set<ExecutionRunStatus>(["queued", "planning", "running"]);
 const POLL_INTERVAL_MS = 2000;
+const TASK_MODE_PATH = "/dashboard/ai-coach";
 
 type State = {
-  run: JarvisRunDTO | null;
-  steps: JarvisStepDTO[];
+  run: TaskRunDTO | null;
+  steps: TaskStepDTO[];
   loading: boolean;
   actionPending: boolean;
   /** Transient/network-level error — separate from run.error, which is a
@@ -60,7 +69,7 @@ async function parseJson(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
-export function useJarvisRun() {
+export function useTaskRun() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const runId = searchParams.get("run");
@@ -77,11 +86,12 @@ export function useJarvisRun() {
 
   const setRunIdInUrl = useCallback(
     (id: string | null) => {
+      // Preserve every other param (notably ?mode=tasks) — only the run id changes.
       const params = new URLSearchParams(searchParams.toString());
       if (id) params.set("run", id);
       else params.delete("run");
       const qs = params.toString();
-      router.replace(qs ? `/jarvis?${qs}` : "/jarvis", { scroll: false });
+      router.replace(qs ? `${TASK_MODE_PATH}?${qs}` : TASK_MODE_PATH, { scroll: false });
     },
     [router, searchParams],
   );
@@ -91,13 +101,13 @@ export function useJarvisRun() {
       const res = await fetch(`/api/jarvis/runs/${id}`);
       const data = await parseJson(res);
       if (!res.ok) {
-        setState((s) => ({ ...s, loading: false, actionError: (data.error as string) ?? "Failed to load run" }));
+        setState((s) => ({ ...s, loading: false, actionError: (data.error as string) ?? "Failed to load task" }));
         return;
       }
       setState((s) => ({
         ...s,
-        run: data.run as JarvisRunDTO,
-        steps: data.steps as JarvisStepDTO[],
+        run: data.run as TaskRunDTO,
+        steps: data.steps as TaskStepDTO[],
         loading: false,
         actionError: null,
       }));
@@ -147,7 +157,7 @@ export function useJarvisRun() {
             ...s,
             actionPending: false,
             actionError: (data.error as string) ?? "Something went wrong.",
-            run: (data.run as JarvisRunDTO) ?? s.run,
+            run: (data.run as TaskRunDTO) ?? s.run,
           }));
           return null;
         }
@@ -155,8 +165,8 @@ export function useJarvisRun() {
           ...s,
           actionPending: false,
           actionError: null,
-          run: (data.run as JarvisRunDTO) ?? s.run,
-          steps: (data.steps as JarvisStepDTO[]) ?? s.steps,
+          run: (data.run as TaskRunDTO) ?? s.run,
+          steps: (data.steps as TaskStepDTO[]) ?? s.steps,
         }));
         return data;
       } catch {
@@ -171,7 +181,7 @@ export function useJarvisRun() {
     async (goal: string) => {
       const data = await runAction("/api/jarvis/runs", { goal });
       if (data?.run) {
-        const run = data.run as JarvisRunDTO;
+        const run = data.run as TaskRunDTO;
         setRunIdInUrl(run.id);
       }
     },

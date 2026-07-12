@@ -2,8 +2,8 @@
 
 import { Check, Loader2, X, Circle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { JarvisRunDTO, JarvisStepDTO } from "@/hooks/useJarvisRun";
-import { EXECUTION_STAGES, latestStepByTool, stageStatus, type StageStatus } from "./lib";
+import type { TaskRunDTO, TaskStepDTO } from "@/hooks/useTaskRun";
+import { EXECUTION_STAGES, latestStepByTool, stageStatus, type StageStatus } from "./stages";
 
 function StageIcon({ status }: { status: StageStatus }) {
   if (status === "completed") {
@@ -41,7 +41,7 @@ function StageIcon({ status }: { status: StageStatus }) {
  * Saving. Driven entirely by DB state (run + steps), so a page refresh
  * re-renders exactly where things left off.
  */
-export function ExecutionPanel({ run, steps }: { run: JarvisRunDTO; steps: JarvisStepDTO[] }) {
+export function ExecutionPanel({ run, steps }: { run: TaskRunDTO; steps: TaskStepDTO[] }) {
   const latest = latestStepByTool(steps);
 
   const planningStatus: StageStatus =
@@ -63,7 +63,7 @@ export function ExecutionPanel({ run, steps }: { run: JarvisRunDTO; steps: Jarvi
   return (
     <Card className="border-gray-200 dark:border-gray-800">
       <CardHeader>
-        <CardTitle className="text-base font-semibold">Jarvis is working on it</CardTitle>
+        <CardTitle className="text-base font-semibold">Working on it</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-start gap-3">
@@ -78,7 +78,7 @@ export function ExecutionPanel({ run, steps }: { run: JarvisRunDTO; steps: Jarvi
           const status = stageStatus(stage.tools, latest);
           const failedStep = stage.tools
             .map((t) => latest.get(t))
-            .find((s): s is JarvisStepDTO => Boolean(s) && s!.status === "failed");
+            .find((s): s is TaskStepDTO => Boolean(s) && s!.status === "failed");
           return (
             <div key={stage.key} className="flex items-start gap-3">
               <StageIcon status={status} />

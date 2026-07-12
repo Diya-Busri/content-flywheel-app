@@ -3,7 +3,7 @@
 import { AlertOctagon, Loader2, RotateCcw, RotateCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import type { JarvisRunDTO } from "@/hooks/useJarvisRun";
+import type { TaskRunDTO } from "@/hooks/useTaskRun";
 
 /**
  * Shown whenever a run's status is "failed". Which phase failed determines
@@ -19,7 +19,7 @@ export function ErrorRetryPanel({
   onStartNew,
   pending,
 }: {
-  run: JarvisRunDTO;
+  run: TaskRunDTO;
   onRetryPlan: () => void;
   onRetryGenerate: () => void;
   onRetryApprove: () => void;

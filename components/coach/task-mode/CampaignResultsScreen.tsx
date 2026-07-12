@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CheckCircle2, ExternalLink, XCircle, RotateCcw, Video, LayoutGrid, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import type { JarvisRunDTO } from "@/hooks/useJarvisRun";
+import type { TaskRunDTO } from "@/hooks/useTaskRun";
 import type { ProposedAsset } from "@/db/schema/jarvis-schema";
 
 const TYPE_ICON: Record<ProposedAsset["type"], typeof Video> = {
@@ -24,7 +24,7 @@ function destinationFor(asset: ProposedAsset): { label: string; href: string } {
  * returned success for them); anything the user deselected, or that failed
  * to save, is shown honestly in its own section rather than folded in.
  */
-export function CampaignResultsScreen({ run, onStartNew }: { run: JarvisRunDTO; onStartNew: () => void }) {
+export function CampaignResultsScreen({ run, onStartNew }: { run: TaskRunDTO; onStartNew: () => void }) {
   const saved = run.assets.filter((a) => a.status === "saved");
   const rejected = run.assets.filter((a) => a.status === "rejected");
   const failed = run.assets.filter((a) => a.status === "approved" && a.saveError);
