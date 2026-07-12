@@ -9,7 +9,7 @@ import type {
   SelectExecutionRun,
   SelectExecutionStep,
 } from "@/db/schema/jarvis-schema";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 
 /**
  * All Jarvis DB access goes through this module. Every function that reads
@@ -84,13 +84,34 @@ export type RunTransitionPatch = {
   error?: string | null;
 };
 
+function gateCondition(fromGates: JarvisGate[] | undefined) {
+  if (!fromGates || fromGates.length === 0) return undefined;
+  const nonNull = fromGates.filter((g): g is Exclude<JarvisGate, null> => g !== null);
+  const includesNull = fromGates.includes(null);
+  const parts = [];
+  if (nonNull.length > 0) parts.push(inArray(executionRunsTable.currentGate, nonNull));
+  if (includesNull) parts.push(isNull(executionRunsTable.currentGate));
+  if (parts.length === 0) return undefined;
+  return parts.length === 1 ? parts[0] : or(...parts);
+}
+
 /**
- * Compare-and-swap the run's status. Only succeeds if the run currently has
- * one of `fromStatuses` AND belongs to userId — a single atomic UPDATE, so
- * concurrent requests (double-click, refresh-triggered retry) can never both
- * "win" and run the same phase twice. The loser gets null back and should
- * simply return the current (already-in-progress or already-completed) state
- * to the client instead of redoing the work.
+ * Compare-and-swap the run's status (and, optionally, its current_gate).
+ * Only succeeds if the run currently has one of `fromStatuses` (and, if
+ * `fromGates` is given, one of those gates too) AND belongs to userId — a
+ * single atomic UPDATE, so concurrent requests (double-click, refresh-
+ * triggered retry) can never both "win" and run the same phase twice.
+ *
+ * The `fromGates` check matters because both approval screens share the
+ * same status ("awaiting_approval") — without it, a call meant to start
+ * generation (queued from plan_review) could incorrectly also match a run
+ * sitting in asset_review, re-triggering generation and spending AI calls
+ * again. Callers that care about which gate a run is in (generate, approve)
+ * must pass `fromGates`.
+ *
+ * The loser gets null back and should simply return the current
+ * (already-in-progress or already-completed) state to the client instead of
+ * redoing the work.
  */
 export async function transitionRunStatus(
   userId: string,
@@ -98,7 +119,9 @@ export async function transitionRunStatus(
   fromStatuses: ExecutionRunStatus[],
   toStatus: ExecutionRunStatus,
   patch: RunTransitionPatch = {},
+  fromGates?: JarvisGate[],
 ): Promise<SelectExecutionRun | null> {
+  const gateCond = gateCondition(fromGates);
   const [updated] = await db
     .update(executionRunsTable)
     .set({
@@ -115,6 +138,7 @@ export async function transitionRunStatus(
         eq(executionRunsTable.id, runId),
         eq(executionRunsTable.userId, userId),
         inArray(executionRunsTable.status, fromStatuses),
+        ...(gateCond ? [gateCond] : []),
       ),
     )
     .returning();
@@ -142,6 +166,34 @@ export async function patchRun(
       ...(patch.error !== undefined ? { error: patch.error } : {}),
     })
     .where(and(eq(executionRunsTable.id, runId), eq(executionRunsTable.userId, userId)))
+    .returning();
+  return updated ?? null;
+}
+
+/**
+ * Overwrites the run's assets array, but only while it's still sitting at
+ * the asset_review gate. Used for user edits to a generated asset before
+ * approval. Guards against editing an asset after the run has already moved
+ * on (approved/saving/completed) — the UPDATE's WHERE clause requires
+ * status='awaiting_approval' AND current_gate='asset_review', so a write
+ * that races a concurrent approve simply matches zero rows and returns null.
+ */
+export async function updateAssetsIfInAssetReview(
+  userId: string,
+  runId: string,
+  assets: ProposedAsset[],
+): Promise<SelectExecutionRun | null> {
+  const [updated] = await db
+    .update(executionRunsTable)
+    .set({ assets, updatedAt: new Date() })
+    .where(
+      and(
+        eq(executionRunsTable.id, runId),
+        eq(executionRunsTable.userId, userId),
+        eq(executionRunsTable.status, "awaiting_approval"),
+        eq(executionRunsTable.currentGate, "asset_review"),
+      ),
+    )
     .returning();
   return updated ?? null;
 }
