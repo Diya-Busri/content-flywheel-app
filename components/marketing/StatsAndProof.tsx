@@ -96,12 +96,12 @@ export function StatsAndProof() {
         <FadeUp delay={0.3} className="text-center">
           <Link
             href="/signup"
-            className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-9 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/25 transition hover:shadow-xl hover:shadow-orange-500/35 hover:scale-105"
+            className="press-feedback group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-9 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/25 transition hover:shadow-xl hover:shadow-orange-500/35 hover:scale-105"
           >
-            Start your free 7-day trial
+            Start Marketing Free
             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
           </Link>
-          <p className="mt-3 text-sm text-white/25">
+          <p className="mt-3 text-sm text-white/30">
             Become one of the first creators using Content Flywheel.
           </p>
         </FadeUp>
