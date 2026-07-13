@@ -277,6 +277,11 @@ export async function POST(
     const applicationFeeAmount =
       platformFeePercent > 0 ? Math.round(unitAmountForFee * (platformFeePercent / 100)) : undefined;
 
+    // Free (£0) items: Stripe doesn't create a PaymentIntent for zero-amount
+    // Checkout Sessions (nothing to charge, nothing to transfer), so omitting
+    // payment_intent_data avoids Stripe rejecting a PI config with no PI.
+    const isFreeCheckout = unitAmountForFee === 0;
+
     // Build checkout session params — route payment through creator's connected account
     const successBase = ma.isCourseFormat ? `${baseUrl}/course/${productId}` : `${baseUrl}/product/${productId}`;
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -297,11 +302,15 @@ export async function POST(
       allow_promotion_codes: discountedUnitAmount === null,
       billing_address_collection: "auto",
       customer_creation: "always",
-      // Route money to the creator's Stripe account
-      payment_intent_data: {
-        application_fee_amount: applicationFeeAmount,
-        transfer_data: { destination: connectAccountId },
-      },
+      // Route money to the creator's Stripe account (skipped for £0 — no PaymentIntent is created)
+      ...(isFreeCheckout
+        ? {}
+        : {
+            payment_intent_data: {
+              application_fee_amount: applicationFeeAmount,
+              transfer_data: { destination: connectAccountId },
+            },
+          }),
     };
 
     // If VAT is enabled, collect tax IDs and note that price is VAT-inclusive

@@ -33,10 +33,12 @@ export async function POST(
     const payWhatYouWant: boolean = body.payWhatYouWant ?? false;
     const minPrice: number | null = typeof body.minPrice === "number" ? body.minPrice : null;
 
-    // For PWYW, price is the suggested/default amount — allow £0 minimum
-    if (typeof price !== "number" || (!payWhatYouWant && price < 100)) {
+    // Valid prices: exactly 0 (Free), or >= 100 pence (£1.00 minimum).
+    // For PWYW, the price is just the suggested/default amount — £0 is always allowed there too.
+    const isFree = price === 0 && !payWhatYouWant;
+    if (typeof price !== "number" || price < 0 || (!payWhatYouWant && price > 0 && price < 100)) {
       return NextResponse.json(
-        { error: "Invalid price. Minimum is 100 pence (£1.00)." },
+        { error: "Invalid price. Enter £0 for Free, or at least £1.00." },
         { status: 400 }
       );
     }
@@ -109,7 +111,7 @@ export async function POST(
         ? `£${(minPrice / 100).toFixed(2)}+`
         : "Pay what you want"
       : null;
-    const priceLabel = pwywLabel ?? `£${(price / 100).toFixed(2)}${intervalLabel}`;
+    const priceLabel = pwywLabel ?? (isFree ? "Free" : `£${(price / 100).toFixed(2)}${intervalLabel}`);
 
     const updatedAssets: MarketingAssets & {
       nativePrice: number;

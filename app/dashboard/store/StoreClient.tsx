@@ -61,6 +61,10 @@ interface LibraryItem {
   format?: string;
   isNativePublished?: boolean;
   nativePrice?: number;
+  /** External checkout URL — set when this is a "link" listing (no native Stripe checkout). */
+  checkoutUrl?: string | null;
+  /** Display price label for link listings (e.g. "£27", "Free"). */
+  priceLabel?: string | null;
 }
 
 interface StoreClientProps {
@@ -263,16 +267,20 @@ function PriceForm({ productId, initialPrice, isEdit, onSuccess, onCancel }: {
   onSuccess: (pence: number) => void; onCancel: () => void;
 }) {
   const [priceInput, setPriceInput] = useState(initialPrice ? (initialPrice / 100).toFixed(2) : "");
+  const [free, setFree] = useState(initialPrice === 0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const handleSubmit = async () => {
-    const priceNum = parseFloat(priceInput);
-    if (isNaN(priceNum) || priceNum < 1) {
-      toast({ title: "Invalid price", description: "Please enter a price of at least \xa31.00.", variant: "destructive" });
-      return;
+    let pence = 0;
+    if (!free) {
+      const priceNum = parseFloat(priceInput);
+      if (isNaN(priceNum) || priceNum < 1) {
+        toast({ title: "Invalid price", description: "Enter a price of at least \xa31.00, or check Free.", variant: "destructive" });
+        return;
+      }
+      pence = Math.round(priceNum * 100);
     }
-    const pence = Math.round(priceNum * 100);
     setLoading(true);
     try {
       const res = await fetch(`/api/products/${productId}/native-publish`, {
@@ -289,19 +297,79 @@ function PriceForm({ productId, initialPrice, isEdit, onSuccess, onCancel }: {
   };
 
   return (
-    <div className="flex items-center gap-2 mt-2">
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm font-medium select-none">\xa3</span>
-        <Input type="number" min="1" step="0.01" value={priceInput} onChange={(e) => setPriceInput(e.target.value)}
-          className="pl-7 w-28 h-8 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-orange-500/60"
-          placeholder="9.99" autoFocus
-          onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); if (e.key === "Escape") onCancel(); }}
-        />
+    <div className="flex flex-col gap-2 mt-2">
+      <div className="flex items-center gap-2">
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm font-medium select-none">\xa3</span>
+          <Input type="number" min="1" step="0.01" value={priceInput} onChange={(e) => setPriceInput(e.target.value)}
+            disabled={free}
+            className="pl-7 w-28 h-8 text-sm bg-gray-100 border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-orange-500/60 disabled:opacity-40"
+            placeholder="9.99" autoFocus={!free}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); if (e.key === "Escape") onCancel(); }}
+          />
+        </div>
+        <Button size="sm" onClick={handleSubmit} disabled={loading} className="h-8 bg-orange-500 hover:bg-orange-600 text-gray-900 text-xs shrink-0">
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isEdit ? "Update" : "Publish"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={loading} className="h-8 text-xs text-gray-600 hover:text-gray-900 shrink-0">Cancel</Button>
       </div>
-      <Button size="sm" onClick={handleSubmit} disabled={loading} className="h-8 bg-orange-500 hover:bg-orange-600 text-gray-900 text-xs shrink-0">
-        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isEdit ? "Update" : "Publish"}
-      </Button>
-      <Button size="sm" variant="ghost" onClick={onCancel} disabled={loading} className="h-8 text-xs text-gray-600 hover:text-gray-900 shrink-0">Cancel</Button>
+      <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none w-fit">
+        <input type="checkbox" checked={free} onChange={(e) => setFree(e.target.checked)} className="accent-orange-500 w-3.5 h-3.5" />
+        <Gift className="w-3 h-3" />Make this free (£0)
+      </label>
+    </div>
+  );
+}
+
+// ── LinkEditForm ──────────────────────────────────────────────────────────────
+
+function LinkEditForm({ item, onSuccess, onCancel }: {
+  item: LibraryItem; onSuccess: () => void; onCancel: () => void;
+}) {
+  const [url, setUrl] = useState(item.checkoutUrl ?? "");
+  const [priceLabel, setPriceLabel] = useState(item.priceLabel ?? "");
+  const [free, setFree] = useState((item.priceLabel ?? "").toLowerCase() === "free");
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const handleSave = async () => {
+    if (!url.trim()) {
+      toast({ title: "URL is required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const getRes = await fetch(`/api/products/${item.id}`);
+      const current = getRes.ok ? await getRes.json().catch(() => ({})) : {};
+      const merged = { ...(current.marketingAssets ?? {}), checkoutUrl: url.trim(), priceLabel: free ? "Free" : (priceLabel.trim() || null) };
+      const res = await fetch(`/api/products/${item.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marketingAssets: merged }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      toast({ title: "Link updated!" });
+      onSuccess();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to save", variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 mt-2">
+      <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…"
+        className="h-8 text-sm bg-gray-100 border-gray-300" autoFocus />
+      <div className="flex items-center gap-2">
+        <Input value={priceLabel} onChange={(e) => setPriceLabel(e.target.value)} disabled={free}
+          placeholder="e.g. £27" className="h-8 text-sm w-28 bg-gray-100 border-gray-300 disabled:opacity-40" />
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+          <input type="checkbox" checked={free} onChange={(e) => setFree(e.target.checked)} className="accent-orange-500 w-3.5 h-3.5" />
+          <Gift className="w-3 h-3" />Free
+        </label>
+        <Button size="sm" onClick={handleSave} disabled={saving} className="h-8 bg-orange-500 hover:bg-orange-600 text-gray-900 text-xs shrink-0 ml-auto">
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving} className="h-8 text-xs text-gray-600 hover:text-gray-900 shrink-0">Cancel</Button>
+      </div>
     </div>
   );
 }
@@ -311,6 +379,7 @@ function PriceForm({ productId, initialPrice, isEdit, onSuccess, onCancel }: {
 function PublishedProductCard({ item, onRefresh }: { item: LibraryItem; onRefresh: () => void }) {
   const [editingPrice, setEditingPrice] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
+  const isLink = !item.isNativePublished && !!item.checkoutUrl;
   const { toast } = useToast();
 
   const handleUnpublish = async () => {
@@ -326,30 +395,70 @@ function PublishedProductCard({ item, onRefresh }: { item: LibraryItem; onRefres
     } finally { setUnpublishing(false); }
   };
 
+  const handleRemoveLink = async () => {
+    setUnpublishing(true);
+    try {
+      const getRes = await fetch(`/api/products/${item.id}`);
+      const current = getRes.ok ? await getRes.json().catch(() => ({})) : {};
+      const merged = { ...(current.marketingAssets ?? {}), checkoutUrl: null };
+      const res = await fetch(`/api/products/${item.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marketingAssets: merged }),
+      });
+      if (!res.ok) throw new Error("Failed to remove");
+      toast({ title: "Removed", description: `"${item.title}" removed from your store.` });
+      onRefresh();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to remove", variant: "destructive" });
+    } finally { setUnpublishing(false); }
+  };
+
   return (
     <div className="bg-white dark:bg-[#1A1A1A] border border-gray-200 dark:border-[#2A2A2A] rounded-2xl p-5 flex flex-col gap-3 hover:border-orange-300 dark:hover:border-orange-700/50 hover:bg-gray-50 dark:hover:bg-[#1E1E1E] transition-all">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 flex items-center justify-center shrink-0">
-          <Package className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+          {isLink ? <ExternalLink className="w-5 h-5 text-orange-600 dark:text-orange-400" /> : <Package className="w-5 h-5 text-orange-600 dark:text-orange-400" />}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight truncate">{item.title}</p>
           <div className="flex items-center gap-2 mt-1.5">
-            <Badge className="text-[10px] bg-green-50 text-green-700 border border-green-200 hover:bg-green-50 font-medium">Live</Badge>
+            <Badge className="text-[10px] bg-green-50 text-green-700 border border-green-200 hover:bg-green-50 font-medium">{isLink ? "Live · Link" : "Live"}</Badge>
             <FormatBadge format={item.format} />
           </div>
         </div>
-        {item.nativePrice != null && !editingPrice && (
-          <span className="text-xl font-bold text-orange-600 shrink-0">{formatPrice(item.nativePrice)}</span>
+        {isLink && !editingPrice && (
+          <span className="text-xl font-bold text-orange-600 shrink-0">{item.priceLabel || "—"}</span>
+        )}
+        {!isLink && item.nativePrice != null && !editingPrice && (
+          <span className="text-xl font-bold text-orange-600 shrink-0">{item.nativePrice === 0 ? "Free" : formatPrice(item.nativePrice)}</span>
         )}
       </div>
-      {editingPrice && (
+      {editingPrice && !isLink && (
         <PriceForm productId={item.id} initialPrice={item.nativePrice} isEdit
           onSuccess={() => { setEditingPrice(false); onRefresh(); }}
           onCancel={() => setEditingPrice(false)}
         />
       )}
-      {!editingPrice && (
+      {editingPrice && isLink && (
+        <LinkEditForm item={item}
+          onSuccess={() => { setEditingPrice(false); onRefresh(); }}
+          onCancel={() => setEditingPrice(false)}
+        />
+      )}
+      {!editingPrice && isLink && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" className="h-8 text-xs border-gray-300 text-gray-800 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-100 gap-1.5" onClick={() => window.open(item.checkoutUrl!, "_blank")}>
+            <Eye className="w-3.5 h-3.5" />View Link
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 text-xs border-gray-300 text-gray-800 hover:text-gray-900 hover:border-orange-400 hover:bg-orange-50 gap-1.5" onClick={() => setEditingPrice(true)}>
+            <PencilLine className="w-3.5 h-3.5" />Edit Link
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 text-xs border-red-200 text-red-600 hover:text-red-700 hover:border-red-400 hover:bg-red-50 ml-auto gap-1.5" onClick={handleRemoveLink} disabled={unpublishing}>
+            {unpublishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}Remove
+          </Button>
+        </div>
+      )}
+      {!editingPrice && !isLink && (
         <div className="flex items-center gap-2 flex-wrap">
           <Button size="sm" variant="outline" className="h-8 text-xs border-gray-300 text-gray-800 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-100 gap-1.5" onClick={() => window.open(`/product/${item.id}`, "_blank")}>
             <Eye className="w-3.5 h-3.5" />View Page
@@ -413,12 +522,20 @@ function LibraryPickerRow({ item, publishing, onPublish }: {
 }) {
   const [showPrice, setShowPrice] = useState(false);
   const [priceInput, setPriceInput] = useState("");
+  const [free, setFree] = useState(false);
   const { toast } = useToast();
 
   const handlePublish = async () => {
+    if (free) {
+      await onPublish(0);
+      setShowPrice(false);
+      setPriceInput("");
+      setFree(false);
+      return;
+    }
     const num = parseFloat(priceInput);
     if (isNaN(num) || num < 1) {
-      toast({ title: "Enter a price of at least £1", variant: "destructive" });
+      toast({ title: "Enter a price of at least £1, or check Free", variant: "destructive" });
       return;
     }
     await onPublish(Math.round(num * 100));
@@ -443,13 +560,15 @@ function LibraryPickerRow({ item, publishing, onPublish }: {
         )}
       </div>
       {showPrice && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+        <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-gray-100">
+        <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 shrink-0">Set price:</span>
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">£</span>
             <input type="number" min="1" step="0.01" value={priceInput} onChange={(e) => setPriceInput(e.target.value)}
-              className="w-full pl-7 pr-3 h-8 text-sm rounded-lg border border-gray-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500/20"
-              placeholder="9.99" autoFocus
+              disabled={free}
+              className="w-full pl-7 pr-3 h-8 text-sm rounded-lg border border-gray-300 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500/20 disabled:opacity-40"
+              placeholder="9.99" autoFocus={!free}
               onKeyDown={(e) => { if (e.key === "Enter") handlePublish(); if (e.key === "Escape") { setShowPrice(false); setPriceInput(""); } }}
             />
           </div>
@@ -459,6 +578,11 @@ function LibraryPickerRow({ item, publishing, onPublish }: {
           <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-500" onClick={() => { setShowPrice(false); setPriceInput(""); }}>
             <X className="w-3.5 h-3.5" />
           </Button>
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none w-fit">
+          <input type="checkbox" checked={free} onChange={(e) => setFree(e.target.checked)} className="accent-orange-500 w-3.5 h-3.5" />
+          <Gift className="w-3 h-3" />Make this free (£0)
+        </label>
         </div>
       )}
     </div>
@@ -575,6 +699,14 @@ export function StoreClient({ userId }: StoreClientProps) {
   // Library picker
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [libraryPickerPublishing, setLibraryPickerPublishing] = useState<string | null>(null);
+
+  // Add-via-link quick add
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkPriceLabel, setLinkPriceLabel] = useState("");
+  const [linkFree, setLinkFree] = useState(false);
+  const [linkSaving, setLinkSaving] = useState(false);
 
   // Trust Score
   const [trustData, setTrustData] = useState<TrustScoreData | null>(null);
@@ -761,8 +893,8 @@ export function StoreClient({ userId }: StoreClientProps) {
     (c.name ?? "").toLowerCase().includes(customerSearch.toLowerCase())
   );
 
-  const published = items.filter((i) => i.isNativePublished);
-  const unpublished = items.filter((i) => !i.isNativePublished);
+  const published = items.filter((i) => i.isNativePublished || !!i.checkoutUrl);
+  const unpublished = items.filter((i) => !i.isNativePublished && !i.checkoutUrl);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-transparent">
@@ -957,7 +1089,7 @@ export function StoreClient({ userId }: StoreClientProps) {
                 <div className="rounded-2xl border border-gray-200 dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A] p-4 flex items-center gap-4 flex-wrap">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">Add products to your store</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Upload a file or pick something you&apos;ve already made in the app</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Upload a file, pick something you&apos;ve already made, or link out to a listing elsewhere</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <Link href="/dashboard/digital-products/upload">
@@ -968,8 +1100,81 @@ export function StoreClient({ userId }: StoreClientProps) {
                     <Button size="sm" className="gap-2 bg-orange-500 hover:bg-orange-600 text-white h-8 text-xs" onClick={() => setShowLibraryPicker((v) => !v)}>
                       <BookOpen className="w-3.5 h-3.5" />{showLibraryPicker ? "Close library" : "Pick from library"}
                     </Button>
+                    <Button variant="outline" size="sm" className="gap-2 border-gray-300 text-gray-700 hover:text-orange-600 hover:border-orange-300 h-8 text-xs" onClick={() => setShowLinkForm((v) => !v)}>
+                      <ExternalLink className="w-3.5 h-3.5" />{showLinkForm ? "Close" : "Add via link"}
+                    </Button>
                   </div>
                 </div>
+
+                {/* ── Add via link form ── */}
+                {showLinkForm && (
+                  <div className="rounded-2xl border border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-950/20 p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ExternalLink className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Add a product via external link</p>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Selling on Gumroad, Etsy, Amazon, Beacons, or elsewhere? List it here — buyers click straight through to your existing checkout.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Product title</label>
+                        <Input value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)}
+                          placeholder="e.g. Ultimate Notion Template Pack"
+                          className="h-9 text-sm bg-white dark:bg-[#141414]" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Checkout / product URL</label>
+                        <Input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
+                          placeholder="https://gumroad.com/l/…"
+                          className="h-9 text-sm bg-white dark:bg-[#141414]" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap mb-4">
+                      <div className="flex-1 min-w-[140px]">
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Price label</label>
+                        <Input value={linkPriceLabel} onChange={(e) => setLinkPriceLabel(e.target.value)}
+                          disabled={linkFree}
+                          placeholder="e.g. £27 or $19"
+                          className="h-9 text-sm bg-white dark:bg-[#141414] disabled:opacity-40 w-40" />
+                      </div>
+                      <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none pt-5">
+                        <input type="checkbox" checked={linkFree} onChange={(e) => setLinkFree(e.target.checked)} className="accent-orange-500 w-3.5 h-3.5" />
+                        <Gift className="w-3 h-3" />Free
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                        disabled={linkSaving}
+                        onClick={async () => {
+                          if (!linkTitle.trim() || !linkUrl.trim()) {
+                            toast({ title: "Title and URL are required", variant: "destructive" });
+                            return;
+                          }
+                          setLinkSaving(true);
+                          try {
+                            const res = await fetch("/api/products/create-link", {
+                              method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ title: linkTitle.trim(), url: linkUrl.trim(), free: linkFree, priceLabel: linkPriceLabel.trim() }),
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.error || "Failed to add product");
+                            toast({ title: "Added!", description: `"${data.title}" is now live in your store.` });
+                            setLinkTitle(""); setLinkUrl(""); setLinkPriceLabel(""); setLinkFree(false); setShowLinkForm(false);
+                            fetchLibrary();
+                          } catch (err) {
+                            toast({ title: "Error", description: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+                          } finally { setLinkSaving(false); }
+                        }}
+                      >
+                        {linkSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}Add to store
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 text-xs text-gray-600" onClick={() => setShowLinkForm(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* ── Library picker ── */}
                 {showLibraryPicker && (

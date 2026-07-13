@@ -13,6 +13,7 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -145,4 +146,74 @@ export async function getPresignedUploadUrl(
 
   const uploadUrl = await getSignedUrl(client, command, { expiresIn });
   return { uploadUrl, publicUrl: `${getPublicUrl()}/${pathname}` };
+}
+
+// ── Private object storage ──────────────────────────────────────────────────
+// Everything above assumes the bucket serves R2_PUBLIC_URL/<key> to anyone who
+// knows the key. The functions below are for files that must NOT be linkable
+// that way (e.g. 100 Product Challenge uploads) — they return only the R2
+// object key (never a public URL), and reads go through a short-lived signed
+// GET URL generated on demand for an authorised admin.
+//
+// IMPORTANT: this only withholds the URL at the application layer. If the R2
+// bucket itself has "public access" / a public dev URL enabled at the
+// Cloudflare account level, anyone who somehow learns the exact key could
+// still fetch R2_PUBLIC_URL/<key> directly. For genuine bucket-level privacy,
+// store these objects in a separate R2 bucket that has public access
+// disabled — that's a Cloudflare dashboard change, not something this file
+// can enforce in code. Using a random, non-guessable key (below) makes this
+// low-risk in practice, but it is obscurity, not a hard access-control
+// guarantee, unless paired with a genuinely private bucket.
+
+/** Upload a file to R2 without ever returning a public URL. Returns the object key only. */
+export async function uploadPrivate(
+  key: string,
+  body: Buffer | Blob | ReadableStream | ArrayBufferLike | Uint8Array,
+  contentType?: string
+): Promise<{ key: string }> {
+  const client = getClient();
+  const bucket = getBucket();
+
+  let uploadBody: Buffer | Uint8Array;
+  if (body instanceof ReadableStream) {
+    const chunks: Uint8Array[] = [];
+    const reader = (body as ReadableStream<Uint8Array>).getReader();
+    let done = false;
+    while (!done) {
+      const { value, done: d } = await reader.read();
+      if (value) chunks.push(value);
+      done = d;
+    }
+    uploadBody = Buffer.concat(chunks);
+  } else if (typeof Blob !== "undefined" && body instanceof Blob) {
+    uploadBody = Buffer.from(await body.arrayBuffer());
+  } else {
+    uploadBody = body as Buffer | Uint8Array;
+  }
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: uploadBody as Buffer,
+      ContentType: contentType,
+    })
+  );
+
+  return { key };
+}
+
+/** Generate a short-lived signed GET URL for a private object. Default expiry: 5 minutes. */
+export async function getSignedDownloadUrl(key: string, expiresIn = 300): Promise<string> {
+  const client = getClient();
+  const bucket = getBucket();
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  return getSignedUrl(client, command, { expiresIn });
+}
+
+/** Delete a private object by its exact key (not a public URL). */
+export async function deleteByKey(key: string): Promise<void> {
+  const client = getClient();
+  const bucket = getBucket();
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
