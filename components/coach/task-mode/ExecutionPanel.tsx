@@ -1,10 +1,30 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Check, Loader2, X, Circle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { TaskRunDTO, TaskStepDTO } from "@/hooks/useTaskRun";
 import { EXECUTION_STAGES, latestStepByTool, stageStatus, timeAgo, type StageStatus } from "./stages";
+
+/**
+ * Renders nothing on first paint (server and client both), then fills in
+ * "Started Xs ago" after mount and keeps it ticking. timeAgo() depends on
+ * Date.now(), which differs between server-render time and client-hydration
+ * time — computing it during the render that gets sent to the client would
+ * be a classic Next.js hydration-mismatch source, so it's deliberately
+ * deferred to a post-mount effect instead.
+ */
+function RelativeTime({ iso }: { iso: string }) {
+  const [label, setLabel] = useState<string | null>(null);
+  useEffect(() => {
+    setLabel(timeAgo(iso));
+    const id = setInterval(() => setLabel(timeAgo(iso)), 5000);
+    return () => clearInterval(id);
+  }, [iso]);
+  if (!label) return null;
+  return <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">Started {label}</p>;
+}
 
 function StageIcon({ status }: { status: StageStatus }) {
   if (status === "completed") {
@@ -50,11 +70,13 @@ function StageRow({
   status,
   label,
   caption,
+  startedAt,
   error,
 }: {
   status: StageStatus;
   label: string;
   caption?: string;
+  startedAt?: string | null;
   error?: string;
 }) {
   return (
@@ -69,6 +91,7 @@ function StageRow({
           {label}
         </p>
         {caption && <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{caption}</p>}
+        {status === "running" && startedAt && <RelativeTime iso={startedAt} />}
         {error && <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{error}</p>}
       </div>
     </div>
@@ -144,10 +167,14 @@ export function ExecutionPanel({ run, steps }: { run: TaskRunDTO; steps: TaskSte
           const failedStep = stage.tools
             .map((t) => latest.get(t))
             .find((s): s is TaskStepDTO => Boolean(s) && s!.status === "failed");
-          const caption = status === "running" && step?.startedAt ? `Started ${timeAgo(step.startedAt)}` : undefined;
           return (
             <div key={stage.key}>
-              <StageRow status={status} label={stage.label} caption={caption} error={failedStep?.error ?? undefined} />
+              <StageRow
+                status={status}
+                label={stage.label}
+                startedAt={step?.startedAt}
+                error={failedStep?.error ?? undefined}
+              />
               <Connector status={status} />
             </div>
           );
