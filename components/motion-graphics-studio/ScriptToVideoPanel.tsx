@@ -147,7 +147,7 @@ export const ScriptToVideoPanel: React.FC = () => {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground mt-1">
-              Pick a voice and every scene gets real ElevenLabs audio automatically. Leave as "No voiceover" to just
+              Pick a voice and every scene gets real ElevenLabs audio automatically. Leave as &quot;No voiceover&quot; to just
               get text + captions — you can generate audio per scene later in the Template Builder.
             </p>
             {voicesError && <p className="text-xs text-destructive mt-1">{voicesError}</p>}
