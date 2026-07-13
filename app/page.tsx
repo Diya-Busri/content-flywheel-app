@@ -2,16 +2,19 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
+import { MotionConfig } from "framer-motion";
 import { LandingNavbar } from "@/components/marketing/landing-navbar";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { LandingAnimations } from "@/components/marketing/LandingAnimations";
 import HeroSection from "@/components/marketing/HeroSection";
 import { LandingAICoach } from "@/components/marketing/LandingAICoach";
+import { ScrollProgressBar } from "@/components/marketing/ScrollProgressBar";
+import { getFeaturedEpisode, getPreviousEpisodes } from "@/lib/marketing-challenge";
 
 export const metadata: Metadata = {
-  title: "Content Flywheel — Create, Sell & Market Digital Products with AI",
+  title: "Content Flywheel — The AI Marketing Engine for Digital Products",
   description:
-    "Build digital products with AI, sell from your own store, and grow your audience — all from one platform. No third-party platforms needed.",
+    "Turn one digital product into weeks of marketing content with AI. Generate research, hooks, carousels, short-form videos, scripts and launch campaigns from a single dashboard.",
 };
 
 async function getPublicReviews(): Promise<{ text: string; name: string; rating?: number }[]> {
@@ -37,12 +40,38 @@ export default async function HomePage() {
   const { userId } = await auth();
   if (userId) redirect("/dashboard");
 
-  const reviews = await getPublicReviews();
+  const [reviews, featuredEpisode, previousEpisodes] = await Promise.all([
+    getPublicReviews(),
+    getFeaturedEpisode(),
+    getPreviousEpisodes(),
+  ]);
+
+  // getFeaturedEpisode only returns null if there are no episodes at all yet.
+  if (!featuredEpisode) {
+    return (
+      <MotionConfig reducedMotion="user">
+        <div className="min-h-screen bg-[#0a0a0a] overflow-x-hidden">
+          <ScrollProgressBar />
+          <LandingNavbar />
+          <HeroSection />
+          <LandingAICoach />
+        </div>
+      </MotionConfig>
+    );
+  }
+
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-[#0a0a0a] overflow-x-hidden">
+      <ScrollProgressBar />
       <LandingNavbar />
       <HeroSection />
-      <LandingAnimations reviews={reviews} />
+      <LandingAnimations
+        reviews={reviews}
+        featuredEpisode={featuredEpisode}
+        previousEpisodes={previousEpisodes}
+        hasPreviousEpisodes={previousEpisodes.length > 0}
+      />
       <LandingAICoach />
 
       {/* Enhanced footer */}
@@ -55,7 +84,7 @@ export default async function HomePage() {
                 Content<span className="text-orange-500">Flywheel</span>
               </span>
               <p className="mt-3 text-sm text-white/40 max-w-xs leading-relaxed">
-                Build, sell, and market digital products with AI. One platform, one price, everything connected.
+                The AI marketing engine for digital products. Research, content, and launch plans, generated from what you already built.
               </p>
               {/* Social links */}
               <div className="flex items-center gap-3 mt-6">
@@ -141,7 +170,7 @@ export default async function HomePage() {
                   href="/sign-up"
                   className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-5 py-2.5 text-sm font-bold text-white transition-colors shadow-lg shadow-orange-500/20"
                 >
-                  Start free →
+                  Start Marketing Free →
                 </Link>
               </div>
             </div>
@@ -163,5 +192,6 @@ export default async function HomePage() {
         </div>
       </footer>
     </div>
+    </MotionConfig>
   );
 }
