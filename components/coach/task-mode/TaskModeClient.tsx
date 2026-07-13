@@ -1,6 +1,5 @@
 "use client";
 
-import { Suspense } from "react";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTaskRun } from "@/hooks/useTaskRun";
@@ -129,18 +128,20 @@ function TaskModeContent() {
   );
 }
 
+/**
+ * No local Suspense boundary here on purpose — this is always rendered
+ * inside AICoachModeSwitcher's single outer Suspense boundary (both Chat
+ * and Task Mode panels stay mounted at all times; see that file). A second,
+ * nested boundary around this same useSearchParams()-consuming subtree
+ * doesn't add anything and risks the inner boundary's fallback markup
+ * being what actually ships in the server HTML while the client renders
+ * real content immediately — a real hydration-mismatch pitfall, not just
+ * redundant code.
+ */
 export function TaskModeClient() {
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-[#F9FAFB] dark:bg-[#0F0F0F]">
-      <Suspense
-        fallback={
-          <div className="flex min-h-[50vh] items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-          </div>
-        }
-      >
-        <TaskModeContent />
-      </Suspense>
+      <TaskModeContent />
     </div>
   );
 }

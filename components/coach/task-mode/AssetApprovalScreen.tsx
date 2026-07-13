@@ -228,7 +228,7 @@ export function AssetApprovalScreen({
                           checked={selected.has(asset.id)}
                           onCheckedChange={() => toggle(asset.id)}
                           disabled={pending}
-                          className="mt-1"
+                          className="mt-1 border-orange-300 data-[state=checked]:border-orange-500 data-[state=checked]:bg-orange-500 data-[state=checked]:text-white dark:border-orange-800"
                         />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
