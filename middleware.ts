@@ -39,9 +39,16 @@ async function handleCustomDomain(req: NextRequest): Promise<NextResponse | null
     const data = await res.json() as { userId?: string };
     if (!data.userId) return null;
 
-    // Rewrite to the creator's store page, preserving path after the root
+    // Only the storefront root maps to /c/[userId] — it's a single-page storefront
+    // with no nested routes. Everything else (/product/[id], /course/[id], /pay, etc.)
+    // is a normal top-level route that already works on any hostname, so let it pass
+    // through unrewritten. Previously this rewrote every path to /c/[userId]{path},
+    // which sent product links on custom domains to a non-existent /c/[userId]/product/[id]
+    // route and 404'd.
     const path = req.nextUrl.pathname;
-    const rewriteUrl = new URL(`/c/${data.userId}${path === "/" ? "" : path}`, req.url);
+    if (path !== "/") return null;
+
+    const rewriteUrl = new URL(`/c/${data.userId}`, req.url);
     rewriteUrl.search = req.nextUrl.search;
     return NextResponse.rewrite(rewriteUrl);
   } catch {
