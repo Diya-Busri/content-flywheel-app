@@ -70,11 +70,11 @@ export async function POST(request: NextRequest) {
     const productDescription = str(body.productDescription, 4000);
     const targetAudience = str(body.targetAudience, 1000);
     const problemSolved = str(body.problemSolved, 1000);
-    const productPrice = str(body.productPrice, 50);
+    const productPrice = optStr(body.productPrice, 50);
     const productStatus = str(body.productStatus, 40);
     const existingProductUrl = optStr(body.existingProductUrl, 500);
-    const whatMakesUseful = str(body.whatMakesUseful, 2000);
-    const whatToImprove = str(body.whatToImprove, 2000);
+    const whatMakesUseful = optStr(body.whatMakesUseful, 2000);
+    const whatToImprove = optStr(body.whatToImprove, 2000);
 
     // ── Marketing questions ─────────────────────────────────────────────
     const marketingStrugglesRaw = Array.isArray(body.marketingStruggles) ? body.marketingStruggles : [];
@@ -125,11 +125,8 @@ export async function POST(request: NextRequest) {
     if (!productDescription) errors.push("Product description is required.");
     if (!targetAudience) errors.push("Target audience is required.");
     if (!problemSolved) errors.push("Please describe the problem the product solves.");
-    if (!productPrice) errors.push("Product price is required.");
     if (!PRODUCT_STATUSES.has(productStatus)) errors.push("A valid product status is required.");
     if (existingProductUrl && !isValidUrl(existingProductUrl)) errors.push("The product/website link is not a valid URL.");
-    if (!whatMakesUseful) errors.push("Please describe what makes the product useful or different.");
-    if (!whatToImprove) errors.push("Please describe what you'd like improved.");
     if (marketingStruggles.length === 0) errors.push("Select at least one marketing challenge.");
     if (!featureType) errors.push("Choose a public or anonymous feature.");
     if (featureType === "anonymous" && !anonymousConsent) errors.push("Anonymous consent is required for anonymous submissions.");

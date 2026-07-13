@@ -22,6 +22,7 @@
     "db:motion-graphics": "node scripts/run-motion-graphics-migration.mjs",
     "db:jarvis": "node scripts/run-jarvis-migration.mjs",
     "db:challenge": "node scripts/run-challenge-submissions-migration.mjs",
+    "db:challenge-optional-fields": "node scripts/run-challenge-submissions-optional-fields-migration.mjs",
     "type-check": "tsc --noEmit",
     "video": "remotion studio",
     "render": "remotion render src/remotion/index.tsx ShowcaseVideo out/video.mp4"

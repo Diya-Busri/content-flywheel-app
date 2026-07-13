@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
-import { Loader2, Upload, X, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Upload, X, FileText, CheckCircle2, AlertCircle, Check } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +39,7 @@ const initialState: FormState = {
   website: "",
 };
 
-const STEP_LABELS = ["About you", "Your product", "Marketing challenges", "Public or anonymous", "Uploads & permissions", "Review & submit"];
+const STEP_LABELS = ["About", "Product", "Marketing", "Privacy", "Uploads", "Review"];
 
 const PRODUCT_TYPES = [
   { value: "ebook", label: "Ebook" }, { value: "workbook", label: "Workbook" }, { value: "template", label: "Template" },
@@ -53,7 +52,7 @@ const PRODUCT_STATUSES = [
 ];
 const SOCIAL_PLATFORMS = [
   { value: "tiktok", label: "TikTok" }, { value: "instagram", label: "Instagram" }, { value: "youtube", label: "YouTube" },
-  { value: "x", label: "X" }, { value: "linkedin", label: "LinkedIn" }, { value: "other", label: "Other" }, { value: "none", label: "I do not want to share one" },
+  { value: "x", label: "X" }, { value: "linkedin", label: "LinkedIn" }, { value: "other", label: "Other" }, { value: "none", label: "I'd rather not say" },
 ];
 const MARKETING_STRUGGLES = [
   { value: "positioning", label: "Positioning" }, { value: "understanding_audience", label: "Understanding the audience" },
@@ -74,6 +73,14 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/epub+zip",
 ]);
+const RECOMMENDED_UPLOADS = [
+  { label: "Product file", hint: "PDF, zip, etc." },
+  { label: "Cover image" },
+  { label: "Product screenshots" },
+  { label: "Landing page", hint: "optional" },
+  { label: "Product preview", hint: "optional" },
+  { label: "Brand assets", hint: "optional" },
+];
 
 function fmtBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -112,19 +119,16 @@ export function ChallengeSubmissionForm() {
   function validateStep(n: number): string[] {
     const e: string[] = [];
     if (n === 1) {
-      if (!form.fullName.trim()) e.push("Full name is required.");
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.push("A valid email address is required.");
+      if (!form.fullName.trim()) e.push("Your name is required.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.push("A valid email address is required — that's how we'll reach you.");
     }
     if (n === 2) {
       if (!form.productName.trim()) e.push("Product name is required.");
       if (!form.productType) e.push("Select a product type.");
-      if (!form.productDescription.trim()) e.push("Product description is required.");
+      if (!form.productDescription.trim()) e.push("A short product description is required.");
       if (!form.targetAudience.trim()) e.push("Target audience is required.");
       if (!form.problemSolved.trim()) e.push("Describe the problem the product solves.");
-      if (!form.productPrice.trim()) e.push("Product price is required.");
       if (!form.productStatus) e.push("Select the current product status.");
-      if (!form.whatMakesUseful.trim()) e.push("Describe what makes the product useful or different.");
-      if (!form.whatToImprove.trim()) e.push("Let me know what you'd most like improved.");
       if (form.existingProductUrl.trim()) {
         try { new URL(form.existingProductUrl.trim()); } catch { e.push("The product/website link is not a valid URL."); }
       }
@@ -186,7 +190,7 @@ export function ChallengeSubmissionForm() {
         continue;
       }
       if (!ALLOWED_MIME_TYPES.has(file.type)) {
-        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...x, status: "error", error: "Unsupported file type." } : x)));
+        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...x, status: "error", error: "That file type isn't supported." } : x)));
         continue;
       }
 
@@ -244,6 +248,11 @@ export function ChallengeSubmissionForm() {
       return next;
     });
   }
+  // Queue timing and publish order are one acknowledgement in the UI, stored as two
+  // fields for the admin readiness checklist — keep them in sync from a single checkbox.
+  function setQueueAndOrder(checked: boolean) {
+    setForm((f) => ({ ...f, queueUnderstandingConfirmed: checked, publicationOrderConfirmed: checked }));
+  }
 
   async function handleSubmit() {
     const e = validateStep(5);
@@ -253,6 +262,9 @@ export function ChallengeSubmissionForm() {
     try {
       const payload = {
         ...form,
+        productPrice: form.productPrice || null,
+        whatMakesUseful: form.whatMakesUseful || null,
+        whatToImprove: form.whatToImprove || null,
         marketingTried: form.marketingTried || null,
         whatStoppingSales: form.whatStoppingSales || null,
         focusRequest: form.focusRequest || null,
@@ -290,18 +302,13 @@ export function ChallengeSubmissionForm() {
     return <SuccessScreen reference={result.reference} productName={form.productName} featureType={form.featureType as "public" | "anonymous"} email={form.email} onSubmitAnother={resetForm} />;
   }
 
-  const progressPct = (step / 6) * 100;
-
   return (
-    <div style={{ maxWidth: "640px", margin: "0 auto", background: "#fff", borderRadius: "20px", border: "1px solid #e5e7eb", padding: "32px 28px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+    <div
+      className="mx-auto bg-white border border-gray-200 px-5 py-6 sm:px-7 sm:py-8"
+      style={{ maxWidth: "640px", borderRadius: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+    >
       {/* ── Progress ── */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-orange-600">Step {step} of 6</span>
-          <span className="text-xs text-gray-500">{STEP_LABELS[step - 1]}</span>
-        </div>
-        <Progress value={progressPct} className="h-1.5" />
-      </div>
+      <Stepper step={step} />
 
       {/* ── Error announcements ── */}
       {errors.length > 0 && (
@@ -320,15 +327,15 @@ export function ChallengeSubmissionForm() {
         <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => set("website", e.target.value)} />
       </div>
 
-      <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-gray-900 mb-5 outline-none">{STEP_LABELS[step - 1]}</h2>
+      <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-gray-900 mb-5 outline-none">{stepHeading(step)}</h2>
 
       {step === 1 && (
         <div className="space-y-4">
           <Field label="Full name" required><Input value={form.fullName} onChange={(e) => set("fullName", e.target.value)} /></Field>
-          <Field label="Email address" required><Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
+          <Field label="Email address" required hint="We'll send your eligibility decision and next steps here."><Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
           <Field label="Creator or business name" hint="Optional"><Input value={form.creatorOrBusinessName} onChange={(e) => set("creatorOrBusinessName", e.target.value)} /></Field>
           <Field label="Social media username" hint="Optional"><Input value={form.socialUsername} onChange={(e) => set("socialUsername", e.target.value)} /></Field>
-          <Field label="Primary social platform" hint="Optional — a social account is never required">
+          <Field label="Primary social platform" hint="Optional">
             <select value={form.primarySocialPlatform} onChange={(e) => set("primarySocialPlatform", e.target.value)} className="w-full h-10 text-sm rounded-lg border border-gray-300 px-3">
               <option value="">Select…</option>
               {SOCIAL_PLATFORMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -339,7 +346,7 @@ export function ChallengeSubmissionForm() {
 
       {step === 2 && (
         <div className="space-y-4">
-          <p className="text-xs text-gray-500 -mt-2 mb-2">Submit one product per form — please don&apos;t attach your entire collection.</p>
+          <p className="text-xs text-gray-500 -mt-2 mb-2">One product per submission, please — not your whole collection.</p>
           <Field label="Product name" required><Input value={form.productName} onChange={(e) => set("productName", e.target.value)} /></Field>
           <Field label="Product type" required>
             <select value={form.productType} onChange={(e) => set("productType", e.target.value)} className="w-full h-10 text-sm rounded-lg border border-gray-300 px-3">
@@ -347,25 +354,25 @@ export function ChallengeSubmissionForm() {
               {PRODUCT_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </Field>
-          <Field label="Product description" required><Textarea rows={3} value={form.productDescription} onChange={(e) => set("productDescription", e.target.value)} /></Field>
-          <Field label="Target audience" required><Textarea rows={2} value={form.targetAudience} onChange={(e) => set("targetAudience", e.target.value)} /></Field>
-          <Field label="What problem does the product solve?" required><Textarea rows={2} value={form.problemSolved} onChange={(e) => set("problemSolved", e.target.value)} /></Field>
-          <Field label="Product price" required><Input placeholder="e.g. £27" value={form.productPrice} onChange={(e) => set("productPrice", e.target.value)} /></Field>
-          <Field label="Current product status" required>
+          <Field label="What is it?" required hint="A couple of sentences is plenty."><Textarea rows={3} className="resize-y" value={form.productDescription} onChange={(e) => set("productDescription", e.target.value)} /></Field>
+          <Field label="Who is it for?" required><Textarea rows={2} className="resize-y" value={form.targetAudience} onChange={(e) => set("targetAudience", e.target.value)} /></Field>
+          <Field label="What problem does it solve?" required><Textarea rows={2} className="resize-y" value={form.problemSolved} onChange={(e) => set("problemSolved", e.target.value)} /></Field>
+          <Field label="Current status" required>
             <select value={form.productStatus} onChange={(e) => set("productStatus", e.target.value)} className="w-full h-10 text-sm rounded-lg border border-gray-300 px-3">
               <option value="">Select…</option>
               {PRODUCT_STATUSES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </Field>
-          <Field label="Existing product or website link" hint="Optional — for internal review only, never shown publicly"><Input value={form.existingProductUrl} onChange={(e) => set("existingProductUrl", e.target.value)} /></Field>
-          <Field label="What makes this product useful or different?" required><Textarea rows={2} value={form.whatMakesUseful} onChange={(e) => set("whatMakesUseful", e.target.value)} /></Field>
-          <Field label="What would you most like me to improve?" required><Textarea rows={2} value={form.whatToImprove} onChange={(e) => set("whatToImprove", e.target.value)} /></Field>
+          <Field label="Price" hint="Optional — happy to ask by email later"><Input placeholder="e.g. £27" value={form.productPrice} onChange={(e) => set("productPrice", e.target.value)} /></Field>
+          <Field label="Existing product or website link" hint="Optional — for our review only, never shown publicly"><Input value={form.existingProductUrl} onChange={(e) => set("existingProductUrl", e.target.value)} /></Field>
+          <Field label="What makes it different?" hint="Optional"><Textarea rows={2} className="resize-y" value={form.whatMakesUseful} onChange={(e) => set("whatMakesUseful", e.target.value)} /></Field>
+          <Field label="Anything you'd like improved?" hint="Optional"><Textarea rows={2} className="resize-y" value={form.whatToImprove} onChange={(e) => set("whatToImprove", e.target.value)} /></Field>
         </div>
       )}
 
       {step === 3 && (
         <div className="space-y-4">
-          <Field label="What are you currently struggling with?" required hint="Select all that apply">
+          <Field label="What's your biggest marketing challenge right now?" required hint="Pick as many as apply">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {MARKETING_STRUGGLES.map((s) => (
                 <label key={s.value} className="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:border-orange-300">
@@ -375,16 +382,16 @@ export function ChallengeSubmissionForm() {
               ))}
             </div>
           </Field>
-          <Field label="What marketing have you already tried?" hint="Optional"><Textarea rows={2} value={form.marketingTried} onChange={(e) => set("marketingTried", e.target.value)} /></Field>
-          <Field label="What do you think is currently stopping the product from selling?" hint="Optional"><Textarea rows={2} value={form.whatStoppingSales} onChange={(e) => set("whatStoppingSales", e.target.value)} /></Field>
-          <Field label="Is there anything specific you want me to focus on?" hint="Optional"><Textarea rows={2} value={form.focusRequest} onChange={(e) => set("focusRequest", e.target.value)} /></Field>
-          <Field label="Is there anything I must not say or show publicly?" hint="Optional"><Textarea rows={2} value={form.doNotSayOrShow} onChange={(e) => set("doNotSayOrShow", e.target.value)} /></Field>
+          <Field label="What have you already tried?" hint="Optional"><Textarea rows={2} className="resize-y" value={form.marketingTried} onChange={(e) => set("marketingTried", e.target.value)} /></Field>
+          <Field label="What do you think is holding back sales?" hint="Optional"><Textarea rows={2} className="resize-y" value={form.whatStoppingSales} onChange={(e) => set("whatStoppingSales", e.target.value)} /></Field>
+          <Field label="Anything specific you'd like us to focus on?" hint="Optional"><Textarea rows={2} className="resize-y" value={form.focusRequest} onChange={(e) => set("focusRequest", e.target.value)} /></Field>
+          <Field label="Anything we shouldn't say or show publicly?" hint="Optional"><Textarea rows={2} className="resize-y" value={form.doNotSayOrShow} onChange={(e) => set("doNotSayOrShow", e.target.value)} /></Field>
         </div>
       )}
 
       {step === 4 && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 mb-2">How would you like your product to be featured?</p>
+          <p className="text-sm text-gray-600 mb-2">How would you like your product featured?</p>
 
           <button
             type="button"
@@ -392,13 +399,10 @@ export function ChallengeSubmissionForm() {
             className={`w-full text-left rounded-xl border-2 p-4 transition-colors ${form.featureType === "public" ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
             aria-pressed={form.featureType === "public"}
           >
-            <p className="font-semibold text-gray-900 mb-1">Show my product and creator identity</p>
+            <p className="font-semibold text-gray-900 mb-1">Show my name and product</p>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Your creator or business name, social username, product name, product visuals and Content Flywheel Store
-              product page may be shown publicly in the challenge series. Public creators do not need a Content
-              Flywheel account when submitting. After your submission passes eligibility review, you&apos;ll get an
-              email asking you to create a Content Flywheel Store product listing and reply with the link — for the
-              exact product being promoted only.
+              Your name, product and Content Flywheel Store link may appear publicly. No account needed to submit —
+              if you&apos;re eligible, we&apos;ll email you to ask for a Store link before production starts.
             </p>
           </button>
 
@@ -408,19 +412,17 @@ export function ChallengeSubmissionForm() {
             className={`w-full text-left rounded-xl border-2 p-4 transition-colors ${form.featureType === "anonymous" ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
             aria-pressed={form.featureType === "anonymous"}
           >
-            <p className="font-semibold text-gray-900 mb-1">Keep my identity and product details anonymous</p>
-            <p className="text-sm text-gray-600 leading-relaxed mb-2">
-              Your product will still be used as a marketing case study, but identifying details will be removed or
-              blurred. You will not need a Content Flywheel account, a store, a public product link, or to reveal your
-              social profile. The case study may still discuss the general product type, audience, problem, marketing
-              challenges, strategy, improvements and lessons learned.
+            <p className="font-semibold text-gray-900 mb-1">Keep me anonymous</p>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Your product becomes a case study, but identifying details are blurred or removed. No account, store
+              or public link required.
             </p>
           </button>
 
           {form.featureType === "anonymous" && (
             <label className="flex items-start gap-2 text-sm text-gray-700 bg-purple-50 border border-purple-200 rounded-lg p-3">
               <Checkbox checked={form.anonymousConsent} onCheckedChange={(c) => set("anonymousConsent", c === true)} className="mt-0.5" />
-              <span>I understand that Content Flywheel may discuss the general product type, audience, marketing challenges, strategy and improvements while removing or blurring identifying information.</span>
+              <span>I understand Content Flywheel may discuss the product, audience and strategy while blurring identifying details.</span>
             </label>
           )}
         </div>
@@ -429,8 +431,18 @@ export function ChallengeSubmissionForm() {
       {step === 5 && (
         <div className="space-y-6">
           <div>
+            <Label className="mb-2 block text-sm font-semibold text-gray-900">Recommended uploads</Label>
+            <div className="grid grid-cols-2 gap-1.5 mb-4">
+              {RECOMMENDED_UPLOADS.map((u) => (
+                <div key={u.label} className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 rounded-md px-2.5 py-1.5">
+                  <Check className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                  <span className="truncate">{u.label}{u.hint && <span className="text-gray-400"> ({u.hint})</span>}</span>
+                </div>
+              ))}
+            </div>
+
             <Label className="mb-1.5 block">Product uploads <span className="text-red-500">*</span></Label>
-            <p className="text-xs text-gray-500 mb-3">PDF, product cover, screenshots, workbook, template preview, course outline, digital download preview, brand assets, or supporting images. Up to {MAX_FILES} files, 50MB each. Files are kept private — only reviewed by admins.</p>
+            <p className="text-xs text-gray-500 mb-3">Up to {MAX_FILES} files, 50MB each. Kept private — only reviewed by admins.</p>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -454,67 +466,86 @@ export function ChallengeSubmissionForm() {
                         <button type="button" onClick={() => removeFile(f.key)} aria-label={`Remove ${f.originalName}`}><X className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
                       </span>
                     </div>
-                    {f.status === "error" && f.error && <p className="text-xs text-red-600 mt-1">{f.error} Remove it and try uploading again.</p>}
+                    {f.status === "error" && f.error && <p className="text-xs text-red-600 mt-1">{f.error} Remove it and try again.</p>}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="border-t border-gray-100 pt-5 space-y-2.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-semibold text-gray-900">Permissions and eligibility</p>
+          <div className="border-t border-gray-100 pt-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-900">Permissions</p>
               <label className="flex items-center gap-1.5 text-xs font-medium text-orange-600 cursor-pointer select-none">
                 <Checkbox checked={allRequiredConsentsChecked} onCheckedChange={(c) => toggleAllConsents(c === true)} />
                 Select all
               </label>
             </div>
-            <ConsentBox checked={form.ownershipConfirmed} onChange={(c) => set("ownershipConfirmed", c)}>I confirm that I own this product or have permission to submit it.</ConsentBox>
-            <ConsentBox checked={form.reviewPermissionConfirmed} onChange={(c) => set("reviewPermissionConfirmed", c)}>I give Content Flywheel permission to review this product and create marketing content about it.</ConsentBox>
-            <ConsentBox checked={form.queueUnderstandingConfirmed} onChange={(c) => set("queueUnderstandingConfirmed", c)}>I understand that every eligible submission will enter the production queue, but publishing may take time.</ConsentBox>
-            <ConsentBox checked={form.publicationOrderConfirmed} onChange={(c) => set("publicationOrderConfirmed", c)}>I understand that the publication order may differ from the submission order.</ConsentBox>
-            <ConsentBox checked={form.rejectionRiskAcknowledged} onChange={(c) => set("rejectionRiskAcknowledged", c)}>I understand that my submission may be rejected if it is incomplete, unsafe, unlawful, fraudulent, inappropriate or outside the challenge scope.</ConsentBox>
-            <ConsentBox checked={form.termsAgreed} onChange={(c) => set("termsAgreed", c)}>
-              I agree to the <Link href="/privacy" className="text-orange-600 underline">Privacy Policy</Link> and <Link href="/terms" className="text-orange-600 underline">Terms</Link>.
-            </ConsentBox>
 
-            {form.featureType === "public" && (
-              <>
-                <ConsentBox checked={form.publicDisplayConsent} onChange={(c) => set("publicDisplayConsent", c)}>I give Content Flywheel permission to publicly display my selected product, creator details and Content Flywheel Store listing.</ConsentBox>
-                <ConsentBox checked={form.storeLinkObligationAck} onChange={(c) => set("storeLinkObligationAck", c)}>I understand that I will need to provide a Content Flywheel Store product link before production begins.</ConsentBox>
-              </>
-            )}
-            {form.featureType === "anonymous" && (
-              <>
-                <ConsentBox checked={form.anonymousNoLinkAck} onChange={(c) => set("anonymousNoLinkAck", c)}>I understand that my product will not receive a public purchase or discovery link.</ConsentBox>
-                <ConsentBox checked={form.anonymousBlurAck} onChange={(c) => set("anonymousBlurAck", c)}>I understand that identifying information will be removed or blurred before publishing.</ConsentBox>
-              </>
-            )}
+            <PermissionGroup title="Legal">
+              <ConsentBox checked={form.ownershipConfirmed} onChange={(c) => set("ownershipConfirmed", c)}>I own this product, or have permission to submit it.</ConsentBox>
+              <ConsentBox checked={form.termsAgreed} onChange={(c) => set("termsAgreed", c)}>
+                I agree to the <Link href="/privacy" className="text-orange-600 underline">Privacy Policy</Link> and <Link href="/terms" className="text-orange-600 underline">Terms</Link>.
+              </ConsentBox>
+            </PermissionGroup>
 
-            <div className="border-t border-gray-100 pt-2.5 mt-2.5">
-              <ConsentBox checked={form.marketingOptIn} onChange={(c) => set("marketingOptIn", c)}>Send me Content Flywheel updates, marketing tips and challenge news.</ConsentBox>
-            </div>
+            <PermissionGroup title="Marketing">
+              <ConsentBox checked={form.reviewPermissionConfirmed} onChange={(c) => set("reviewPermissionConfirmed", c)}>Content Flywheel can review this product and create marketing content about it.</ConsentBox>
+            </PermissionGroup>
+
+            <PermissionGroup title="Publication">
+              <ConsentBox checked={form.queueUnderstandingConfirmed && form.publicationOrderConfirmed} onChange={setQueueAndOrder}>My submission joins a production queue — publishing takes time and order may vary.</ConsentBox>
+              <ConsentBox checked={form.rejectionRiskAcknowledged} onChange={(c) => set("rejectionRiskAcknowledged", c)}>My submission may be turned away if it&apos;s incomplete, unsafe or outside the challenge scope.</ConsentBox>
+              {form.featureType === "public" && (
+                <>
+                  <ConsentBox checked={form.publicDisplayConsent} onChange={(c) => set("publicDisplayConsent", c)}>Content Flywheel can publicly show my product, name and Store listing.</ConsentBox>
+                  <ConsentBox checked={form.storeLinkObligationAck} onChange={(c) => set("storeLinkObligationAck", c)}>I&apos;ll add a Content Flywheel Store link before production starts.</ConsentBox>
+                </>
+              )}
+              {form.featureType === "anonymous" && (
+                <>
+                  <ConsentBox checked={form.anonymousNoLinkAck} onChange={(c) => set("anonymousNoLinkAck", c)}>My identity won&apos;t be shown, and I won&apos;t need a Store link.</ConsentBox>
+                  <ConsentBox checked={form.anonymousBlurAck} onChange={(c) => set("anonymousBlurAck", c)}>Identifying details will be blurred or removed before publishing.</ConsentBox>
+                </>
+              )}
+            </PermissionGroup>
+
+            <PermissionGroup title="Communication">
+              <ConsentBox checked={form.marketingOptIn} onChange={(c) => set("marketingOptIn", c)}>Send me updates, tips and challenge news.</ConsentBox>
+            </PermissionGroup>
           </div>
         </div>
       )}
 
       {step === 6 && (
         <div className="space-y-5">
-          <ReviewRow label="Full name" value={form.fullName} />
-          <ReviewRow label="Email" value={form.email} />
-          <ReviewRow label="Product" value={form.productName} />
-          <ReviewRow label="Product type" value={PRODUCT_TYPES.find((t) => t.value === form.productType)?.label ?? ""} />
-          <ReviewRow label="Feature type" value={form.featureType === "public" ? "Public — identity shown" : "Anonymous — identity blurred"} />
-          <ReviewRow label="Files" value={`${files.filter((f) => f.status === "done").length} uploaded`} />
-          <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-4">
-            After you submit, your product goes through a basic eligibility review. Every eligible submission is added
-            to the production queue — publishing may take time and won&apos;t necessarily follow submission order.
-          </p>
+          <div className="rounded-xl border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+            <ReviewRow label="Creator" value={form.fullName} />
+            <ReviewRow label="Product" value={form.productName} />
+            <ReviewRow label="Audience" value={form.targetAudience} />
+            <ReviewRow label="Product type" value={PRODUCT_TYPES.find((t) => t.value === form.productType)?.label ?? ""} />
+            <ReviewRow label="Marketing challenge" value={form.marketingStruggles.map((v) => MARKETING_STRUGGLES.find((s) => s.value === v)?.label ?? v).join(", ")} />
+            <ReviewRow label="Feature type" value={form.featureType === "public" ? "Public — name shown" : "Anonymous — identity blurred"} />
+            <ReviewRow label="Files uploaded" value={`${files.filter((f) => f.status === "done").length}`} />
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm font-semibold text-gray-900 mb-2">What happens next?</p>
+            <ul className="space-y-1.5 text-sm text-gray-600 leading-relaxed">
+              <li className="flex gap-2"><Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />Your submission goes through a quick eligibility review.</li>
+              {form.featureType === "public" ? (
+                <li className="flex gap-2"><Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />If it&apos;s eligible, we&apos;ll email you to ask for a Content Flywheel Store link for this product.</li>
+              ) : (
+                <li className="flex gap-2"><Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />No Store link needed — your submission stays anonymous.</li>
+              )}
+              <li className="flex gap-2"><Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />Once everything&apos;s confirmed, your product joins the production queue.</li>
+            </ul>
+          </div>
         </div>
       )}
 
       {/* ── Nav ── */}
-      <div className="flex items-center justify-between mt-8 pt-5 border-t border-gray-100">
+      <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 mt-8 flex items-center justify-between border-t border-gray-100 bg-white/95 backdrop-blur px-5 sm:px-7 py-4 sm:static sm:mx-0 sm:bg-transparent sm:backdrop-blur-0 sm:py-0 sm:pt-5 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-0">
         <Button type="button" variant="ghost" onClick={goBack} disabled={step === 1 || submitting}>Back</Button>
         {step < 6 ? (
           <Button type="button" className="bg-orange-500 hover:bg-orange-600" onClick={goNext}>Next</Button>
@@ -528,7 +559,54 @@ export function ChallengeSubmissionForm() {
   );
 }
 
+function stepHeading(step: number): string {
+  switch (step) {
+    case 1: return "About you";
+    case 2: return "Your product";
+    case 3: return "Marketing challenges";
+    case 4: return "Public or anonymous?";
+    case 5: return "Uploads & permissions";
+    case 6: return "Review & submit";
+    default: return "";
+  }
+}
+
 // ── Small building blocks ────────────────────────────────────────────────────
+
+function Stepper({ step }: { step: number }) {
+  return (
+    <div className="mb-6">
+      <div className="flex items-center">
+        {STEP_LABELS.map((label, i) => {
+          const idx = i + 1;
+          const isDone = idx < step;
+          const isCurrent = idx === step;
+          return (
+            <div key={label} className="flex items-center flex-1 last:flex-none">
+              <div className="flex flex-col items-center">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 transition-colors ${
+                    isDone ? "bg-orange-500 text-white" : isCurrent ? "bg-orange-500 text-white ring-4 ring-orange-100" : "bg-gray-100 text-gray-400"
+                  }`}
+                  aria-current={isCurrent ? "step" : undefined}
+                >
+                  {isDone ? <Check className="w-3.5 h-3.5" /> : idx}
+                </div>
+                <span className={`mt-1 text-[10px] font-medium text-center leading-tight hidden sm:block ${isCurrent ? "text-orange-600" : isDone ? "text-gray-600" : "text-gray-400"}`}>
+                  {label}
+                </span>
+              </div>
+              {idx < STEP_LABELS.length && <div className={`flex-1 h-0.5 mx-1 ${isDone ? "bg-orange-400" : "bg-gray-200"}`} />}
+            </div>
+          );
+        })}
+      </div>
+      <p className="sm:hidden text-center text-xs font-semibold text-orange-600 mt-2">
+        Step {step} of {STEP_LABELS.length} — {STEP_LABELS[step - 1]}
+      </p>
+    </div>
+  );
+}
 
 function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
@@ -536,6 +614,15 @@ function Field({ label, required, hint, children }: { label: string; required?: 
       <Label className="mb-1.5 block text-sm">{label} {required && <span className="text-red-500">*</span>}</Label>
       {hint && <p className="text-xs text-gray-400 mb-1.5">{hint}</p>}
       {children}
+    </div>
+  );
+}
+
+function PermissionGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{title}</p>
+      <div className="space-y-2">{children}</div>
     </div>
   );
 }
@@ -551,9 +638,9 @@ function ConsentBox({ checked, onChange, children }: { checked: boolean; onChang
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-sm border-b border-gray-100 pb-2">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-gray-900 text-right">{value}</span>
+    <div className="flex items-start justify-between gap-4 text-sm px-4 py-2.5">
+      <span className="text-gray-500 shrink-0">{label}</span>
+      <span className="font-medium text-gray-900 text-right">{value || "—"}</span>
     </div>
   );
 }
@@ -566,16 +653,15 @@ function SuccessScreen({ reference, productName, featureType, email, onSubmitAno
       <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
         <CheckCircle2 className="w-7 h-7 text-green-600" />
       </div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-3">Your product has been submitted</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-3">You&apos;re in — thanks for submitting</h2>
       <p className="text-sm text-gray-600 leading-relaxed mb-2">
-        Your submission is now waiting for an eligibility review. Every eligible product will be added to the 100
-        Product Challenge production queue. Publishing times will depend on the number of submissions currently
-        waiting.
+        Your submission is now waiting for a quick eligibility review. Every eligible product joins the 100 Product
+        Challenge production queue — publishing time depends on how many are ahead of you.
       </p>
       <p className="text-sm text-gray-600 leading-relaxed mb-6">
         {featureType === "public"
-          ? "Once your product passes the review, you'll receive an email asking you to create a Content Flywheel Store listing for the product you submitted."
-          : "You will not be required to create a Content Flywheel account or store, and your product will not receive a public purchase or discovery link. Your identifying details will be removed or blurred before publication."}
+          ? "Once you&apos;re eligible, we&apos;ll email you to ask for a Content Flywheel Store link for this product."
+          : "No account or Store needed — your identifying details will be blurred or removed before publishing."}
       </p>
 
       <div className="bg-gray-50 rounded-xl p-4 text-left text-sm space-y-2 mb-8">

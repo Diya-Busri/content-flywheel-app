@@ -67,12 +67,15 @@ export const challengeSubmissionsTable = pgTable("challenge_submissions", {
   productDescription: text("product_description").notNull(),
   targetAudience: text("target_audience").notNull(),
   problemSolved: text("problem_solved").notNull(),
-  productPrice: text("product_price").notNull(),
+  /** Optional — nice to know, not required before eligibility review. */
+  productPrice: text("product_price"),
   /** "finished_not_launched" | "launched_no_sales" | "some_sales" | "selling_consistently" */
   productStatus: text("product_status").notNull(),
   existingProductUrl: text("existing_product_url"),
-  whatMakesUseful: text("what_makes_useful").notNull(),
-  whatToImprove: text("what_to_improve").notNull(),
+  /** Optional — can be collected later by email if needed. */
+  whatMakesUseful: text("what_makes_useful"),
+  /** Optional — can be collected later by email if needed. */
+  whatToImprove: text("what_to_improve"),
 
   // ── Marketing questions ──────────────────────────────────────────────────
   marketingStruggles: jsonb("marketing_struggles").$type<string[]>().notNull().default([]),
