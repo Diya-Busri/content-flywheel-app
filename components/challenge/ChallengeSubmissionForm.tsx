@@ -12,7 +12,7 @@ import { Loader2, Upload, X, FileText, CheckCircle2, AlertCircle } from "lucide-
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type UploadedFile = { key: string; originalName: string; size: number; type: string; uploadedAt: string; status: "uploading" | "done" | "error" };
+type UploadedFile = { key: string; originalName: string; size: number; type: string; uploadedAt: string; status: "uploading" | "done" | "error"; error?: string };
 
 type FormState = {
   fullName: string; email: string; creatorOrBusinessName: string; socialUsername: string; primarySocialPlatform: string;
@@ -65,6 +65,15 @@ const MARKETING_STRUGGLES = [
 ];
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.webp,.gif,.zip,.docx,.pptx,.xlsx,.epub";
 const MAX_FILES = 6;
+const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB per file
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif",
+  "application/zip", "application/x-zip-compressed",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/epub+zip",
+]);
 
 function fmtBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -166,15 +175,50 @@ export function ChallengeSubmissionForm() {
     for (const file of toUpload) {
       const tempKey = `temp-${Date.now()}-${file.name}`;
       setFiles((f) => [...f, { key: tempKey, originalName: file.name, size: file.size, type: file.type, uploadedAt: "", status: "uploading" }]);
+
+      // Client-side pre-checks — fail fast with a clear reason before hitting the network.
+      if (file.size === 0) {
+        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...x, status: "error", error: "File is empty." } : x)));
+        continue;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...x, status: "error", error: "File is too large (50MB max)." } : x)));
+        continue;
+      }
+      if (!ALLOWED_MIME_TYPES.has(file.type)) {
+        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...x, status: "error", error: "Unsupported file type." } : x)));
+        continue;
+      }
+
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/challenge/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
-        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...data, status: "done" } : x)));
-      } catch {
-        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...x, status: "error" } : x)));
+        // Step 1: ask the server for a short-lived presigned R2 upload URL.
+        const presignRes = await fetch("/api/challenge/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+        });
+        const presignData = await presignRes.json();
+        if (!presignRes.ok) throw new Error(presignData.error || "Could not prepare upload");
+
+        // Step 2: upload the file bytes straight to R2 — never through our server,
+        // so there's no Vercel function body-size limit to hit.
+        const putRes = await fetch(presignData.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!putRes.ok) throw new Error("Upload to storage failed. Please try again.");
+
+        setFiles((f) =>
+          f.map((x) =>
+            x.key === tempKey
+              ? { key: presignData.key, originalName: presignData.originalName, size: presignData.size, type: presignData.type, uploadedAt: presignData.uploadedAt, status: "done" }
+              : x
+          )
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Upload failed. Please try again.";
+        setFiles((f) => f.map((x) => (x.key === tempKey ? { ...x, status: "error", error: message } : x)));
       }
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -182,6 +226,23 @@ export function ChallengeSubmissionForm() {
 
   function removeFile(key: string) {
     setFiles((f) => f.filter((x) => x.key !== key));
+  }
+
+  // "Select all" covers only the required permission/eligibility acknowledgements —
+  // marketingOptIn is a genuine opt-in choice and is deliberately excluded.
+  const requiredConsentKeys: (keyof FormState)[] = [
+    "ownershipConfirmed", "reviewPermissionConfirmed", "queueUnderstandingConfirmed",
+    "publicationOrderConfirmed", "rejectionRiskAcknowledged", "termsAgreed",
+    ...(form.featureType === "public" ? (["publicDisplayConsent", "storeLinkObligationAck"] as (keyof FormState)[]) : []),
+    ...(form.featureType === "anonymous" ? (["anonymousNoLinkAck", "anonymousBlurAck"] as (keyof FormState)[]) : []),
+  ];
+  const allRequiredConsentsChecked = requiredConsentKeys.every((k) => form[k] === true);
+  function toggleAllConsents(checked: boolean) {
+    setForm((f) => {
+      const next = { ...f };
+      for (const k of requiredConsentKeys) (next as Record<string, unknown>)[k] = checked;
+      return next;
+    });
   }
 
   async function handleSubmit() {
@@ -383,14 +444,17 @@ export function ChallengeSubmissionForm() {
             {files.length > 0 && (
               <div className="mt-3 space-y-2">
                 {files.map((f) => (
-                  <div key={f.key} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
-                    <span className="flex items-center gap-2 min-w-0"><FileText className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">{f.originalName}</span><span className="text-xs text-gray-400 shrink-0">({fmtBytes(f.size)})</span></span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      {f.status === "uploading" && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
-                      {f.status === "done" && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                      {f.status === "error" && <AlertCircle className="w-4 h-4 text-red-500" />}
-                      <button type="button" onClick={() => removeFile(f.key)} aria-label={`Remove ${f.originalName}`}><X className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
-                    </span>
+                  <div key={f.key} className={`rounded-lg px-3 py-2 ${f.status === "error" ? "bg-red-50" : "bg-gray-50"}`}>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 min-w-0"><FileText className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">{f.originalName}</span><span className="text-xs text-gray-400 shrink-0">({fmtBytes(f.size)})</span></span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        {f.status === "uploading" && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+                        {f.status === "done" && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                        {f.status === "error" && <AlertCircle className="w-4 h-4 text-red-500" />}
+                        <button type="button" onClick={() => removeFile(f.key)} aria-label={`Remove ${f.originalName}`}><X className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
+                      </span>
+                    </div>
+                    {f.status === "error" && f.error && <p className="text-xs text-red-600 mt-1">{f.error} Remove it and try uploading again.</p>}
                   </div>
                 ))}
               </div>
@@ -398,7 +462,13 @@ export function ChallengeSubmissionForm() {
           </div>
 
           <div className="border-t border-gray-100 pt-5 space-y-2.5">
-            <p className="text-sm font-semibold text-gray-900 mb-1">Permissions and eligibility</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-semibold text-gray-900">Permissions and eligibility</p>
+              <label className="flex items-center gap-1.5 text-xs font-medium text-orange-600 cursor-pointer select-none">
+                <Checkbox checked={allRequiredConsentsChecked} onCheckedChange={(c) => toggleAllConsents(c === true)} />
+                Select all
+              </label>
+            </div>
             <ConsentBox checked={form.ownershipConfirmed} onChange={(c) => set("ownershipConfirmed", c)}>I confirm that I own this product or have permission to submit it.</ConsentBox>
             <ConsentBox checked={form.reviewPermissionConfirmed} onChange={(c) => set("reviewPermissionConfirmed", c)}>I give Content Flywheel permission to review this product and create marketing content about it.</ConsentBox>
             <ConsentBox checked={form.queueUnderstandingConfirmed} onChange={(c) => set("queueUnderstandingConfirmed", c)}>I understand that every eligible submission will enter the production queue, but publishing may take time.</ConsentBox>
