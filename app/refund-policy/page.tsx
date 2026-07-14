@@ -1,4 +1,5 @@
 import { LegalPageLayout } from "@/components/legal-page-layout";
+import { REFUND_POLICY_TEXT } from "@/lib/refund-policy";
 
 export const metadata = {
   title: "Refund Policy | Content Flywheel",
@@ -64,7 +65,17 @@ export default function RefundPolicyPage() {
             Digital Products Sold by Creators
           </h2>
           <p className="mt-3 leading-relaxed">
-            Content Flywheel is a platform that enables creators to sell their own digital products. Refund policies for individual products are set by the creator who sold them. If you purchased a digital product from a creator&apos;s store, please contact them directly. Content Flywheel is not responsible for refunds on third-party creator products.
+            Content Flywheel is a platform that enables creators to sell their own digital products (guides, courses, templates, and similar instant-download items). This is the standard policy that applies to every digital product purchase made on the platform:
+          </p>
+          <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 leading-relaxed dark:border-slate-700 dark:bg-slate-800/60">
+            {REFUND_POLICY_TEXT}
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Before paying, every buyer must actively confirm they understand this by checking a consent box — it is never pre-selected. If you believe a product you purchased is faulty, inaccessible, or materially different from its description, contact the creator directly, or{" "}
+            <a href="mailto:contentflywheel@gmail.com" className="font-medium text-orange-500 hover:text-orange-400">
+              contentflywheel@gmail.com
+            </a>{" "}
+            if you need help escalating it. Nothing here affects your statutory consumer rights.
           </p>
         </section>
 

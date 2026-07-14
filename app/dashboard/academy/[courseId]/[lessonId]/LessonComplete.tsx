@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   CheckCircle2, ArrowRight, Loader2, Zap, Trophy,
-  Star, Rocket, ShoppingBag, BookOpen,
+  Star, Rocket, ShoppingBag, BookOpen, MessageCircleQuestion, Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { markLessonCompleteAction } from "@/actions/academy-actions";
 import { CompletionCelebration } from "@/components/academy/completion-celebration";
+import { UnderstandingCheckPanel } from "@/components/academy/UnderstandingCheckPanel";
+import type { CourseCheckpointRecap } from "@/db/queries/academy-checkpoint-queries";
 
 const XP_PER_LESSON = 10;
 
@@ -36,19 +38,29 @@ const ACHIEVEMENT_THRESHOLDS: Record<number, { icon: string; label: string }> = 
 export function LessonComplete({
   lessonId,
   courseId,
+  lessonTitle,
   alreadyComplete,
   nextLessonId,
   isLastLesson,
   totalLessons,
   completedCount,
+  checkpointEnabled = false,
+  applyToolKey,
+  checkpointRecap = null,
 }: {
   lessonId: string;
   courseId: string;
+  lessonTitle: string;
   alreadyComplete: boolean;
   nextLessonId: string | null;
   isLastLesson?: boolean;
   totalLessons?: number;
   completedCount?: number;
+  /** Understanding Check feature flag — resolved server-side (admin bypass + per-user beta flag). */
+  checkpointEnabled?: boolean;
+  applyToolKey?: string | null;
+  /** Course-wide Understanding Check rollup — only ever populated for the last lesson. */
+  checkpointRecap?: CourseCheckpointRecap | null;
 }) {
   const [completed, setCompleted] = useState(alreadyComplete);
   const [celebrate, setCelebrate] = useState(false);
@@ -56,8 +68,24 @@ export function LessonComplete({
   const [showCourseComplete, setShowCourseComplete] = useState(false);
   const [newXP, setNewXP] = useState(0);
   const [achievement, setAchievement] = useState<{ icon: string; label: string } | null>(null);
+  const [showPanel, setShowPanel] = useState(false);
+  // Gates the next-lesson UI only for a FRESH completion this session — revisiting an
+  // already-completed lesson never re-forces the checkpoint open (it's still reachable
+  // via the "Understanding Check" button below, per "don't repeatedly force it open").
+  const [checkpointDone, setCheckpointDone] = useState(!checkpointEnabled || alreadyComplete);
   const { toast } = useToast();
   const router = useRouter();
+
+  function finishCompletionFlow() {
+    if (isLastLesson) {
+      setShowCourseComplete(true);
+    } else {
+      toast({
+        title: `+${XP_PER_LESSON} XP — Lesson complete! 🎉`,
+        description: getMotivationalMessage(completedCount ?? 0),
+      });
+    }
+  }
 
   async function handleComplete() {
     setLoading(true);
@@ -74,18 +102,25 @@ export function LessonComplete({
       const unlocked = ACHIEVEMENT_THRESHOLDS[newCount];
       if (unlocked) setAchievement(unlocked);
 
-      // Course complete?
-      if (isLastLesson) {
-        setShowCourseComplete(true);
+      if (checkpointEnabled) {
+        // Open the Understanding Check before showing the normal next-lesson action.
+        setShowPanel(true);
       } else {
-        toast({
-          title: `+${XP_PER_LESSON} XP — Lesson complete! 🎉`,
-          description: getMotivationalMessage(completedCount ?? 0),
-        });
+        finishCompletionFlow();
       }
       router.refresh();
     } else {
       toast({ title: "Error", description: res.message, variant: "destructive" });
+    }
+  }
+
+  function handlePanelDone() {
+    // Only the FIRST time the panel concludes after a fresh completion should trigger
+    // the celebration/next-step flow. Manual reopens later (checkpointDone already
+    // true) just close the panel without re-firing XP toasts or the course-complete screen.
+    if (!checkpointDone) {
+      setCheckpointDone(true);
+      finishCompletionFlow();
     }
   }
 
@@ -132,6 +167,35 @@ export function LessonComplete({
               ))}
             </div>
           </div>
+
+          {/* Understanding Check recap — only shown if the feature is on and at least one checkpoint was opened. */}
+          {checkpointRecap && checkpointRecap.lessonsWithCheckpoint > 0 && (
+            <div className="mt-4 rounded-lg border bg-card p-4 text-left">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5">
+                <Lightbulb className="h-3.5 w-3.5 text-orange-500" /> Your Understanding Checks
+              </p>
+              <div className="space-y-1.5 text-sm text-foreground">
+                <p>
+                  You confirmed you understood{" "}
+                  <span className="font-medium">
+                    {checkpointRecap.understoodCount} of {checkpointRecap.lessonsWithCheckpoint}
+                  </span>{" "}
+                  lessons.
+                </p>
+                {checkpointRecap.helpUsedCount > 0 && (
+                  <p className="text-muted-foreground">
+                    You asked for extra help on {checkpointRecap.helpUsedCount} lesson{checkpointRecap.helpUsedCount === 1 ? "" : "s"} —
+                    revisit those anytime from the course sidebar.
+                  </p>
+                )}
+                {checkpointRecap.skippedCount > 0 && (
+                  <p className="text-muted-foreground">
+                    You skipped the checkpoint on {checkpointRecap.skippedCount} lesson{checkpointRecap.skippedCount === 1 ? "" : "s"}.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
@@ -185,34 +249,64 @@ export function LessonComplete({
 
       {/* Complete / Next */}
       <div className="flex flex-wrap items-center gap-3">
-        {completed ? (
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-4 py-2 text-sm font-medium text-green-600">
-            <CheckCircle2 className="h-4 w-4" /> Completed
-          </span>
-        ) : (
+        {!completed && (
           <Button onClick={handleComplete} disabled={loading} className="bg-orange-500 hover:bg-orange-600">
             {loading
               ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Marking complete…</>
               : <><CheckCircle2 className="mr-1.5 h-4 w-4" /> Mark as Complete</>}
           </Button>
         )}
-        {nextLessonId && !isLastLesson && (
-          <Link
-            href={`/dashboard/academy/${courseId}/${nextLessonId}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Next Lesson <ArrowRight className="h-4 w-4" />
-          </Link>
+
+        {completed && !checkpointDone && (
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-4 py-2 text-sm font-medium text-green-600">
+            <CheckCircle2 className="h-4 w-4" /> Completed — finishing your Understanding Check…
+          </span>
         )}
-        {isLastLesson && completed && (
-          <Link
-            href="/dashboard/digital-products/discover"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
-          >
-            <Rocket className="h-4 w-4" /> Create My Product
-          </Link>
+
+        {completed && checkpointDone && (
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-4 py-2 text-sm font-medium text-green-600">
+              <CheckCircle2 className="h-4 w-4" /> Completed
+            </span>
+            {nextLessonId && !isLastLesson && (
+              <Link
+                href={`/dashboard/academy/${courseId}/${nextLessonId}`}
+                className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                Next Lesson <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
+            {isLastLesson && (
+              <Link
+                href="/dashboard/digital-products/discover"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+              >
+                <Rocket className="h-4 w-4" /> Create My Product
+              </Link>
+            )}
+            {checkpointEnabled && (
+              <button
+                type="button"
+                onClick={() => setShowPanel(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-dashed bg-transparent px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <MessageCircleQuestion className="h-3.5 w-3.5" /> Understanding Check
+              </button>
+            )}
+          </>
         )}
       </div>
+
+      {checkpointEnabled && (
+        <UnderstandingCheckPanel
+          open={showPanel}
+          onOpenChange={setShowPanel}
+          lessonId={lessonId}
+          lessonTitle={lessonTitle}
+          applyToolKey={applyToolKey}
+          onDone={handlePanelDone}
+        />
+      )}
     </div>
   );
 }

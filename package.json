@@ -21,9 +21,17 @@
     "db:coach-memory": "node scripts/run-coach-migrations.mjs",
     "db:motion-graphics": "node scripts/run-motion-graphics-migration.mjs",
     "db:jarvis": "node scripts/run-jarvis-migration.mjs",
+    "db:academy-checkpoints": "node scripts/run-academy-checkpoint-migration.mjs",
+    "db:academy-checkpoint-message-image": "node scripts/run-academy-checkpoint-message-image-migration.mjs",
+    "db:academy-checkpoint-struggle-memory": "node scripts/run-academy-checkpoint-struggle-memory-migration.mjs",
+    "db:feature-flags-rollout": "node scripts/run-feature-flags-rollout-migration.mjs",
+    "db:challenge": "node scripts/run-challenge-submissions-migration.mjs",
+    "db:challenge-optional-fields": "node scripts/run-challenge-submissions-optional-fields-migration.mjs",
+    "db:order-consent": "node scripts/run-order-consent-migration.mjs",
     "type-check": "tsc --noEmit",
     "video": "remotion studio",
-    "render": "remotion render src/remotion/index.tsx ShowcaseVideo out/video.mp4"
+    "render": "remotion render src/remotion/index.tsx ShowcaseVideo out/video.mp4",
+    "test": "vitest run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
@@ -158,16 +166,21 @@
   },
   "devDependencies": {
     "@remotion/cli": "4.0.484",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.7.0",
     "drizzle-kit": "^0.24.2",
     "eslint": "^8",
     "eslint-config-next": "14.2.7",
+    "jsdom": "^25.0.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }

@@ -161,18 +161,20 @@ export function ProductCoverSection({
           >
             {productTitle}
           </h3>
-          <p
-            style={{
-              margin: 0,
-              color: "rgba(255,255,255,0.5)",
-              fontSize: "12px",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              fontWeight: "600",
-            }}
-          >
-            {formatLabel}
-          </p>
+          {format && (
+            <p
+              style={{
+                margin: 0,
+                color: "rgba(255,255,255,0.5)",
+                fontSize: "12px",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                fontWeight: "600",
+              }}
+            >
+              {formatLabel}
+            </p>
+          )}
         </div>
       )}
 
@@ -276,7 +278,7 @@ export function ProductCoverSection({
                 fontWeight: "500",
               }}
             >
-              — first {pdfPages.length} page{pdfPages.length > 1 ? "s" : ""}
+              First {pdfPages.length} page{pdfPages.length > 1 ? "s" : ""}
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

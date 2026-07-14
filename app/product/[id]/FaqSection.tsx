@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { REFUND_POLICY_TEXT } from "@/lib/refund-policy";
 
 type Faq = { q: string; a: string };
 
 const DEFAULT_FAQS: Faq[] = [
-  { q: "What format will I receive?", a: "You'll receive an instant digital download. The format depends on the product type — PDF, EPUB, or similar. Check the product badge above for the exact format." },
-  { q: "Can I print it?", a: "Yes — all our digital products are printer-friendly. Simply open the file and print from any device." },
+  { q: "What format will I receive?", a: "You'll receive an instant digital download. The format depends on the product type, such as PDF or EPUB. Check the product badge above for the exact format." },
+  { q: "Can I print it?", a: "Yes, all our digital products are printer-friendly. Simply open the file and print from any device." },
   { q: "How do I access my purchase?", a: "After checkout you'll receive an email with your secure download link. Links are valid for 7 days. You can also access your purchases at any time via your buyer portal." },
   { q: "Does it work on mobile?", a: "Absolutely. PDFs and digital files open in any browser or PDF reader on iPhone, Android, or tablet." },
-  { q: "What is your refund policy?", a: "We offer a 30-day money-back guarantee. If you're not happy, contact us and we'll make it right." },
+  { q: "What is your refund policy?", a: REFUND_POLICY_TEXT },
 ];
 
 export function FaqSection({ customFaqs }: { customFaqs?: Faq[] }) {

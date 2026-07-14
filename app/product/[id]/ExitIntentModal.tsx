@@ -15,7 +15,7 @@ export function ExitIntentModal({
   creatorUserId,
   priceLabel,
   discountPercent = 15,
-  headline = "Wait — before you go!",
+  headline = "Wait, before you go!",
 }: ExitIntentModalProps) {
   const [visible, setVisible] = useState(false);
   const [email, setEmail] = useState("");
@@ -103,7 +103,7 @@ export function ExitIntentModal({
               You&apos;re on the list!
             </h2>
             <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#6b7280", lineHeight: 1.6 }}>
-              Check your inbox — we&apos;ll be in touch with your discount.
+              Check your inbox. We&apos;ll be in touch with your discount.
             </p>
             <button
               onClick={() => setVisible(false)}

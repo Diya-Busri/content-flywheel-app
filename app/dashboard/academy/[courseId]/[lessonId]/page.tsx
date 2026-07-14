@@ -14,6 +14,8 @@ import { LessonPlayer } from "@/components/academy/lesson-player";
 import { LessonSidebar } from "@/components/academy/lesson-sidebar";
 import { BlockViewer } from "@/components/academy/block-viewer";
 import { parseLessonBlocks } from "@/lib/academy-blocks";
+import { isAcademyCheckpointEnabled } from "@/lib/academy/checkpoint-guard";
+import { getCourseCheckpointRecap } from "@/db/queries/academy-checkpoint-queries";
 import { LessonComplete } from "./LessonComplete";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +32,12 @@ export default async function LessonViewerPage({
   ]);
   if (!course || !lesson || lesson.courseId !== course.id) return notFound();
 
-  const [modules, lessons, resources, progress] = await Promise.all([
+  const [modules, lessons, resources, progress, checkpointEnabled] = await Promise.all([
     listModulesByCourse(params.courseId),
     listLessonsByCourse(params.courseId),
     listResourcesByLesson(params.lessonId),
     userId ? getUserCourseProgress(userId, params.courseId) : Promise.resolve([]),
+    userId ? isAcademyCheckpointEnabled(userId) : Promise.resolve(false),
   ]);
 
   const publishedLessons = lessons.filter((l) => l.isPublished);
@@ -51,6 +54,10 @@ export default async function LessonViewerPage({
   const nextLesson = currentIndex >= 0 ? publishedLessons[currentIndex + 1] : undefined;
   const isLastLesson = currentIndex === publishedLessons.length - 1;
   const lessonNumber = currentIndex + 1;
+
+  // Only fetched for the course-complete recap — no point querying this on every lesson page.
+  const checkpointRecap =
+    isLastLesson && checkpointEnabled && userId ? await getCourseCheckpointRecap(userId, course.id) : null;
 
   const blocks = parseLessonBlocks(lesson.content);
   const isInternal = lesson.ctaRoute?.startsWith("/");
@@ -156,11 +163,15 @@ export default async function LessonViewerPage({
             <LessonComplete
               lessonId={lesson.id}
               courseId={course.id}
+              lessonTitle={lesson.title}
               alreadyComplete={completedSet.has(lesson.id)}
               nextLessonId={nextLesson?.id ?? null}
               isLastLesson={isLastLesson}
               totalLessons={publishedLessons.length}
               completedCount={completedIds.length}
+              checkpointEnabled={checkpointEnabled}
+              applyToolKey={lesson.applyToolKey}
+              checkpointRecap={checkpointRecap}
             />
           </div>
         </div>

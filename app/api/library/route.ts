@@ -55,6 +55,10 @@ type LibraryItem = {
   isNativePublished?: boolean;
   /** Native price in pence (GBP). */
   nativePrice?: number;
+  /** External checkout/product URL — set when this is a "link" listing (no native Stripe checkout). */
+  checkoutUrl?: string | null;
+  /** Display price label for link listings (e.g. "£27", "Free"). */
+  priceLabel?: string | null;
   /** Total page views for this product (native store only). */
   pageViews?: number;
   /** Total completed orders for this product (native store only). */
@@ -188,6 +192,8 @@ export async function GET(request: NextRequest) {
         productDescription?: string | null;
         isNativePublished?: boolean;
         nativePrice?: number;
+        checkoutUrl?: string | null;
+        priceLabel?: string | null;
       } | null;
       const thumbnail = ma?.coverThumbnailUrl ?? ma?.thumbnailUrl ?? undefined;
       const row = p as { designSource?: "ai" | "brand" | null; status?: string };
@@ -222,6 +228,8 @@ export async function GET(request: NextRequest) {
         completionScore,
         isNativePublished,
         nativePrice: ma?.nativePrice ?? undefined,
+        checkoutUrl: ma?.checkoutUrl ?? undefined,
+        priceLabel: ma?.priceLabel ?? undefined,
         ...(isNativePublished && { pageViews: viewCountMap[p.id] ?? 0, orderCount: orderCountMap[p.id] ?? 0 }),
         ...(showDeleted && p.deletedAt && { deletedAt: (p.deletedAt as Date)?.toISOString?.() ?? String(p.deletedAt) }),
         archivedAt: p.archivedAt ? ((p.archivedAt as Date)?.toISOString?.() ?? String(p.archivedAt)) : null,

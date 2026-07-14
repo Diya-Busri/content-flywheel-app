@@ -19,6 +19,23 @@ import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { notificationsTable } from "@/db/schema/notifications-schema";
 import { Resend } from "resend";
 import { recomputeTrustScore, logReputationEvent } from "@/lib/trust-score-helpers";
+import { REFUND_POLICY_TEXT, resolvePolicyText } from "@/lib/refund-policy";
+import { isFeatureEnabledForVisitors } from "@/lib/feature-flags";
+
+/** Pull the standard consent fields off a Checkout Session's metadata into DB-ready values. */
+function consentFieldsFromSession(session: Stripe.Checkout.Session) {
+  const version = session.metadata?.consentPolicyVersion ?? null;
+  const { consentCheckboxText } = resolvePolicyText(version);
+  const consentGiven = session.metadata?.consentGiven === "true";
+  const consentTimestampRaw = session.metadata?.consentTimestamp;
+  return {
+    buyerUserId: session.metadata?.buyerUserId ?? null,
+    consentGiven,
+    consentText: consentGiven ? consentCheckboxText : null,
+    consentPolicyVersion: consentGiven ? version : null,
+    consentTimestamp: consentGiven && consentTimestampRaw ? new Date(consentTimestampRaw) : null,
+  };
+}
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -221,6 +238,14 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
 
   const downloadToken = crypto.randomUUID();
   const downloadExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const accessGrantedAt = new Date();
+  const consentFields = consentFieldsFromSession(session);
+  if (!consentFields.consentGiven) {
+    // Should never happen — /api/products/[id]/buy blocks session creation without consent.
+    // Log loudly so it's investigated, but still deliver the product since payment succeeded.
+    console.error("[stripe-webhook] product_purchase completed WITHOUT recorded consent:", session.id);
+  }
+  const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
 
   // Insert order record
   await db.insert(productOrdersTable).values({
@@ -231,10 +256,13 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
     amountCents,
     currency: session.currency ?? "gbp",
     stripeSessionId: session.id,
+    stripePaymentIntentId: paymentIntentId,
     status: "completed",
     downloadToken,
     downloadExpiresAt,
     emailSent: false,
+    accessGrantedAt,
+    ...consentFields,
   }).onConflictDoNothing();
 
   // Recalculate Trust Score on new sale (fire-and-forget)
@@ -258,6 +286,7 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
 
   const downloadUrl = `${appUrl}/download/${productId}?token=${downloadToken}`;
   const productTitle = product?.title ?? "Digital Product";
+  const marketplaceEnabled = await isFeatureEnabledForVisitors("marketplace");
 
   // Send delivery email
   try {
@@ -283,10 +312,15 @@ async function handleProductPurchase(session: Stripe.Checkout.Session) {
           <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">This link expires in 7 days. If you need a new link, reply to this email.</p>
         </td></tr>
         <tr><td style="padding:0 40px 32px;border-top:1px solid #f3f4f6;">
+          <p style="margin:24px 0 8px;font-size:13px;font-weight:700;color:#374151;">Your consent &amp; refund policy</p>
+          ${consentFields.consentGiven ? `<p style="margin:0 0 12px;font-size:12px;color:#6b7280;line-height:1.6;">Before paying, you confirmed: &ldquo;${consentFields.consentText}&rdquo;</p>` : ""}
+          <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;line-height:1.6;">${REFUND_POLICY_TEXT}</p>
+        </td></tr>
+        ${marketplaceEnabled ? `<tr><td style="padding:0 40px 32px;border-top:1px solid #f3f4f6;">
           <p style="margin:24px 0 12px;font-size:13px;font-weight:700;color:#374151;">Discover more digital products</p>
           <p style="margin:0 0 16px;font-size:13px;color:#6b7280;line-height:1.6;">Find templates, guides, courses and more from independent creators on the Content Flywheel marketplace.</p>
           <a href="https://contentflywheel.co.uk/marketplace" style="display:inline-block;padding:10px 24px;background:#f9fafb;color:#374151;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;border:1px solid #e5e7eb;">Browse the Marketplace &rarr;</a>
-        </td></tr>
+        </td></tr>` : ""}
         <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
           <p style="margin:0;font-size:12px;color:#0B0B0F;">Powered by Content Flywheel</p>
         </td></tr>
@@ -573,6 +607,12 @@ async function handleBundlePurchase(session: Stripe.Checkout.Session) {
   // Create one order record per product with shared download tokens
   const downloadTokens: { productId: string; title: string; token: string }[] = [];
   const downloadExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const accessGrantedAt = new Date();
+  const consentFields = consentFieldsFromSession(session);
+  if (!consentFields.consentGiven) {
+    console.error("[stripe-webhook] bundle_purchase completed WITHOUT recorded consent:", session.id);
+  }
+  const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
 
   for (const product of products) {
     const downloadToken = crypto.randomUUID();
@@ -586,10 +626,13 @@ async function handleBundlePurchase(session: Stripe.Checkout.Session) {
       amountCents: Math.round(amountCents / Math.max(products.length, 1)),
       currency: session.currency ?? "gbp",
       stripeSessionId: `${session.id}_${product.id}`,
+      stripePaymentIntentId: paymentIntentId,
       status: "completed",
       downloadToken,
       downloadExpiresAt,
       emailSent: false,
+      accessGrantedAt,
+      ...consentFields,
     }).catch(() => {/* ignore duplicate */});
   }
 
@@ -624,6 +667,9 @@ async function handleBundlePurchase(session: Stripe.Checkout.Session) {
           <p style="margin:0 0 24px;font-size:15px;color:#555;">Hi ${buyerName ?? "there"}, thank you for purchasing <strong>${bundleTitle}</strong>. Here are your download links:</p>
           <table width="100%" cellpadding="0" cellspacing="0">${linksHtml}</table>
           <p style="margin:24px 0 0;font-size:13px;color:#888;">Links expire in 7 days. Reply to this email if you need help.</p>
+          <p style="margin:24px 0 8px;font-size:13px;font-weight:700;color:#374151;">Your consent &amp; refund policy</p>
+          ${consentFields.consentGiven ? `<p style="margin:0 0 12px;font-size:12px;color:#6b7280;line-height:1.6;">Before paying, you confirmed: &ldquo;${consentFields.consentText}&rdquo;</p>` : ""}
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">${REFUND_POLICY_TEXT}</p>
         </td></tr>
         <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
           <p style="margin:0;font-size:13px;color:#0B0B0F;font-weight:600;">Content Flywheel</p>

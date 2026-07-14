@@ -8,7 +8,7 @@ import {
 
 const STEPS = [
   { icon: Send, label: "Submit Product" },
-  { icon: Sparkles, label: "AI Builds Campaign" },
+  { icon: Sparkles, label: "Campaign Built" },
   { icon: ClipboardCheck, label: "Creator Reviews Assets" },
   { icon: Megaphone, label: "Featured on Social Media" },
   { icon: ShoppingBag, label: "Traffic Sent to Store" },

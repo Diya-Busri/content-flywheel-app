@@ -22,6 +22,7 @@ import {
   Calendar,
   Users,
   X,
+  Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -183,6 +184,7 @@ export function OrdersClient() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [resending, setResending] = useState<string | null>(null);
+  const [refunding, setRefunding] = useState<string | null>(null);
   const [blastOpen, setBlastOpen] = useState(false);
   const [blastProductId, setBlastProductId] = useState("");
   const [blastSubject, setBlastSubject] = useState("");
@@ -243,6 +245,32 @@ export function OrdersClient() {
       toast({ title: err instanceof Error ? err.message : "Failed to resend", variant: "destructive" });
     } finally {
       setResending(null);
+    }
+  };
+
+  const handleRefund = async (order: Order) => {
+    const isFree = order.amountCents === 0;
+    const confirmed = window.confirm(
+      isFree
+        ? "Revoke this buyer's download access? This cannot be undone."
+        : `Refund ${formatPrice(order.amountCents)} to ${order.buyerEmail} and revoke their download access? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setRefunding(order.id);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to refund");
+      toast({ title: isFree ? "Access revoked" : "Refund processed — access revoked" });
+      fetchData();
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed to refund", variant: "destructive" });
+    } finally {
+      setRefunding(null);
     }
   };
 
@@ -435,7 +463,7 @@ export function OrdersClient() {
 
         {/* Status filter */}
         <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
-          {["all", "completed", "pending"].map((s) => (
+          {["all", "completed", "pending", "refunded"].map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -535,9 +563,11 @@ export function OrdersClient() {
                         "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold",
                         order.status === "completed"
                           ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                          : order.status === "refunded"
+                          ? "bg-red-500/10 text-red-600 dark:text-red-400"
                           : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
                       )}>
-                        {order.status === "completed" ? "✓ Completed" : "⏳ Pending"}
+                        {order.status === "completed" ? "✓ Completed" : order.status === "refunded" ? "↩ Refunded" : "⏳ Pending"}
                       </span>
                     </div>
                   </div>
@@ -550,8 +580,8 @@ export function OrdersClient() {
                   </div>
 
                   {/* Actions */}
-                  <div className="pl-12 md:pl-0 flex items-center gap-2">
-                    {order.downloadToken && (
+                  <div className="pl-12 md:pl-0 flex items-center gap-2 flex-wrap">
+                    {order.downloadToken && order.status !== "refunded" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -565,6 +595,22 @@ export function OrdersClient() {
                           <RotateCcw className="w-3 h-3" />
                         )}
                         Resend
+                      </Button>
+                    )}
+                    {order.status === "completed" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-950/30"
+                        onClick={() => handleRefund(order)}
+                        disabled={refunding === order.id}
+                      >
+                        {refunding === order.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Undo2 className="w-3 h-3" />
+                        )}
+                        {order.amountCents === 0 ? "Revoke access" : "Refund"}
                       </Button>
                     )}
                   </div>

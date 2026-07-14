@@ -44,6 +44,19 @@ export const academyLessonsTable = pgTable("academy_lessons", {
   ctaLabel: text("cta_label"),
   /** Internal route or URL the action CTA opens (e.g. "/dashboard/digital-products/discover"). */
   ctaRoute: text("cta_route"),
+  /** Optional: JSON array of strings — what the learner should be able to do after this lesson. */
+  learningObjectives: text("learning_objectives"),
+  /** Optional: JSON array of strings — key terms/concepts the Understanding Check may reference. */
+  keyConcepts: text("key_concepts"),
+  /** Optional: short prompt used to seed the "Help me apply this" guided exercise. */
+  suggestedExercise: text("suggested_exercise"),
+  /**
+   * Optional: key into the central APPLY_TOOL_MAP (lib/academy-checkpoint-routing.ts) that
+   * drives the "Help me apply this" destination CTA with prefilled context. Distinct from
+   * ctaLabel/ctaRoute (which remain a plain, always-available link) — unknown/unset keys just
+   * mean no CTA is shown after the guided exercise, never a broken link.
+   */
+  applyToolKey: text("apply_tool_key"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
 });

@@ -8,6 +8,7 @@ import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { creatorPromoCodesTable } from "@/db/schema/creator-promo-codes-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { CURRENT_POLICY_VERSION } from "@/lib/refund-policy";
 
 // 2% platform fee on sales — transparent on pricing page, still far below competitors
 const PLATFORM_FEE_PERCENT = 2;
@@ -111,6 +112,31 @@ export async function POST(
 
     const platformFeePercent = PLATFORM_FEE_PERCENT;
 
+    // ── Consent gate — parse the body once, up front, so every purchase mode
+    // below (subscription, pay-what-you-want, standard, £0) is blocked from
+    // ever creating a Stripe session unless the buyer ticked the required
+    // pre-payment checkbox. This is enforced server-side, not just in the UI,
+    // so the check cannot be bypassed by calling this endpoint directly.
+    let bodyForPromo: Record<string, unknown> = {};
+    try {
+      bodyForPromo = await request.json().catch(() => ({}));
+    } catch { /* ok */ }
+
+    if (bodyForPromo.consent !== true) {
+      return NextResponse.json(
+        { error: "You must accept the consent checkbox before continuing." },
+        { status: 400 }
+      );
+    }
+
+    const consentTimestamp = new Date();
+    const consentMetadata: Record<string, string> = {
+      consentGiven: "true",
+      consentPolicyVersion: CURRENT_POLICY_VERSION,
+      consentTimestamp: consentTimestamp.toISOString(),
+      ...(buyerUserId ? { buyerUserId } : {}),
+    };
+
     // Ensure the Stripe product is active — it may have been archived during a
     // previous unpublish cycle and the reactivation on re-publish can fail silently.
     if (ma.stripeProductId) {
@@ -138,6 +164,7 @@ export async function POST(
           creatorUserId: product.userId,
           vatEnabled: vatEnabled ? "true" : "false",
           ...(refCode ? { affiliateRef: refCode } : {}),
+          ...consentMetadata,
         },
         subscription_data: {
           application_fee_percent: platformFeePercent > 0 ? platformFeePercent : undefined,
@@ -150,11 +177,8 @@ export async function POST(
     }
 
     // ── Pay-what-you-want: buyer supplies a custom amount ─────────────────
+    // (bodyForPromo was already parsed above, during the consent check)
     let pwywAmount: number | null = null;
-    let bodyForPromo: Record<string, unknown> = {};
-    try {
-      bodyForPromo = await request.json().catch(() => ({}));
-    } catch { /* ok */ }
 
     if (ma.payWhatYouWant) {
       const raw = typeof bodyForPromo.customAmount === "number" ? bodyForPromo.customAmount : null;
@@ -277,6 +301,11 @@ export async function POST(
     const applicationFeeAmount =
       platformFeePercent > 0 ? Math.round(unitAmountForFee * (platformFeePercent / 100)) : undefined;
 
+    // Free (£0) items: Stripe doesn't create a PaymentIntent for zero-amount
+    // Checkout Sessions (nothing to charge, nothing to transfer), so omitting
+    // payment_intent_data avoids Stripe rejecting a PI config with no PI.
+    const isFreeCheckout = unitAmountForFee === 0;
+
     // Build checkout session params — route payment through creator's connected account
     const successBase = ma.isCourseFormat ? `${baseUrl}/course/${productId}` : `${baseUrl}/product/${productId}`;
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -292,16 +321,21 @@ export async function POST(
         ...(promoCode ? { promoCode } : {}),
         ...(appliedPromoCodeId ? { promoCodeId: appliedPromoCodeId } : {}),
         ...(refCode ? { affiliateRef: refCode } : {}),
+        ...consentMetadata,
       },
       // Only allow Stripe promotion codes when no native promo code was applied
       allow_promotion_codes: discountedUnitAmount === null,
       billing_address_collection: "auto",
       customer_creation: "always",
-      // Route money to the creator's Stripe account
-      payment_intent_data: {
-        application_fee_amount: applicationFeeAmount,
-        transfer_data: { destination: connectAccountId },
-      },
+      // Route money to the creator's Stripe account (skipped for £0 — no PaymentIntent is created)
+      ...(isFreeCheckout
+        ? {}
+        : {
+            payment_intent_data: {
+              application_fee_amount: applicationFeeAmount,
+              transfer_data: { destination: connectAccountId },
+            },
+          }),
     };
 
     // If VAT is enabled, collect tax IDs and note that price is VAT-inclusive

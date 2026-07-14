@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import MarketplaceClient from "./MarketplaceClient";
 import { isAdmin } from "@/lib/is-admin";
+import { isFeatureEnabledForVisitors } from "@/lib/feature-flags";
 
 const SITE_URL = "https://contentflywheel.co.uk";
 
@@ -40,7 +41,23 @@ export const metadata: Metadata = {
 };
 
 export default async function MarketplacePage() {
-  const admin = await isAdmin();
+  const [admin, marketplaceEnabled] = await Promise.all([
+    isAdmin(),
+    isFeatureEnabledForVisitors("marketplace"),
+  ]);
+
+  if (!marketplaceEnabled) {
+    return (
+      <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontSize: "48px", marginBottom: "16px" }}>🛍️</div>
+        <h1 style={{ fontSize: "20px", fontWeight: 700, color: "#111827", marginBottom: "8px" }}>Marketplace unavailable</h1>
+        <p style={{ fontSize: "14px", color: "#6b7280", maxWidth: "360px" }}>
+          The marketplace isn&apos;t available right now. Check back soon.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <Suspense fallback={<div style={{ padding: "80px", textAlign: "center", color: "#9ca3af" }}>Loading…</div>}>
       <MarketplaceClient isAdmin={admin} />

@@ -22,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Sparkles,
@@ -32,9 +31,12 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  Zap,
+  GitBranch,
 } from "lucide-react";
 import type { AspectRatio, CfMentionMode, ContentMode, TemplateCategory } from "@/lib/motion-graphics/types";
 import { useVoiceOptions } from "./useVoiceOptions";
+import { AgentRunPanel } from "./AgentRunPanel";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -127,12 +129,22 @@ const LOADING_STEPS = [
   "Preparing the preview…",
 ];
 
+// ─── Generation mode toggle ────────────────────────────────────────────────────
+
+type GenerationMode = "quick" | "agent";
+
+// Only Reddit Reaction supports Agent Workflow in first delivery (Correction 11)
+function supportsAgentWorkflow(mode: ContentMode | null): boolean {
+  return mode === "reddit-reaction";
+}
+
 // ─── Content Mode Panel ────────────────────────────────────────────────────────
 
 const ContentModePanel: React.FC = () => {
   const router = useRouter();
 
   const [selectedMode, setSelectedMode] = useState<ContentMode | null>(null);
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("quick");
   const [sourceText, setSourceText] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
@@ -147,6 +159,13 @@ const ContentModePanel: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  /** When agent workflow is active, show the AgentRunPanel instead of the form. */
+  const [agentPayload, setAgentPayload] = useState<null | {
+    contentMode: string; sourceText: string; sourceUrl?: string;
+    targetAudience?: string; mainOpinion?: string; desiredCta?: string;
+    cfMention: string; videoDuration?: string; tone?: string; aspectRatio: string;
+  }>(null);
+
   // Cycle through loading steps
   React.useEffect(() => {
     if (!loading) { setLoadingStep(0); return; }
@@ -156,11 +175,18 @@ const ContentModePanel: React.FC = () => {
     return () => clearInterval(interval);
   }, [loading]);
 
+  // When mode changes to one that doesn't support agent workflow, reset to quick
+  React.useEffect(() => {
+    if (selectedMode && !supportsAgentWorkflow(selectedMode)) {
+      setGenerationMode("quick");
+    }
+  }, [selectedMode]);
+
   const activeModeConfig = CONTENT_MODES.find((m) => m.id === selectedMode);
   const isRedditStyle =
     selectedMode === "reddit-reaction" || selectedMode === "creator-complaint";
 
-  const handleGenerate = async () => {
+  const handleQuickGenerate = async () => {
     if (!selectedMode) { setError("Choose a content mode first."); return; }
     if (!sourceText.trim()) { setError("Paste your source material first."); return; }
     setLoading(true);
@@ -191,6 +217,34 @@ const ContentModePanel: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const handleAgentGenerate = () => {
+    if (!selectedMode) { setError("Choose a content mode first."); return; }
+    if (!sourceText.trim()) { setError("Paste your source material first."); return; }
+    setError(null);
+    setAgentPayload({
+      contentMode: selectedMode,
+      sourceText,
+      sourceUrl: sourceUrl || undefined,
+      targetAudience: targetAudience || undefined,
+      mainOpinion: mainOpinion || undefined,
+      desiredCta: desiredCta || undefined,
+      cfMention,
+      videoDuration: videoDuration || undefined,
+      tone: tone || undefined,
+      aspectRatio,
+    });
+  };
+
+  // If agent workflow is running, show that panel
+  if (agentPayload) {
+    return (
+      <AgentRunPanel
+        initialPayload={agentPayload}
+        onCancel={() => setAgentPayload(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -347,23 +401,100 @@ const ContentModePanel: React.FC = () => {
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            <Button
-              onClick={handleGenerate}
-              disabled={loading || !selectedMode || !sourceText.trim()}
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin mr-2" />
-                  {LOADING_STEPS[loadingStep]}
-                </>
+            {/* Generation mode toggle + button */}
+            <div className="space-y-2">
+              {/* Toggle: only show when reddit-reaction is selected */}
+              {supportsAgentWorkflow(selectedMode) ? (
+                <div className="flex gap-1.5 rounded-lg border p-1 bg-muted/30">
+                  <button
+                    type="button"
+                    onClick={() => setGenerationMode("quick")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
+                      generationMode === "quick"
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Zap size={11} />
+                    Quick Generate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGenerationMode("agent")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
+                      generationMode === "agent"
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <GitBranch size={11} />
+                    Agent Workflow
+                    <span className="inline-flex items-center text-[9px] h-3.5 px-1 rounded-full bg-orange-500/20 text-orange-400">
+                      Beta
+                    </span>
+                  </button>
+                </div>
               ) : (
-                <>
-                  <Sparkles size={14} className="mr-2" />
-                  Generate storyboard
-                </>
+                <div className="flex gap-1.5 rounded-lg border p-1 bg-muted/30">
+                  <button
+                    type="button"
+                    disabled
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium bg-background shadow-sm text-foreground"
+                  >
+                    <Zap size={11} />
+                    Quick Generate
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    title="Agent Workflow is only available for Reddit Reaction"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs text-muted-foreground/40 cursor-not-allowed"
+                  >
+                    <GitBranch size={11} />
+                    Agent Workflow
+                    <span className="text-[9px] ml-0.5">(Reddit Reaction only)</span>
+                  </button>
+                </div>
               )}
-            </Button>
+
+              {/* Helper text */}
+              {generationMode === "agent" && (
+                <p className="text-xs text-muted-foreground">
+                  Agent Workflow analyses the source, proposes a content strategy for your approval, then generates the storyboard step-by-step.
+                </p>
+              )}
+
+              {/* Generate button */}
+              {generationMode === "quick" ? (
+                <Button
+                  onClick={handleQuickGenerate}
+                  disabled={loading || !selectedMode || !sourceText.trim()}
+                  className="w-full"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin mr-2" />
+                      {LOADING_STEPS[loadingStep]}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} className="mr-2" />
+                      Generate storyboard
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleAgentGenerate}
+                  disabled={!selectedMode || !sourceText.trim()}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <GitBranch size={14} className="mr-2" />
+                  Start agent workflow
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -520,9 +651,9 @@ export const ScriptToVideoPanel: React.FC = () => {
         >
           <MessageSquare size={14} />
           Content Mode
-          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 bg-orange-500/20 text-orange-400 border-0">
+          <span className="inline-flex items-center text-[10px] h-4 px-1.5 rounded-full bg-orange-500/20 text-orange-400">
             New
-          </Badge>
+          </span>
         </button>
         <button
           type="button"

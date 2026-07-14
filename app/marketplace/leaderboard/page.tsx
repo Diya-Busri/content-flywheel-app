@@ -7,6 +7,7 @@ import { productsTable } from "@/db/schema/products-schema";
 import { brandVoiceTable } from "@/db/schema/brand-voice-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, sql, and, gte, isNull, inArray } from "drizzle-orm";
+import { isFeatureEnabledForVisitors } from "@/lib/feature-flags";
 
 export const metadata: Metadata = {
   title: "Top Sellers Leaderboard | Content Flywheel Marketplace",
@@ -16,6 +17,17 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
+  const marketplaceEnabled = await isFeatureEnabledForVisitors("marketplace");
+  if (!marketplaceEnabled) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Helvetica Neue', Arial, sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", padding: "60px 24px" }}>
+        <span style={{ fontSize: "64px" }}>🛍️</span>
+        <h2 style={{ margin: 0, fontSize: "24px", fontWeight: 800, color: "#111827" }}>Marketplace unavailable</h2>
+        <p style={{ margin: 0, fontSize: "15px", color: "#6b7280", textAlign: "center", maxWidth: "400px" }}>The marketplace isn&apos;t available right now. Check back soon.</p>
+      </div>
+    );
+  }
+
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Sales per creator this month (only completed orders)

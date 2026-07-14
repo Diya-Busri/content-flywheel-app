@@ -106,9 +106,14 @@ export function AcademyAdminClient({
           <h1 className="text-2xl font-bold text-foreground">Academy Admin</h1>
           <p className="text-sm text-muted-foreground">Manage courses, lessons and community.</p>
         </div>
-        <Link href="/dashboard/academy" className="text-sm text-muted-foreground hover:text-foreground">
-          View Academy →
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard/academy/admin/checkpoints" className="text-sm text-muted-foreground hover:text-foreground">
+            Understanding Check analytics →
+          </Link>
+          <Link href="/dashboard/academy" className="text-sm text-muted-foreground hover:text-foreground">
+            View Academy →
+          </Link>
+        </div>
       </div>
 
       <Tabs defaultValue="dashboard">

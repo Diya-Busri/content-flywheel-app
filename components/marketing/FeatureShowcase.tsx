@@ -36,7 +36,7 @@ const CARDS: Card[] = [
     bg: "bg-cyan-500/10",
     border: "hover:border-cyan-500/30",
     title: "Research",
-    desc: "AI studies your product, your audience, and your competitors before writing a single word.",
+    desc: "We study your product, your audience and your competitors before writing a single word.",
   },
   {
     emoji: "📝",
@@ -90,7 +90,7 @@ const CARDS: Card[] = [
     bg: "bg-green-500/10",
     border: "hover:border-green-500/30",
     title: "Analytics",
-    desc: "See what's actually driving traffic and sales, and let AI double down on it.",
+    desc: "See what's actually driving traffic and sales, and double down on what works.",
   },
 ];
 
@@ -101,15 +101,15 @@ export function FeatureShowcase() {
 
       <div className="max-w-6xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
-          <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">After you hit publish</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">The solution</p>
           <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-            Everything you need{" "}
+            Content Flywheel analyses your product and{" "}
             <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-              after you create your product
+              generates an entire marketing campaign in minutes.
             </span>
           </h2>
           <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">
-            One dashboard covers research through launch, so your product never has to market itself.
+            One dashboard turns one product into weeks of ready-to-post marketing, so you never have to wonder what to post next.
           </p>
         </FadeUp>
 

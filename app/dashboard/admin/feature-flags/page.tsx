@@ -17,6 +17,7 @@ type Flag = {
   description: string | null;
   enabled: boolean;
   userId: string | null;
+  rolloutPercentage: number | null;
   createdAt: string;
 };
 
@@ -30,6 +31,7 @@ export default function AdminFeatureFlagsPage() {
   const [newLabel, setNewLabel] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newUserId, setNewUserId] = useState("");
+  const [newRollout, setNewRollout] = useState("");
   const [creating, setCreating] = useState(false);
   const { toast } = useToast();
 
@@ -57,6 +59,23 @@ export default function AdminFeatureFlagsPage() {
     setSaving(null);
   }
 
+  /** Rollout percentage only applies to global flags — a per-user flag always overrides it outright. */
+  async function updateRollout(flag: Flag, value: string) {
+    const trimmed = value.trim();
+    const rolloutPercentage = trimmed === "" ? null : Math.max(0, Math.min(100, Number(trimmed)));
+    setSaving(flag.id);
+    const res = await fetch(`/api/admin/feature-flags/${flag.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rolloutPercentage }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { flag?: Flag };
+    if (data.flag) {
+      setFlags((prev) => prev.map((f) => (f.id === flag.id ? data.flag! : f)));
+    }
+    setSaving(null);
+  }
+
   async function deleteFlag(id: string) {
     setDeleting(id);
     await fetch(`/api/admin/feature-flags/${id}`, { method: "DELETE" });
@@ -71,12 +90,19 @@ export default function AdminFeatureFlagsPage() {
     const res = await fetch("/api/admin/feature-flags", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: newKey.trim(), label: newLabel.trim(), description: newDesc.trim() || null, userId: newUserId.trim() || null, enabled: false }),
+      body: JSON.stringify({
+        key: newKey.trim(),
+        label: newLabel.trim(),
+        description: newDesc.trim() || null,
+        userId: newUserId.trim() || null,
+        rolloutPercentage: newRollout.trim() === "" ? null : Number(newRollout.trim()),
+        enabled: false,
+      }),
     });
     const data = (await res.json().catch(() => ({}))) as { flag?: Flag };
     if (data.flag) {
       setFlags((prev) => [...prev, data.flag!]);
-      setNewKey(""); setNewLabel(""); setNewDesc(""); setNewUserId("");
+      setNewKey(""); setNewLabel(""); setNewDesc(""); setNewUserId(""); setNewRollout("");
       setShowNew(false);
       toast({ title: "Flag created" });
     }
@@ -127,6 +153,18 @@ export default function AdminFeatureFlagsPage() {
                 <Label className="text-xs">User ID (blank = global)</Label>
                 <Input placeholder="user_abc123 or leave blank" value={newUserId} onChange={(e) => setNewUserId(e.target.value)} />
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Rollout % (global only, blank = 100%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="e.g. 10"
+                  value={newRollout}
+                  onChange={(e) => setNewRollout(e.target.value)}
+                  disabled={!!newUserId.trim()}
+                />
+              </div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white" disabled={creating || !newKey || !newLabel} onClick={() => void createFlag()}>
@@ -163,24 +201,42 @@ export default function AdminFeatureFlagsPage() {
                             onCheckedChange={() => void toggleFlag(flag)}
                           />
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-sm">{flag.label}</span>
                               <Badge variant="outline" className="text-[10px] font-mono">{flag.key}</Badge>
                               <Badge variant={flag.enabled ? "default" : "secondary"} className="text-[10px]">
                                 {flag.enabled ? "ON" : "OFF"}
                               </Badge>
+                              {flag.enabled && flag.rolloutPercentage != null && (
+                                <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-500/40">
+                                  {flag.rolloutPercentage}% rollout
+                                </Badge>
+                              )}
                             </div>
                             {flag.description && <p className="text-xs text-muted-foreground mt-0.5">{flag.description}</p>}
                           </div>
                         </div>
-                        <Button
-                          variant="ghost" size="sm"
-                          className="text-destructive hover:text-destructive shrink-0"
-                          disabled={deleting === flag.id}
-                          onClick={() => void deleteFlag(flag.id)}
-                        >
-                          {deleting === flag.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            placeholder="100%"
+                            defaultValue={flag.rolloutPercentage ?? ""}
+                            onBlur={(e) => void updateRollout(flag, e.target.value)}
+                            disabled={saving === flag.id}
+                            className="h-8 w-20 text-xs"
+                            title="Rollout percentage — blank means 100%"
+                          />
+                          <Button
+                            variant="ghost" size="sm"
+                            className="text-destructive hover:text-destructive shrink-0"
+                            disabled={deleting === flag.id}
+                            onClick={() => void deleteFlag(flag.id)}
+                          >
+                            {deleting === flag.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

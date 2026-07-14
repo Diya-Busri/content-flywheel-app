@@ -7,10 +7,13 @@ import { ArrowLeft, Sparkles, Loader2, Copy, Trash2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { BlockEditor } from "@/components/academy/block-editor";
 import { parseLessonBlocks, serializeLessonBlocks, newBlock, type Block } from "@/lib/academy-blocks";
+import { APPLY_TOOL_KEYS, APPLY_TOOL_LABELS } from "@/lib/academy-checkpoint-routing";
+import { AdminCheckpointPreview } from "@/components/academy/admin/AdminCheckpointPreview";
 import {
   updateLessonAction,
   createLessonAction,
@@ -35,6 +38,12 @@ export function LessonEditorClient({
   const [blocks, setBlocks] = useState<Block[]>(parseLessonBlocks(lesson.content));
   const [ctaLabel, setCtaLabel] = useState<string>(lesson.ctaLabel ?? "");
   const [ctaRoute, setCtaRoute] = useState<string>(lesson.ctaRoute ?? "");
+  // Understanding Check (optional) — plain one-per-line text; parsed with a JSON-or-newline
+  // fallback (see lib/academy-checkpoint-prompt.ts parseListField) so either format works.
+  const [learningObjectives, setLearningObjectives] = useState<string>(lesson.learningObjectives ?? "");
+  const [keyConcepts, setKeyConcepts] = useState<string>(lesson.keyConcepts ?? "");
+  const [suggestedExercise, setSuggestedExercise] = useState<string>(lesson.suggestedExercise ?? "");
+  const [applyToolKey, setApplyToolKey] = useState<string>(lesson.applyToolKey ?? "");
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const backHref = `/dashboard/academy/admin/courses/${courseId}`;
@@ -47,6 +56,10 @@ export function LessonEditorClient({
         content: serializeLessonBlocks(blocks),
         ctaLabel: ctaLabel.trim() || null,
         ctaRoute: ctaRoute.trim() || null,
+        learningObjectives: learningObjectives.trim() || null,
+        keyConcepts: keyConcepts.trim() || null,
+        suggestedExercise: suggestedExercise.trim() || null,
+        applyToolKey: applyToolKey.trim() || null,
       });
       setSaving(false);
       if (res.isSuccess) {
@@ -55,7 +68,7 @@ export function LessonEditorClient({
         toast({ title: "Error", description: res.message, variant: "destructive" });
       }
     },
-    [lesson.id, title, blocks, ctaLabel, ctaRoute, toast]
+    [lesson.id, title, blocks, ctaLabel, ctaRoute, learningObjectives, keyConcepts, suggestedExercise, applyToolKey, toast]
   );
 
   async function handleAISuggest() {
@@ -189,6 +202,75 @@ export function LessonEditorClient({
                 onBlur={() => save(true)}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Understanding Check settings (optional) */}
+        <div className="rounded-xl border bg-card p-4 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground mb-0.5">Understanding Check (optional)</p>
+              <p className="text-xs text-muted-foreground">
+                Improves the end-of-lesson AI checkpoint. Leave blank and the checkpoint falls back to the lesson content alone.
+              </p>
+            </div>
+            <AdminCheckpointPreview
+              lessonTitle={title}
+              lessonContent={serializeLessonBlocks(blocks)}
+              learningObjectives={learningObjectives}
+              keyConcepts={keyConcepts}
+            />
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-xs">Learning objectives (one per line)</Label>
+            <Textarea
+              placeholder={"e.g.\nExplain what a niche is\nIdentify 3 profitable niches"}
+              value={learningObjectives}
+              onChange={(e) => setLearningObjectives(e.target.value)}
+              onBlur={() => save(true)}
+              rows={3}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-xs">Key concepts (one per line)</Label>
+            <Textarea
+              placeholder={"e.g.\nNiche\nTarget audience"}
+              value={keyConcepts}
+              onChange={(e) => setKeyConcepts(e.target.value)}
+              onBlur={() => save(true)}
+              rows={2}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-xs">Suggested application exercise</Label>
+            <Textarea
+              placeholder="e.g. Help the learner compare 3 niche ideas against their existing skills."
+              value={suggestedExercise}
+              onChange={(e) => setSuggestedExercise(e.target.value)}
+              onBlur={() => save(true)}
+              rows={2}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-xs">Recommended destination tool (&quot;Help me apply this&quot;)</Label>
+            <select
+              value={applyToolKey}
+              onChange={(e) => {
+                setApplyToolKey(e.target.value);
+              }}
+              onBlur={() => save(true)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">None — just show the generated result</option>
+              {APPLY_TOOL_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {APPLY_TOOL_LABELS[key]}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>

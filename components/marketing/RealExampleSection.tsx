@@ -49,9 +49,9 @@ const OUTPUTS = [
     border: "border-purple-500/15",
     title: "Carousel",
     lines: [
-      "Slide 1 — Hook: \"Your mornings are costing you your whole day\"",
-      "Slides 2–5 — The 4-step framework",
-      "Slide 6 — CTA: \"Full system → link in bio\"",
+      "Slide 1 · Hook: \"Your mornings are costing you your whole day\"",
+      "Slides 2–5 · The 4-step framework",
+      "Slide 6 · CTA: \"Full system → link in bio\"",
     ],
   },
   {
@@ -94,7 +94,7 @@ const OUTPUTS = [
 
 export function RealExampleSection() {
   return (
-    <section className="py-24 lg:py-32 bg-white/[0.02] border-y border-white/[0.05] relative overflow-hidden">
+    <section id="how-it-works" className="py-24 lg:py-32 bg-white/[0.02] border-y border-white/[0.05] relative overflow-hidden">
       <div className="max-w-6xl mx-auto px-6">
         <FadeUp className="text-center mb-16">
           <p className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-4">A real example</p>
@@ -105,7 +105,7 @@ export function RealExampleSection() {
             </span>
           </h2>
           <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">
-            One product, run through Content Flywheel. No editing, no prompting back and forth.
+            One product, run through Content Flywheel: research, competitor analysis, hooks, carousels, scripts, emails, social posts and landing page copy, all generated from a single product. No editing, no prompting back and forth.
           </p>
         </FadeUp>
 

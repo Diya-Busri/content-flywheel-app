@@ -13,6 +13,7 @@ import FollowButton from "@/components/FollowButton";
 import type { MarketingAssets } from "@/db/schema/products-schema";
 import { getCreatorLevel } from "@/lib/rewards-config";
 import { TrustScoreCard } from "@/components/TrustScoreBadge";
+import { isFeatureEnabledForVisitors } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export default async function CreatorProfilePage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = await params;
+  const marketplaceEnabled = await isFeatureEnabledForVisitors("marketplace");
 
   // Guard: 404 for explicitly deleted accounts only.
   // Wrapped in try/catch because the deleted_at column may not yet exist in all
@@ -603,7 +605,7 @@ export default async function CreatorProfilePage({
           <div style={{ textAlign: "center", padding: "80px 20px" }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>🛍️</div>
             <p style={{ fontSize: "17px", fontWeight: "700", color: t.text, margin: "0 0 8px", letterSpacing: "-0.3px" }}>No products yet</p>
-            <p style={{ fontSize: "14px", color: t.subText, margin: 0 }}>Check back soon — new things are coming!</p>
+            <p style={{ fontSize: "14px", color: t.subText, margin: 0 }}>Check back soon, new things are coming!</p>
           </div>
         )}
 
@@ -657,18 +659,20 @@ export default async function CreatorProfilePage({
           </Link>
         </div>
 
-        {/* ── Browse marketplace ── */}
-        <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <a href="/marketplace" style={{
-            display: "inline-flex", alignItems: "center", gap: "6px",
-            fontSize: "13px", fontWeight: "600", color: t.subText,
-            textDecoration: "none", padding: "8px 18px", borderRadius: "100px",
-            border: `1px solid ${t.cardBorder}`,
-            transition: "opacity 0.15s",
-          }}>
-            🛍️ Browse more creators on Content Flywheel →
-          </a>
-        </div>
+        {/* ── Browse marketplace (hidden when the marketplace feature is disabled) ── */}
+        {marketplaceEnabled && (
+          <div style={{ textAlign: "center", marginBottom: "20px" }}>
+            <a href="/marketplace" style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              fontSize: "13px", fontWeight: "600", color: t.subText,
+              textDecoration: "none", padding: "8px 18px", borderRadius: "100px",
+              border: `1px solid ${t.cardBorder}`,
+              transition: "opacity 0.15s",
+            }}>
+              🛍️ Browse more creators on Content Flywheel →
+            </a>
+          </div>
+        )}
 
         {/* ── Footer ── */}
         <p style={{ textAlign: "center", fontSize: "12px", color: t.mutedText, letterSpacing: "0.01em" }}>

@@ -1,13 +1,13 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { ArrowRight, PlayCircle, Sparkles } from "lucide-react"
+import { ArrowRight, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { HeroDashboard } from "./HeroDashboard"
 
 export default function HeroSection() {
   return (
-    <section className="relative isolate overflow-hidden bg-[#0a0a0a]">
+    <section className="relative isolate overflow-hidden bg-[#0a0a0a] flex min-h-[100svh] flex-col justify-start pt-24 md:justify-center md:pt-20">
       {/* Background gradients */}
       <div className="pointer-events-none absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl" aria-hidden="true">
         <div
@@ -18,10 +18,10 @@ export default function HeroSection() {
       {/* Additional glow */}
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[600px] bg-[radial-gradient(ellipse_at_top_center,rgba(249,115,22,0.06),transparent_60%)]" aria-hidden="true" />
 
-      <div className="mx-auto max-w-7xl px-6 pb-16 pt-20 sm:pt-32 lg:px-8 lg:pt-40">
+      <div className="mx-auto w-full max-w-7xl px-6 pb-8 sm:pb-10 lg:px-8">
         {/* Hero text — centered */}
         <div className="mx-auto max-w-3xl text-center">
-          {/* Badge */}
+          {/* Eyebrow */}
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -32,7 +32,7 @@ export default function HeroSection() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" />
             </span>
-            The AI marketing engine for digital products
+            The marketing engine for digital products
           </motion.div>
 
           {/* Headline */}
@@ -40,30 +40,31 @@ export default function HeroSection() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-balance text-4xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-7xl"
+            className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-7xl"
           >
-            Once you&apos;ve created your product...{" "}
+            Creating your digital product is the easy part.
+            <br />
             <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-              now what?
+              Marketing it is where most creators give up.
             </span>
           </motion.h1>
 
-          {/* Subheadline */}
+          {/* Supporting text */}
           <motion.p
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mt-6 text-lg leading-8 text-white/50 sm:text-xl max-w-2xl mx-auto"
           >
-            Turn one digital product into weeks of marketing content with AI. Generate research, hooks, carousels, short-form videos, scripts and launch campaigns from a single dashboard.
+            Content Flywheel turns one digital product into weeks of marketing content using AI. Generate research, competitor analysis, hooks, carousels, short-form video scripts, emails and launch campaigns from one dashboard so you can focus on growing your business instead of wondering what to post next.
           </motion.p>
 
-          {/* CTAs */}
+          {/* CTA — a single, unambiguous action. No secondary CTA competes for attention. */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
+            className="mt-10 flex justify-center"
           >
             <Link
               href="/signup"
@@ -72,14 +73,6 @@ export default function HeroSection() {
               <Sparkles className="h-4 w-4" />
               Start Marketing Free
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-            </Link>
-            <Link
-              href="#flywheel"
-              className="press-feedback inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-6 py-4 text-sm sm:px-8 sm:text-base font-semibold text-white transition hover:bg-white/10"
-            >
-              <PlayCircle className="h-4 w-4 text-white/50 shrink-0" />
-              <span className="sm:hidden">Watch the Demo</span>
-              <span className="hidden sm:inline">Watch a Product Become a Marketing Campaign</span>
             </Link>
           </motion.div>
 
@@ -94,7 +87,7 @@ export default function HeroSection() {
         </div>
 
         {/* ─── Dashboard mockup ─── */}
-        <div className="mt-16 sm:mt-20">
+        <div className="mt-10 sm:mt-12">
           <HeroDashboard />
         </div>
 

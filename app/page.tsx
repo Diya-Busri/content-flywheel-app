@@ -12,7 +12,7 @@ import { ScrollProgressBar } from "@/components/marketing/ScrollProgressBar";
 import { getFeaturedEpisode, getPreviousEpisodes } from "@/lib/marketing-challenge";
 
 export const metadata: Metadata = {
-  title: "Content Flywheel — The AI Marketing Engine for Digital Products",
+  title: "Content Flywheel: The AI Marketing Engine for Digital Products",
   description:
     "Turn one digital product into weeks of marketing content with AI. Generate research, hooks, carousels, short-form videos, scripts and launch campaigns from a single dashboard.",
 };

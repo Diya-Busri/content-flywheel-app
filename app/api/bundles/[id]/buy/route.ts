@@ -1,19 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db/db";
 import { productBundlesTable } from "@/db/schema/product-bundles-schema";
 import { profilesTable } from "@/db/schema/profiles-schema";
 import { eq, and } from "drizzle-orm";
+import { CURRENT_POLICY_VERSION } from "@/lib/refund-policy";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
 const PLATFORM_FEE_PERCENT = 2;
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: bundleId } = await params;
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = await request.json().catch(() => ({}));
+  } catch { /* ok */ }
+
+  if (body.consent !== true) {
+    return NextResponse.json(
+      { error: "You must accept the consent checkbox before continuing." },
+      { status: 400 }
+    );
+  }
+
+  const { userId: buyerUserId } = await auth();
+  const consentMetadata: Record<string, string> = {
+    consentGiven: "true",
+    consentPolicyVersion: CURRENT_POLICY_VERSION,
+    consentTimestamp: new Date().toISOString(),
+    ...(buyerUserId ? { buyerUserId } : {}),
+  };
 
   const [bundle] = await db
     .select()
@@ -65,6 +87,7 @@ export async function POST(
         bundleId: bundle.id,
         creatorUserId: bundle.creatorUserId,
         productIds: bundle.productIds.join(","),
+        ...consentMetadata,
       },
       billing_address_collection: "auto",
       customer_creation: "always",

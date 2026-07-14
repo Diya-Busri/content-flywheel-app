@@ -9,6 +9,8 @@ import { productsTable } from "@/db/schema/products-schema";
 import { eq, and } from "drizzle-orm";
 import { Resend } from "resend";
 import { notificationsTable } from "@/db/schema/notifications-schema";
+import { productOrdersTable } from "@/db/schema/product-orders-schema";
+import { CURRENT_POLICY_VERSION, CONSENT_CHECKBOX_TEXT, REFUND_POLICY_TEXT } from "@/lib/refund-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -248,13 +250,20 @@ export async function POST(request: NextRequest) {
           .limit(1);
 
         if (lmProduct) {
+          // A digital product is about to be delivered here — the required pre-payment
+          // (pre-access, for £0 items) consent checkbox must have been checked client-side.
+          // BuyButton's free-product flow always sends consent: true once the box is ticked;
+          // reject anything that reaches this point without it rather than silently granting access.
+          if (body.consent !== true) {
+            console.warn("[subscribe] Skipping lead magnet delivery — consent not provided:", email);
+          } else {
           const lmToken = crypto.randomUUID();
           const lmExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
           const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
           const lmDownloadUrl = `${appUrl}/api/products/${lmProduct.id}/download?token=${lmToken}`;
+          const accessGrantedAt = new Date();
 
-          // Store a free order record for the lead magnet
-          const { productOrdersTable } = await import("@/db/schema/product-orders-schema");
+          // Store a free order record for the lead magnet, including the consent record
           await db.insert(productOrdersTable).values({
             productId: lmProduct.id,
             creatorUserId: userId,
@@ -267,6 +276,11 @@ export async function POST(request: NextRequest) {
             downloadToken: lmToken,
             downloadExpiresAt: lmExpiry,
             emailSent: true,
+            accessGrantedAt,
+            consentGiven: true,
+            consentText: CONSENT_CHECKBOX_TEXT,
+            consentPolicyVersion: CURRENT_POLICY_VERSION,
+            consentTimestamp: accessGrantedAt,
           }).catch(() => {}); // ignore if fails (e.g. duplicate)
 
           await resend.emails.send({
@@ -287,6 +301,11 @@ export async function POST(request: NextRequest) {
           <p style="margin:0 0 24px;">Click the button below to download it. The link is valid for 30 days.</p>
           <a href="${lmDownloadUrl}" style="display:inline-block;padding:14px 32px;background:#f97316;color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px;">Download Your Freebie &rarr;</a>
         </td></tr>
+        <tr><td style="padding:0 40px 32px;border-top:1px solid #f3f4f6;">
+          <p style="margin:24px 0 8px;font-size:13px;font-weight:700;color:#374151;">Your consent &amp; refund policy</p>
+          <p style="margin:0 0 12px;font-size:12px;color:#6b7280;line-height:1.6;">Before requesting this, you confirmed: &ldquo;${CONSENT_CHECKBOX_TEXT}&rdquo;</p>
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">${REFUND_POLICY_TEXT}</p>
+        </td></tr>
         <tr><td style="background:#F5C97A;padding:20px 40px;text-align:center;">
           <p style="margin:0;font-size:13px;color:#0B0B0F;font-weight:600;">${fromName}</p>
         </td></tr>
@@ -295,6 +314,7 @@ export async function POST(request: NextRequest) {
   </table>
 </body></html>`,
           });
+          }
         }
       }
     } catch (lmErr) {

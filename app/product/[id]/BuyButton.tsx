@@ -1,6 +1,44 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { REFUND_POLICY_TEXT, CONSENT_CHECKBOX_TEXT } from "@/lib/refund-policy";
+
+function ConsentCheckbox({
+  checked,
+  onChange,
+  showError,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  showError: boolean;
+}) {
+  return (
+    <div style={{ marginBottom: "12px" }}>
+      <label
+        style={{
+          display: "flex", alignItems: "flex-start", gap: "9px", cursor: "pointer",
+          padding: "11px 13px", borderRadius: "10px",
+          background: showError ? "#fef2f2" : "#f9fafb",
+          border: `1.5px solid ${showError ? "#fca5a5" : "#e5e7eb"}`,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          required
+          style={{ marginTop: "2px", width: "16px", height: "16px", accentColor: "#f97316", cursor: "pointer", flexShrink: 0 }}
+        />
+        <span style={{ fontSize: "12.5px", lineHeight: 1.5, color: "#4b5563" }}>{CONSENT_CHECKBOX_TEXT}</span>
+      </label>
+      {showError && (
+        <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>
+          Please check the box above to continue.
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface BuyButtonProps {
   productId: string;
@@ -28,6 +66,9 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
   const [promoValidating, setPromoValidating] = useState(false);
   const [promoResult, setPromoResult] = useState<{ discount: string; code: string } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
+  // Required pre-payment consent checkbox — must never default to checked.
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentError, setConsentError] = useState(false);
 
   // Auto-validate coupon from URL on first render
   useEffect(() => {
@@ -63,13 +104,17 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
   };
 
   const handleBuy = async () => {
+    if (!consentChecked) {
+      setConsentError(true);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const buyUrl = refCode
         ? `/api/products/${productId}/buy?ref=${encodeURIComponent(refCode)}`
         : `/api/products/${productId}/buy`;
-      const body: Record<string, unknown> = { promoCode: promoResult?.code ?? null };
+      const body: Record<string, unknown> = { promoCode: promoResult?.code ?? null, consent: true };
       if (payWhatYouWant) {
         const parsed = Math.round(parseFloat(pwywAmount || "0") * 100);
         const minPence = minPrice ?? 0;
@@ -98,6 +143,10 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
   const handleFreeGet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!freeEmail.trim()) return;
+    if (!consentChecked) {
+      setConsentError(true);
+      return;
+    }
     setFreeStatus("loading");
     try {
       const res = await fetch("/api/email/subscribe", {
@@ -109,6 +158,7 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
           userId: creatorUserId,
           tags: ["free-product"],
           leadMagnetProductId: productId,
+          consent: true,
         }),
       });
       if (res.ok || res.status === 409) {
@@ -152,19 +202,24 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
           onChange={(e) => setFreeEmail(e.target.value)}
           style={{ padding: "11px 14px", borderRadius: "10px", border: "1.5px solid #e5e7eb", fontSize: "14px", color: "#111827", outline: "none" }}
         />
+        <ConsentCheckbox
+          checked={consentChecked}
+          onChange={(v) => { setConsentChecked(v); if (v) setConsentError(false); }}
+          showError={consentError}
+        />
         <button
           type="submit"
-          disabled={freeStatus === "loading"}
+          disabled={freeStatus === "loading" || !consentChecked}
           style={{
             width: "100%", padding: "14px", borderRadius: "12px", justifyContent: "center",
             background: "linear-gradient(135deg,#f97316 0%,#ea6c0a 100%)",
             color: "#fff", fontSize: "16px", fontWeight: 700, border: "none",
-            cursor: freeStatus === "loading" ? "not-allowed" : "pointer",
+            cursor: freeStatus === "loading" || !consentChecked ? "not-allowed" : "pointer",
             boxShadow: "0 4px 20px rgba(249,115,22,0.35)",
-            opacity: freeStatus === "loading" ? 0.8 : 1,
+            opacity: freeStatus === "loading" || !consentChecked ? 0.5 : 1,
           }}
         >
-          {freeStatus === "loading" ? "Sending…" : "Get it free — send to my email →"}
+          {freeStatus === "loading" ? "Sending…" : "Get this product free"}
         </button>
         {error && <p style={{ margin: 0, fontSize: "13px", color: "#dc2626" }}>{error}</p>}
         <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af", textAlign: "center" }}>No spam. Unsubscribe any time.</p>
@@ -199,15 +254,21 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
         </div>
       )}
 
+      <ConsentCheckbox
+        checked={consentChecked}
+        onChange={(v) => { setConsentChecked(v); if (v) setConsentError(false); }}
+        showError={consentError}
+      />
+
       <button
         onClick={handleBuy}
-        disabled={loading}
+        disabled={loading || !consentChecked}
         style={{
           display: "inline-flex", alignItems: "center", gap: "8px", width: "100%",
           padding: "14px 36px", borderRadius: "12px", justifyContent: "center",
           background: loading ? "linear-gradient(135deg,#fb923c 0%,#f97316 100%)" : "linear-gradient(135deg,#f97316 0%,#ea6c0a 100%)",
           color: "#ffffff", fontSize: "16px", fontWeight: 700, boxShadow: "0 4px 20px rgba(249,115,22,0.35)",
-          letterSpacing: "-0.2px", border: "none", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.85 : 1,
+          letterSpacing: "-0.2px", border: "none", cursor: loading || !consentChecked ? "not-allowed" : "pointer", opacity: loading ? 0.85 : !consentChecked ? 0.5 : 1,
         }}
       >
         {loading && (
@@ -220,8 +281,8 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
           : payWhatYouWant
           ? `Support with £${parseFloat(pwywAmount || "0").toFixed(2)} →`
           : promoResult
-          ? `Buy Now – ${priceLabel} (${promoResult.discount})`
-          : `Buy Now – ${priceLabel}`}
+          ? `Get instant access for ${priceLabel} (${promoResult.discount})`
+          : `Get instant access for ${priceLabel}`}
       </button>
 
       {/* Promo code section */}
@@ -246,7 +307,7 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
           </div>
         )}
         {promoResult && (
-          <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#16a34a", fontWeight: 600 }}>✓ Code applied — {promoResult.discount}</p>
+          <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#16a34a", fontWeight: 600 }}>✓ Code applied: {promoResult.discount}</p>
         )}
         {promoError && (
           <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#dc2626" }}>{promoError}</p>
@@ -255,10 +316,10 @@ export function BuyButton({ productId, priceLabel, creatorUserId, isFree, refCod
 
       {error && <p style={{ margin: "8px 0 0", fontSize: "13px", color: "#dc2626" }}>{error}</p>}
 
-      {/* Money-back guarantee */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", marginTop: "14px", padding: "10px 14px", borderRadius: "10px", background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-        <span style={{ fontSize: "16px" }}>🛡️</span>
-        <span style={{ fontSize: "12px", fontWeight: 600, color: "#15803d" }}>30-day money-back guarantee</span>
+      {/* Refund / cancellation policy */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", marginTop: "14px", padding: "12px 14px", borderRadius: "10px", background: "#f9fafb", border: "1px solid #e5e7eb" }}>
+        <span style={{ fontSize: "14px", lineHeight: 1.4 }}>ℹ️</span>
+        <span style={{ fontSize: "11.5px", lineHeight: 1.55, color: "#6b7280" }}>{REFUND_POLICY_TEXT}</span>
       </div>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

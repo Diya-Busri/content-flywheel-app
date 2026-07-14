@@ -38,14 +38,14 @@ export function ChallengeSection({
             🚀 Marketing 100 Digital Products
           </div>
           <h2 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-            Every week, one product becomes
+            Real products. Real campaigns.
             <br />
             <span className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-              a full campaign, live.
+              Every single week.
             </span>
           </h2>
           <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto">
-            Every eligible submission joins the production queue — every week, one of them becomes a complete AI marketing campaign, live.
+            Every week, we turn one real creator&apos;s product into a complete marketing campaign, live. Proof this works on real products, not just a demo.
           </p>
         </FadeUp>
 
@@ -109,7 +109,7 @@ export function ChallengeSection({
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 px-7 py-3.5 text-sm font-semibold text-white/30 cursor-default"
                 >
                   <PlayCircle className="h-4 w-4" />
-                  Watch Previous Episodes — coming soon
+                  Watch Previous Episodes (coming soon)
                 </span>
               )}
             </div>
@@ -155,7 +155,7 @@ function LaunchTeaser({ episodeNumber }: { episodeNumber: number }) {
           🚀 Episode {episodeNumber} launches soon
         </p>
         <p className="text-sm text-white/50 mt-3 leading-relaxed max-w-sm mx-auto">
-          The first creator will be revealed shortly. Submit your product — every eligible submission joins the production queue and is featured once it&apos;s ready.
+          The first creator will be revealed shortly. Submit your product. Every eligible submission joins the production queue and is featured once it&apos;s ready.
         </p>
       </div>
     </div>

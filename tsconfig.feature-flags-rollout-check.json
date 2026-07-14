@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "db/schema/feature-flags-schema.ts",
+    "db/db.ts",
+    "lib/feature-flags.ts",
+    "lib/is-admin.ts",
+    "app/api/admin/feature-flags/route.ts",
+    "app/api/admin/feature-flags/[id]/route.ts",
+    "app/dashboard/admin/feature-flags/page.tsx",
+    "components/ui/card.tsx",
+    "components/ui/button.tsx",
+    "components/ui/input.tsx",
+    "components/ui/switch.tsx",
+    "components/ui/label.tsx",
+    "components/ui/badge.tsx",
+    "components/ui/use-toast.ts"
+  ]
+}

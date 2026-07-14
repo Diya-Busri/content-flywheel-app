@@ -4,7 +4,7 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, Sparkles, Search, Megaphone, ShoppingBag,
+  ArrowRight, Sparkles, Megaphone, ShoppingBag,
 } from "lucide-react";
 import {
   Accordion,
@@ -13,7 +13,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ProblemSection } from "./ProblemSection";
-import { FlywheelSection } from "./FlywheelSection";
 import { FeatureShowcase } from "./FeatureShowcase";
 import { RealExampleSection } from "./RealExampleSection";
 import { StatsAndProof } from "./StatsAndProof";
@@ -63,11 +62,6 @@ export function LandingAnimations({
       {/* ─── PROBLEM ─── */}
       <ProblemSection />
 
-      <SectionConnector label="Content Flywheel analyses it" icon={Search} />
-
-      {/* ─── FLYWHEEL (animated) ─── */}
-      <FlywheelSection />
-
       {/* ─── FEATURE GRID ─── */}
       <FeatureShowcase />
 
@@ -107,7 +101,7 @@ export function LandingAnimations({
               <blockquote className="text-lg sm:text-xl text-white/70 leading-relaxed">
                 &ldquo;I kept watching creators build genuinely great products, then let them sit there because marketing felt like a second full-time job. Research, hooks, scripts, carousels, emails, a launch plan: nobody has time to do all of that for one £19 guide.
                 <br /><br />
-                Content Flywheel exists to close that gap. You already did the hard part by creating something. This is what happens next.&rdquo;
+                Content Flywheel exists to close that gap. You already built something worth marketing. This is what happens next.&rdquo;
               </blockquote>
               <div className="mt-8 flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 font-bold text-sm">CF</div>
@@ -274,14 +268,14 @@ export function LandingAnimations({
                     🚀
                   </motion.div>
                   <h2 className="text-4xl lg:text-6xl font-extrabold text-white tracking-tight">
-                    Your first campaign
+                    Every product you build
                     <br />
                     <span className="bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-                      could be live today.
+                      deserves a real campaign.
                     </span>
                   </h2>
                   <p className="mt-5 text-lg text-white/40 max-w-lg mx-auto">
-                    Add your product. AI builds the research, content, and launch plan. Start posting.
+                    Add a product and get a full campaign in minutes. Then do it again for the next one. Content Flywheel markets everything you build, not just the first thing you launch.
                   </p>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="mt-8 inline-block">
                     <Link

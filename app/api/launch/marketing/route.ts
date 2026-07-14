@@ -32,6 +32,7 @@ import { checkApiRateLimit } from "@/lib/rate-limit-api";
 import { db } from "@/db/db";
 import { productsTable } from "@/db/schema/products-schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { REFUND_POLICY_TEXT } from "@/lib/refund-policy";
 
 /* ─── Input shape ─────────────────────────────────────────────────────────────── */
 
@@ -149,7 +150,7 @@ Generate a complete launch campaign package. Return this exact JSON:
     {"q": "Who is this for?", "a": "Specific answer"},
     {"q": "What's included?", "a": "Specific answer"},
     {"q": "How quickly will I see results?", "a": "Honest, specific answer"},
-    {"q": "Is there a money-back guarantee?", "a": "Specific answer"},
+    {"q": "What is your refund policy?", "a": "${REFUND_POLICY_TEXT}"},
     {"q": "Why this and not something free?", "a": "Specific differentiator answer"}
   ],
   "ctas": ["CTA 1 (action verb + outcome)", "CTA 2", "CTA 3", "CTA 4", "CTA 5"],

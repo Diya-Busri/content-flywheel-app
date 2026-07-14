@@ -44,7 +44,7 @@ Vercel project: content-flywheels-projects/content-flywheel-app
 ### Product Page / Conversion
 - [x] Social proof above the fold
 - [x] Upsells moved before buy button
-- [x] Money-back guarantee badge
+- [x] Refund/cancellation policy note + required pre-payment consent checkbox
 - [x] FAQ section
 - [x] JSON-LD structured data (SEO)
 - [x] Exit-intent abandoned visitor offer

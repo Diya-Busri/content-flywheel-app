@@ -31,7 +31,7 @@ export async function generateMetadata({
 
   if (!bundle) return { title: "Bundle not found" };
   return {
-    title: `${bundle.title} — Bundle`,
+    title: bundle.title,
     description: bundle.description ?? undefined,
   };
 }
@@ -96,7 +96,7 @@ export default async function BundlePage({
         {/* Bundle header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 bg-orange-500/15 border border-orange-500/30 rounded-full px-4 py-1.5 text-xs font-semibold text-orange-400 mb-4">
-            Bundle — {products.length} products
+            Bundle of {products.length} products
           </div>
           <h1 className="text-4xl font-bold text-white mb-4 leading-tight">{bundle.title}</h1>
           {bundle.description && (
@@ -118,7 +118,7 @@ export default async function BundlePage({
         {/* Price + CTA */}
         <div className="rounded-2xl bg-white/5 border border-white/10 p-8 text-center mb-8">
           <p className="text-5xl font-bold text-orange-400 mb-2">{priceLabel}</p>
-          <p className="text-sm text-gray-500 mb-6">One-time purchase — instant access to all {products.length} products</p>
+          <p className="text-sm text-gray-500 mb-6">One-time payment for instant access to all {products.length} products</p>
           <BundleBuyButton bundleId={bundle.id} />
         </div>
 

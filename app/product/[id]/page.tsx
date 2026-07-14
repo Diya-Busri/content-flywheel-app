@@ -21,6 +21,7 @@ import { EmailCaptureWidget } from "./EmailCaptureWidget";
 import { ExitIntentModal } from "./ExitIntentModal";
 import { SalePriceCountdown } from "./SalePriceCountdown";
 import { SaleDeadlineCountdown } from "./SaleDeadlineCountdown";
+import { isFeatureEnabledForVisitors } from "@/lib/feature-flags";
 
 type MarketingAssets = {
   productTitle?: string;
@@ -67,22 +68,22 @@ export async function generateMetadata({
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk";
     const ogImageUrl = `${appUrl}/api/og/product/${id}`;
     return {
-      title: `${title} — Digital Product`,
+      title,
       description: ma.productDescription ?? undefined,
       openGraph: {
-        title: `${title} — Digital Product`,
+        title,
         description: ma.productDescription ?? undefined,
         images: [{ url: ogImageUrl, width: 1200, height: 630, alt: title }],
       },
       twitter: {
         card: "summary_large_image",
-        title: `${title} — Digital Product`,
+        title,
         description: ma.productDescription ?? undefined,
         images: [ogImageUrl],
       },
     };
   } catch {
-    return { title: "Digital Product" };
+    return { title: "Content Flywheel" };
   }
 }
 
@@ -99,6 +100,7 @@ export default async function ProductSalesPage({
   const refCode = sp?.ref ?? null;
   const autoCoupon = sp?.coupon ?? null;
   const { userId: viewerUserId } = await auth();
+  const marketplaceEnabled = await isFeatureEnabledForVisitors("marketplace");
 
   let product: { id: string; title: string; niche: string | null; format: string | null; userId: string; marketingAssets: unknown; content: unknown } | undefined;
   try {
@@ -225,8 +227,12 @@ export default async function ProductSalesPage({
   const formatLabel = product.format
     ? product.format.charAt(0).toUpperCase() + product.format.slice(1).replace(/_/g, " ")
     : "Digital Product";
-  const isNativePublished = !!(ma.isNativePublished && ma.nativePrice);
-  const nativePriceLabel = ma.nativePrice ? `£${(ma.nativePrice / 100).toFixed(2)}` : null;
+  // nativePrice can legitimately be 0 (a free product), so this must be a
+  // null check, not a truthy check — otherwise free native products would
+  // incorrectly fall through to the non-native (external checkout) branch below.
+  const isNativePublished = !!(ma.isNativePublished && ma.nativePrice != null);
+  const nativePriceLabel = ma.nativePrice != null ? `£${(ma.nativePrice / 100).toFixed(2)}` : null;
+  const isFreeNative = isNativePublished && ma.nativePrice === 0;
   const hasSalePrice = typeof ma.salePrice === "number" && ma.nativePrice !== undefined && ma.salePrice < ma.nativePrice;
   const salePriceLabel = hasSalePrice ? `£${(ma.salePrice! / 100).toFixed(2)}` : null;
   const isComingSoon = !!(ma.comingSoon);
@@ -297,11 +303,17 @@ export default async function ProductSalesPage({
           <a href={`/c/${product.userId}`} style={{ fontWeight: 700, fontSize: "15px", color: "#111827", textDecoration: "none" }}>
             {creatorName}
           </a>
+        ) : marketplaceEnabled ? (
+          <a href="/marketplace" style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "15px", color: "#111827", textDecoration: "none" }}>
+            <span aria-hidden="true">←</span> Browse products
+          </a>
         ) : (
-          <span style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>Digital Product</span>
+          <a href="/" style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "15px", color: "#111827", textDecoration: "none" }}>
+            <span aria-hidden="true">←</span> Content Flywheel
+          </a>
         )}
-        <span style={{ fontSize: "12px", color: "#9ca3af" }}>
-          Powered by <span style={{ color: "#f97316", fontWeight: 600 }}>Content Flywheel</span>
+        <span style={{ fontSize: "11px", color: "#c7ccd3" }}>
+          Powered by <span style={{ color: "#9ca3af", fontWeight: 500 }}>Content Flywheel</span>
         </span>
       </nav>
 
@@ -319,7 +331,7 @@ export default async function ProductSalesPage({
               </p>
             ) : (
               <p style={{ margin: "0 0 16px", fontSize: "14px", color: "#16a34a" }}>
-                Check your email for your download link — it&apos;s valid for 7 days.
+                Check your email for your download link. It&apos;s valid for 7 days.
               </p>
             )}
             {(ma as { isCourseFormat?: boolean }).isCourseFormat && sp?.session_id && (
@@ -346,7 +358,7 @@ export default async function ProductSalesPage({
               </p>
               <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
                 <a
-                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just grabbed "${displayTitle}" — highly recommend it! 🔥`)}&url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk"}/product/${product.id}`)}`}
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just grabbed "${displayTitle}", highly recommend it! 🔥`)}&url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL ?? "https://contentflywheel.co.uk"}/product/${product.id}`)}`}
                   target="_blank" rel="noopener noreferrer"
                   style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 18px", borderRadius: "100px", background: "#000", color: "#fff", fontSize: "13px", fontWeight: 700, textDecoration: "none" }}
                 >
@@ -451,10 +463,12 @@ export default async function ProductSalesPage({
         {/* RIGHT COLUMN — Purchase card */}
         <div>
           <div className="purchase-card" id="buy">
-            {/* Format badge */}
-            <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: "999px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "11px", fontWeight: 700, color: "#c2410c", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "14px" }}>
-              {formatLabel}
-            </span>
+            {/* Format badge (only shown when the product has a real format set) */}
+            {product.format && (
+              <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: "999px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "11px", fontWeight: 700, color: "#c2410c", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "14px" }}>
+                {formatLabel}
+              </span>
+            )}
 
             {/* Title */}
             <h1 style={{ margin: "0 0 10px", fontSize: "clamp(20px,4vw,26px)", fontWeight: 800, color: "#111827", lineHeight: 1.2, letterSpacing: "-0.5px" }}>
@@ -499,32 +513,38 @@ export default async function ProductSalesPage({
             ) : isNativePublished ? (
               <>
                 <div style={{ margin: "0 0 16px" }}>
-                  {hasSalePrice ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          background: "#fef2f2",
-                          color: "#b91c1c",
-                          fontSize: "11px",
-                          fontWeight: 800,
-                          letterSpacing: "0.06em",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        SALE
+                  {isFreeNative ? (
+                    <span style={{ fontSize: "38px", fontWeight: 800, color: "#111827", letterSpacing: "-1.5px" }}>Free</span>
+                  ) : (
+                    <>
+                      {hasSalePrice ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "3px 8px",
+                              borderRadius: "6px",
+                              background: "#fef2f2",
+                              color: "#b91c1c",
+                              fontSize: "11px",
+                              fontWeight: 800,
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            SALE
+                          </span>
+                          <span style={{ fontSize: "22px", fontWeight: 700, color: "#9ca3af", textDecoration: "line-through", letterSpacing: "-0.5px" }}>
+                            {nativePriceLabel}
+                          </span>
+                        </div>
+                      ) : null}
+                      <span style={{ fontSize: "38px", fontWeight: 800, color: hasSalePrice ? "#f97316" : "#111827", letterSpacing: "-1.5px" }}>
+                        {hasSalePrice ? salePriceLabel : nativePriceLabel}
                       </span>
-                      <span style={{ fontSize: "22px", fontWeight: 700, color: "#9ca3af", textDecoration: "line-through", letterSpacing: "-0.5px" }}>
-                        {nativePriceLabel}
-                      </span>
-                    </div>
-                  ) : null}
-                  <span style={{ fontSize: "38px", fontWeight: 800, color: hasSalePrice ? "#f97316" : "#111827", letterSpacing: "-1.5px" }}>
-                    {hasSalePrice ? salePriceLabel : nativePriceLabel}
-                  </span>
-                  <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
+                      <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time payment</span>
+                    </>
+                  )}
                   {hasSalePrice && (
                     <div><SalePriceCountdown productId={product.id} durationHours={24} /></div>
                   )}
@@ -536,7 +556,7 @@ export default async function ProductSalesPage({
                   productId={product.id}
                   priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!}
                   creatorUserId={product.userId}
-                  isFree={ma.nativePrice === 0}
+                  isFree={isFreeNative}
                   refCode={refCode}
                   autoCoupon={autoCoupon}
                   payWhatYouWant={(ma as { payWhatYouWant?: boolean }).payWhatYouWant ?? false}
@@ -548,7 +568,7 @@ export default async function ProductSalesPage({
                 {priceLabel && (
                   <div style={{ margin: "0 0 16px" }}>
                     <span style={{ fontSize: "38px", fontWeight: 800, color: "#111827", letterSpacing: "-1.5px" }}>{priceLabel}</span>
-                    <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time</span>
+                    <span style={{ fontSize: "14px", color: "#9ca3af", marginLeft: "6px" }}>one-time payment</span>
                   </div>
                 )}
                 <a
@@ -557,17 +577,32 @@ export default async function ProductSalesPage({
                   rel={checkoutUrl ? "noopener noreferrer" : undefined}
                   className="buy-btn"
                 >
-                  Get this product {priceLabel ? `— ${priceLabel}` : ""}
+                  {priceLabel ? `Get instant access for ${priceLabel}` : "Get this product"}
                 </a>
               </>
             )}
 
             {/* Trust badges */}
             <div className="trust-grid">
-              <div className="trust-item"><span>🔒</span> Secure checkout</div>
-              <div className="trust-item"><span>📥</span> Instant download</div>
-              <div className="trust-item"><span>✉️</span> Email delivery</div>
-              <div className="trust-item"><span>💳</span> Stripe payments</div>
+              {isFreeNative ? (
+                <>
+                  <div className="trust-item"><span>📥</span> Instant access</div>
+                  <div className="trust-item"><span>✉️</span> Email delivery</div>
+                </>
+              ) : isNativePublished ? (
+                <>
+                  <div className="trust-item"><span>🔒</span> Secure checkout</div>
+                  <div className="trust-item"><span>📥</span> Instant download</div>
+                  <div className="trust-item"><span>✉️</span> Email delivery</div>
+                  <div className="trust-item"><span>💳</span> Stripe payments</div>
+                </>
+              ) : (
+                <>
+                  <div className="trust-item"><span>🔒</span> Secure checkout</div>
+                  <div className="trust-item"><span>📥</span> Instant download</div>
+                  <div className="trust-item"><span>✉️</span> Email delivery</div>
+                </>
+              )}
             </div>
 
             {/* Divider */}
@@ -767,7 +802,9 @@ export default async function ProductSalesPage({
     {!purchased && !isComingSoon && (isNativePublished || checkoutUrl) && (
       <div className="mobile-buy-bar">
         <div>
-          {hasSalePrice ? (
+          {isFreeNative ? (
+            <span style={{ fontSize: "18px", fontWeight: 800, color: "#111827", letterSpacing: "-0.5px" }}>Free</span>
+          ) : hasSalePrice ? (
             <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
               <span style={{ fontSize: "18px", fontWeight: 800, color: "#f97316", letterSpacing: "-0.5px" }}>{salePriceLabel}</span>
               <span style={{ fontSize: "13px", fontWeight: 600, color: "#9ca3af", textDecoration: "line-through" }}>{nativePriceLabel}</span>
@@ -777,14 +814,16 @@ export default async function ProductSalesPage({
               {nativePriceLabel ?? priceLabel ?? "Get it"}
             </span>
           )}
-          <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af", fontWeight: 500 }}>one-time · instant download</p>
+          <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af", fontWeight: 500 }}>
+            {isFreeNative ? "Instant access · Email delivery" : "One-time payment · Instant download"}
+          </p>
         </div>
         {isNativePublished ? (
           <BuyButton
             productId={product.id}
             priceLabel={hasSalePrice ? salePriceLabel! : nativePriceLabel!}
             creatorUserId={product.userId}
-            isFree={ma.nativePrice === 0}
+            isFree={isFreeNative}
             refCode={refCode}
             autoCoupon={autoCoupon}
             payWhatYouWant={(ma as { payWhatYouWant?: boolean }).payWhatYouWant ?? false}

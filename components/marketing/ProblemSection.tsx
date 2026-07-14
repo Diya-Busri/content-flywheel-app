@@ -7,8 +7,8 @@ import { Package, Users, FileX, TrendingDown, ArrowDown } from "lucide-react";
 const STEPS = [
   {
     icon: Package,
-    title: "Digital Product",
-    desc: "You built something people actually need.",
+    title: "Product built",
+    desc: "You built something people actually need. That part's done.",
     tone: "neutral",
   },
   {

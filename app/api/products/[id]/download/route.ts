@@ -54,8 +54,20 @@ export async function GET(
       return NextResponse.json({ error: "Invalid or expired download link" }, { status: 403 });
     }
 
+    if (order.accessRevokedAt) {
+      return NextResponse.json({ error: "Access to this download has been revoked following a refund." }, { status: 403 });
+    }
+
     if (order.downloadExpiresAt && order.downloadExpiresAt < new Date()) {
       return NextResponse.json({ error: "Download link has expired" }, { status: 403 });
+    }
+
+    // Record the first time this order's file is actually fetched (best-effort, never blocks delivery).
+    if (!order.firstDownloadAt) {
+      db.update(productOrdersTable)
+        .set({ firstDownloadAt: new Date() })
+        .where(eq(productOrdersTable.id, order.id))
+        .catch((err) => console.warn("[download] Failed to record firstDownloadAt:", err));
     }
 
     // Fetch the product

@@ -17,17 +17,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const body = (await req.json().catch(() => ({}))) as {
-    key?: string; label?: string; description?: string; enabled?: boolean; userId?: string | null;
+    key?: string; label?: string; description?: string; enabled?: boolean; userId?: string | null; rolloutPercentage?: number | null;
   };
   if (!body.key || !body.label) {
     return NextResponse.json({ error: "key and label required" }, { status: 400 });
   }
+  // Rollout percentage only makes sense on a global flag — ignore it if a userId was given.
+  const rolloutPercentage =
+    !body.userId && typeof body.rolloutPercentage === "number"
+      ? Math.max(0, Math.min(100, Math.round(body.rolloutPercentage)))
+      : null;
   const [flag] = await db.insert(featureFlagsTable).values({
     key: body.key,
     label: body.label,
     description: body.description ?? null,
     enabled: body.enabled ?? false,
     userId: body.userId ?? null,
+    rolloutPercentage,
   }).returning();
   return NextResponse.json({ flag });
 }

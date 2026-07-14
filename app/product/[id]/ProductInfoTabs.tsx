@@ -118,7 +118,7 @@ export function ProductInfoTabs({ previewPageUrl, sections, descParagraphs, test
           <TextContentPreview descParagraphs={descParagraphs} />
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "160px", background: "linear-gradient(to bottom, transparent, rgba(255,255,255,0.98))", pointerEvents: "none" }} />
           <div style={{ position: "absolute", bottom: "20px", left: 0, right: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-            <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>You&apos;re seeing a preview — purchase to get full access</p>
+            <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>You&apos;re seeing a preview. Purchase to get full access</p>
             <button
               type="button"
               onClick={() => document.getElementById("buy")?.scrollIntoView({ behavior: "smooth", block: "center" })}
