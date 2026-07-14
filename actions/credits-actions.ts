@@ -127,6 +127,7 @@ export async function withPremiumFeature<T>(
     }
     
     // Use credits for this feature
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- useCredits is a server action (see "use server" above), not a React hook; the name is a coincidence.
     const creditResult = await useCredits(options.creditsRequired, options.featureName);
     
     if (!creditResult.success) {
