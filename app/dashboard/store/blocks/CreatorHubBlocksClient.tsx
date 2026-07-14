@@ -38,7 +38,7 @@ import {
   type NewsletterConfig,
   type CurrentlyBuildingConfig,
   type CustomConfig,
-} from "@/lib/creator-hub";
+} from "@/lib/creator-hub-types";
 
 type Section = {
   id: string;

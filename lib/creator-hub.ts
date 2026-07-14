@@ -2,32 +2,21 @@ import { db } from "@/db/db";
 import { profileSectionsTable, type SelectProfileSection } from "@/db/schema/creator-hub-schema";
 import { storeSettingsTable } from "@/db/schema/store-settings-schema";
 import { eq, and, asc } from "drizzle-orm";
+import type { SectionType, CustomConfig } from "@/lib/creator-hub-types";
 
-export type SectionType =
-  | "featured_product"
-  | "products"
-  | "social_links"
-  | "featured_content"
-  | "newsletter"
-  | "currently_building"
-  | "custom";
-
-export const SECTION_LABELS: Record<SectionType, string> = {
-  featured_product: "Featured Product",
-  products: "Store (Products)",
-  social_links: "Social Links",
-  featured_content: "Featured Content",
-  newsletter: "Newsletter Signup",
-  currently_building: "Currently Building",
-  custom: "Custom Section",
-};
-
-export type FeaturedProductConfig = { productId: string | null };
-export type FeaturedContentItem = { id: string; platform: "youtube" | "tiktok" | "instagram"; url: string; title?: string };
-export type FeaturedContentConfig = { items: FeaturedContentItem[] };
-export type NewsletterConfig = { headline?: string; subtext?: string };
-export type CurrentlyBuildingConfig = { text: string };
-export type CustomConfig = { title: string; body: string; links: { label: string; url: string }[] };
+// Re-exported for convenience so server-side callers can import everything
+// from one place. Client components must import from creator-hub-types
+// directly — this file pulls in `db` and is not safe to bundle client-side.
+export type {
+  SectionType,
+  FeaturedProductConfig,
+  FeaturedContentItem,
+  FeaturedContentConfig,
+  NewsletterConfig,
+  CurrentlyBuildingConfig,
+  CustomConfig,
+} from "@/lib/creator-hub-types";
+export { SECTION_LABELS } from "@/lib/creator-hub-types";
 
 /**
  * Built-in blocks every creator starts with, in this order. "social_links"
