@@ -63,6 +63,7 @@ import { productOrdersTable } from "./schema/product-orders-schema";
 import { productReviewsTable } from "./schema/product-reviews-schema";
 import { creatorFollowsTable } from "./schema/creator-follows-schema";
 import { storeSettingsTable } from "./schema/store-settings-schema";
+import { profileSectionsTable } from "./schema/creator-hub-schema";
 import { creatorTrustScoresTable } from "./schema/creator-trust-scores-schema";
 import { creatorTrustScoreHistoryTable } from "./schema/creator-trust-score-history-schema";
 import { creatorReputationEventsTable } from "./schema/creator-reputation-events-schema";
@@ -140,6 +141,7 @@ const schema = {
   productReviews: productReviewsTable,
   creatorFollows: creatorFollowsTable,
   storeSettings: storeSettingsTable,
+  profileSections: profileSectionsTable,
   // Trust Score
   creatorTrustScores: creatorTrustScoresTable,
   creatorTrustScoreHistory: creatorTrustScoreHistoryTable,

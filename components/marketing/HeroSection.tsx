@@ -59,20 +59,26 @@ export default function HeroSection() {
             Content Flywheel turns one digital product into weeks of marketing content using AI. Generate research, competitor analysis, hooks, carousels, short-form video scripts, emails and launch campaigns from one dashboard so you can focus on growing your business instead of wondering what to post next.
           </motion.p>
 
-          {/* CTA — a single, unambiguous action. No secondary CTA competes for attention. */}
+          {/* Two audiences, two paths: use the software, or have us market your product. */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="mt-10 flex justify-center"
+            className="mt-10 flex flex-col sm:flex-row gap-4 justify-center"
           >
             <Link
               href="/signup"
-              className="press-feedback group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition hover:shadow-xl hover:shadow-orange-500/40 hover:scale-105"
+              className="press-feedback group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-8 py-4 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition hover:shadow-xl hover:shadow-orange-500/40 hover:scale-105"
             >
               <Sparkles className="h-4 w-4" />
               Start Marketing Free
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </Link>
+            <Link
+              href="/challenge/submit"
+              className="press-feedback inline-flex items-center justify-center gap-2 rounded-full border border-white/15 hover:bg-white/5 px-8 py-4 text-base font-bold text-white transition-colors"
+            >
+              Submit Your Product
             </Link>
           </motion.div>
 

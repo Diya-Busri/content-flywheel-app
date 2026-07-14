@@ -4,7 +4,7 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, Sparkles, Megaphone, ShoppingBag,
+  ArrowRight, Sparkles,
 } from "lucide-react";
 import {
   Accordion,
@@ -18,10 +18,15 @@ import { RealExampleSection } from "./RealExampleSection";
 import { StatsAndProof } from "./StatsAndProof";
 import { SectionConnector } from "./SectionConnector";
 import { ChallengeSection } from "./challenge/ChallengeSection";
-import { CreatorJourney } from "./challenge/CreatorJourney";
-import { FeaturedThisWeekSection } from "./challenge/FeaturedThisWeekSection";
 import { MarketplaceConnectSection } from "./challenge/MarketplaceConnectSection";
 import type { ChallengeEpisode } from "@/lib/marketing-challenge";
+
+/*
+ * Marketplace positioning (CreatorJourney, FeaturedThisWeekSection,
+ * MarketplaceConnectSection) is intentionally not deleted — it's gated
+ * behind the "marketplace" feature flag so it can return once real
+ * creators/products have been featured. Do not remove the source files.
+ */
 
 /* ─── helpers ─── */
 function FadeUp({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -45,12 +50,12 @@ export function LandingAnimations({
   reviews,
   featuredEpisode,
   previousEpisodes,
-  hasPreviousEpisodes,
+  marketplaceEnabled,
 }: {
   reviews: { text: string; name: string; rating?: number }[];
-  featuredEpisode: ChallengeEpisode;
+  featuredEpisode: ChallengeEpisode | null;
   previousEpisodes: ChallengeEpisode[];
-  hasPreviousEpisodes: boolean;
+  marketplaceEnabled: boolean;
 }) {
   void reviews; // reviews available for future use
 
@@ -71,20 +76,17 @@ export function LandingAnimations({
       <SectionConnector />
 
       {/* ─── 100 PRODUCT CHALLENGE ─── */}
-      <ChallengeSection episode={featuredEpisode} hasPreviousEpisodes={hasPreviousEpisodes} />
+      <ChallengeSection />
 
-      {/* ─── CREATOR JOURNEY ─── */}
-      <CreatorJourney />
-
-      <SectionConnector label="Creator featured" icon={Megaphone} />
-
-      {/* ─── FEATURED THIS WEEK ─── */}
-      <FeaturedThisWeekSection episode={featuredEpisode} />
-
-      <SectionConnector label="Store traffic" icon={ShoppingBag} />
-
-      {/* ─── MARKETPLACE CONNECT ─── */}
-      <MarketplaceConnectSection featuredEpisode={featuredEpisode} previousEpisodes={previousEpisodes} />
+      {/* ─── MARKETPLACE CONNECT ───
+          Hidden until the marketplace has real creators to show. Re-enable
+          by flipping the "marketplace" feature flag on. */}
+      {marketplaceEnabled && featuredEpisode && (
+        <>
+          <SectionConnector label="Store traffic" icon={ArrowRight} />
+          <MarketplaceConnectSection featuredEpisode={featuredEpisode} previousEpisodes={previousEpisodes} />
+        </>
+      )}
 
       {/* ─── BETA TRUST ─── */}
       <StatsAndProof />
@@ -277,14 +279,24 @@ export function LandingAnimations({
                   <p className="mt-5 text-lg text-white/40 max-w-lg mx-auto">
                     Add a product and get a full campaign in minutes. Then do it again for the next one. Content Flywheel markets everything you build, not just the first thing you launch.
                   </p>
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="mt-8 inline-block">
-                    <Link
-                      href="/signup"
-                      className="inline-flex items-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-10 py-4 text-base font-bold text-white shadow-2xl shadow-orange-500/30 transition-colors"
-                    >
-                      Start Marketing Free <ArrowRight className="h-5 w-5" />
-                    </Link>
-                  </motion.div>
+                  <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
+                      <Link
+                        href="/signup"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-10 py-4 text-base font-bold text-white shadow-2xl shadow-orange-500/30 transition-colors"
+                      >
+                        Start Marketing Free <ArrowRight className="h-5 w-5" />
+                      </Link>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                      <Link
+                        href="/challenge/submit"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 hover:bg-white/5 px-10 py-4 text-base font-bold text-white transition-colors"
+                      >
+                        Submit Your Product
+                      </Link>
+                    </motion.div>
+                  </div>
                   <p className="mt-5 text-sm text-white/20">No credit card required · Free trial included · Cancel anytime</p>
                 </div>
               </div>

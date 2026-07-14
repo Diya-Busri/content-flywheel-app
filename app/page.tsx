@@ -10,6 +10,7 @@ import HeroSection from "@/components/marketing/HeroSection";
 import { LandingAICoach } from "@/components/marketing/LandingAICoach";
 import { ScrollProgressBar } from "@/components/marketing/ScrollProgressBar";
 import { getFeaturedEpisode, getPreviousEpisodes } from "@/lib/marketing-challenge";
+import { isFeatureEnabledForVisitors } from "@/lib/feature-flags";
 
 export const metadata: Metadata = {
   title: "Content Flywheel: The AI Marketing Engine for Digital Products",
@@ -40,25 +41,15 @@ export default async function HomePage() {
   const { userId } = await auth();
   if (userId) redirect("/dashboard");
 
-  const [reviews, featuredEpisode, previousEpisodes] = await Promise.all([
+  // The homepage no longer depends on challenge-episode data existing —
+  // the Challenge section is static content. featuredEpisode/previousEpisodes
+  // are only needed to power the (flag-gated) MarketplaceConnectSection.
+  const [reviews, featuredEpisode, previousEpisodes, marketplaceEnabled] = await Promise.all([
     getPublicReviews(),
     getFeaturedEpisode(),
     getPreviousEpisodes(),
+    isFeatureEnabledForVisitors("marketplace"),
   ]);
-
-  // getFeaturedEpisode only returns null if there are no episodes at all yet.
-  if (!featuredEpisode) {
-    return (
-      <MotionConfig reducedMotion="user">
-        <div className="min-h-screen bg-[#0a0a0a] overflow-x-hidden">
-          <ScrollProgressBar />
-          <LandingNavbar />
-          <HeroSection />
-          <LandingAICoach />
-        </div>
-      </MotionConfig>
-    );
-  }
 
   return (
     <MotionConfig reducedMotion="user">
@@ -70,7 +61,7 @@ export default async function HomePage() {
         reviews={reviews}
         featuredEpisode={featuredEpisode}
         previousEpisodes={previousEpisodes}
-        hasPreviousEpisodes={previousEpisodes.length > 0}
+        marketplaceEnabled={marketplaceEnabled}
       />
       <LandingAICoach />
 
@@ -115,7 +106,7 @@ export default async function HomePage() {
                   ["Features", "/features"],
                   ["How it Works", "/journey"],
                   ["Pricing", "/pricing"],
-                  ["Marketplace", "/marketplace"],
+                  ...(marketplaceEnabled ? [["Marketplace", "/marketplace"]] : []),
                   ["Blog", "/blog"],
                 ].map(([label, href]) => (
                   <li key={label}>

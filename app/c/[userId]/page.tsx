@@ -14,6 +14,15 @@ import type { MarketingAssets } from "@/db/schema/products-schema";
 import { getCreatorLevel } from "@/lib/rewards-config";
 import { TrustScoreCard } from "@/components/TrustScoreBadge";
 import { isFeatureEnabledForVisitors } from "@/lib/feature-flags";
+import { getVisibleSections } from "@/lib/creator-hub";
+import type {
+  FeaturedProductConfig,
+  FeaturedContentConfig,
+  FeaturedContentItem,
+  NewsletterConfig,
+  CurrentlyBuildingConfig,
+  CustomConfig,
+} from "@/lib/creator-hub";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +84,7 @@ export default async function CreatorProfilePage({
       .then((r) => r[0]).catch(() => undefined),
   ]);
 
-  const [products, activeBundles, followerCountRow, creatorScore] = await Promise.all([
+  const [products, activeBundles, followerCountRow, creatorScore, sections] = await Promise.all([
     db.select({ id: productsTable.id, title: productsTable.title, marketingAssets: productsTable.marketingAssets })
       .from(productsTable)
       .where(and(
@@ -99,6 +108,7 @@ export default async function CreatorProfilePage({
       .where(eq(creatorScoresTable.userId, userId))
       .limit(1)
       .then((r) => r[0]).catch(() => undefined),
+    getVisibleSections(userId).catch(() => []),
   ]);
 
   const followerCount = followerCountRow?.count ?? 0;
@@ -184,199 +194,190 @@ export default async function CreatorProfilePage({
     website: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
   };
 
-  return (
-    <main style={{ minHeight: "100vh", background: t.isDark
-        ? `radial-gradient(ellipse 160% 60% at 50% -5%, ${accent}70 0%, transparent 55%), radial-gradient(ellipse 100% 50% at 85% 100%, ${accent}50 0%, transparent 55%), ${t.page}`
-        : `radial-gradient(ellipse 160% 55% at 50% -5%, ${accent}55 0%, transparent 52%), radial-gradient(ellipse 100% 45% at 85% 95%, ${accent}38 0%, transparent 55%), linear-gradient(180deg, ${t.page} 0%, #fff 100%)`,
-      fontFamily: pageFontFamily }}>
-      <style>{`
-        .cf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
-        .cf-avatar-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 12px; margin-bottom: 12px; }
-        @media (max-width: 420px) {
-          .cf-grid-2 { grid-template-columns: 1fr; }
-          .cf-avatar-row { align-items: flex-start; }
-        }
-      `}</style>
-      {/* Announcement bar */}
-      {announcementText && (
-        <div style={{ background: accent, padding: "9px 16px", textAlign: "center", fontSize: "13px", fontWeight: "700", color: "#fff", letterSpacing: "0.01em" }}>
-          📢 {announcementText}
-        </div>
-      )}
+  const labelStyle: React.CSSProperties = { margin: "0 0 16px", fontSize: "11px", fontWeight: 700, color: t.mutedText, textTransform: "uppercase", letterSpacing: "0.12em" };
+  const cardBoxStyle: React.CSSProperties = { background: t.card, borderRadius: "18px", border: `1px solid ${t.cardBorder}`, padding: "20px 22px" };
 
-      {/* ── Hero banner ── */}
-      <div style={{ position: "relative", height: bannerImageUrl ? "260px" : "200px", overflow: "hidden" }}>
+  /* ── Creator Hub blocks ──
+     The store (products+bundles) is one block among several here — everything
+     below is ordered and toggled by the creator in the Page Builder. */
 
-        {bannerImageUrl ? (
-          /* Photo banner — full bleed image pinned to top */
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={bannerImageUrl}
-            alt=""
-            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: bannerImagePosition, display: "block" }}
-          />
-        ) : bannerGradient ? (
-          /* Custom gradient set by creator */
-          <div style={{ width: "100%", height: "100%", background: `linear-gradient(${bannerGradient})` }} />
-        ) : (
-          /* ── Designed default banner ── */
-          <div style={{
-            width: "100%", height: "100%", position: "relative", overflow: "hidden",
-            background: t.isDark
-              ? `linear-gradient(135deg, ${accent}ee 0%, ${accent}99 40%, #0a0a0c 100%)`
-              : `linear-gradient(135deg, ${accent} 0%, ${accent}cc 50%, ${accent}88 100%)`,
-          }}>
-            {/* Decorative circles */}
-            <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "200px", height: "200px", borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
-            <div style={{ position: "absolute", bottom: "-60px", right: "15%", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
-            <div style={{ position: "absolute", top: "20px", left: "-30px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
-            {/* Grid dots pattern */}
-            <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px)", backgroundSize: "28px 28px", opacity: 0.6 }} />
-            {/* Brand text */}
-            <div style={{
-              position: "absolute", inset: 0,
-              display: "flex", flexDirection: "column",
-              alignItems: "flex-start", justifyContent: "flex-end",
-              padding: "0 28px 32px",
-            }}>
-              <p style={{ margin: "0 0 6px", fontSize: "28px", fontWeight: "900", color: "#fff", letterSpacing: "-0.8px", lineHeight: 1.1, textShadow: "0 2px 12px rgba(0,0,0,0.2)" }}>
-                {brandName}
-              </p>
-              {tagline && (
-                <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "rgba(255,255,255,0.85)", letterSpacing: "-0.1px" }}>
-                  {tagline}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Gradient fade into page */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "70px", background: `linear-gradient(to bottom, transparent 0%, ${t.page}cc 70%, ${t.page} 100%)` }} />
-      </div>
-
-      {/* ── Content ── */}
-      <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 24px 56px" }}>
-
-        {/* Avatar — sits below banner with a gap */}
-        <div className="cf-avatar-row">
-          {profileImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={profileImageUrl} alt={brandName} style={{
-              width: "108px", height: "108px", borderRadius: "50%", objectFit: "cover",
-              border: `5px solid ${t.page}`,
-              boxShadow: `0 0 0 1px ${t.cardBorder}, 0 8px 32px rgba(0,0,0,0.15)`,
-              flexShrink: 0,
-            }} />
-          ) : (
-            <div style={{
-              width: "108px", height: "108px", borderRadius: "50%", flexShrink: 0,
-              background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "38px", fontWeight: "800", color: "#fff", letterSpacing: "-1.5px",
-              border: `5px solid ${t.page}`,
-              boxShadow: `0 0 0 1px ${t.cardBorder}, 0 8px 32px ${accent}55`,
-            }}>
-              {initials}
-            </div>
-          )}
-          {/* Follow + Subscribe buttons */}
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
-            <FollowButton creatorId={userId} initialFollowerCount={followerCount} accentColor={accent} />
-            <Link href={`/subscribe/${userId}`} style={{
-              display: "inline-flex", alignItems: "center", gap: "6px",
-              padding: "10px 18px", borderRadius: "100px",
-              background: "transparent",
-              border: `2px solid ${accent}55`,
-              color: t.text,
-              fontSize: "13px", fontWeight: "700", textDecoration: "none",
-              letterSpacing: "-0.2px",
-              transition: "all 0.15s",
-            }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-              {buttonText}
-            </Link>
-          </div>
-        </div>
-
-        {/* Name + tagline + bio */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
-          <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: t.text, letterSpacing: "-0.8px", lineHeight: 1.15 }}>
-            {brandName}
-          </h1>
-          {/* Creator level badge — only show earned levels, not "New Creator" */}
-          {creatorLevel.id !== "new" && (
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: "4px",
-              padding: "3px 10px", borderRadius: "999px",
+  function SocialLinksBlock({ blockKey }: { blockKey: string }) {
+    if (!showSocial) return null;
+    return (
+      <div key={blockKey} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px", flexWrap: "wrap" }}>
+        {Object.entries(socialLinks).filter(([, v]) => v).map(([platform, url]) => (
+          <a key={platform} href={url.startsWith("http") ? url : `https://${url}`} target="_blank" rel="noopener noreferrer"
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: "36px", height: "36px", borderRadius: "10px",
               background: t.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-              border: `1px solid ${t.cardBorder}`,
-              fontSize: "12px", fontWeight: "700", color: t.subText,
-              letterSpacing: "0.01em", whiteSpace: "nowrap",
-            }}>
-              {creatorLevel.emoji} {creatorLevel.label}
-            </span>
+              color: t.subText, textDecoration: "none",
+              transition: "opacity 0.15s",
+            }}
+            title={platform}
+            dangerouslySetInnerHTML={{ __html: socialIcons[platform] ?? socialIcons.website }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  function FeaturedProductBlock({ blockKey, config }: { blockKey: string; config: FeaturedProductConfig }) {
+    const p = config?.productId ? publishedProducts.find((pr) => pr.id === config.productId) : undefined;
+    if (!p) return null;
+    const ma = p.marketingAssets as MarketingAssets | null;
+    const isNative = !!ma?.isNativePublished;
+    const href = isNative ? `/product/${p.id}` : (ma?.checkoutUrl || `/product/${p.id}`);
+    const coverImg = ma?.coverThumbnailUrl ?? ma?.bookMockupUrl ?? ma?.thumbnailUrl ?? null;
+    const price = ma?.nativePrice ? fmtPrice(ma.nativePrice) : ma?.priceLabel ?? null;
+    const emoji = productEmoji(ma);
+    return (
+      <section key={blockKey} style={{ marginBottom: "24px" }}>
+        <p style={labelStyle}>Featured</p>
+        <a href={href} {...(!isNative && ma?.checkoutUrl ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          style={{ display: "block", background: t.card, borderRadius: "20px", overflow: "hidden", textDecoration: "none", border: `1px solid ${t.cardBorder}`, boxShadow: `0 8px 40px ${accent}15` }}>
+          {coverImg ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverImg} alt={p.title} style={{ width: "100%", height: "200px", objectFit: "cover", display: "block" }} />
+          ) : (
+            <div style={{ height: "200px", background: `linear-gradient(135deg, ${accent}28, ${accent}60)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "48px" }}>{emoji}</div>
           )}
-        </div>
-        {tagline && (
-          <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: "600", color: accent }}>
-            {tagline}
-          </p>
-        )}
-        {bio && (
-          <p style={{ margin: "0 0 16px", fontSize: "15px", color: t.subText, lineHeight: "1.65", maxWidth: "480px" }}>
-            {bio}
-          </p>
-        )}
-
-        {/* Stats row */}
-        {(publishedProducts.length > 0 || activeBundles.length > 0) && (
-          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "14px" }}>
-            {publishedProducts.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                <span style={{ fontSize: "15px", fontWeight: "800", color: t.text }}>{publishedProducts.length}</span>
-                <span style={{ fontSize: "13px", color: t.subText }}>{publishedProducts.length === 1 ? "product" : "products"}</span>
-              </div>
-            )}
-            {activeBundles.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                <span style={{ fontSize: "15px", fontWeight: "800", color: t.text }}>{activeBundles.length}</span>
-                <span style={{ fontSize: "13px", color: t.subText }}>{activeBundles.length === 1 ? "bundle" : "bundles"}</span>
-              </div>
-            )}
+          <div style={{ padding: "24px 26px" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "22px", fontWeight: 800, color: t.text, letterSpacing: "-0.5px", lineHeight: 1.2 }}>{p.title}</h3>
+            {ma?.productDescription && <p style={{ margin: "0 0 20px", fontSize: "14px", color: t.subText, lineHeight: "1.65" }}>{ma.productDescription.slice(0, 140)}{ma.productDescription.length > 140 ? "…" : ""}</p>}
+            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+              {price && <span style={{ fontSize: "28px", fontWeight: 800, color: accent, letterSpacing: "-0.8px" }}>{price}</span>}
+              <div style={{ padding: "12px 24px", borderRadius: "100px", background: accent, color: "#fff", fontSize: "14px", fontWeight: 700, boxShadow: `0 4px 16px ${accent}45`, letterSpacing: "-0.2px" }}>Get it now →</div>
+            </div>
           </div>
-        )}
+        </a>
+      </section>
+    );
+  }
 
-        {/* Trust Score — only renders if creator has opted in publicly */}
-        <div style={{ marginBottom: "16px" }}>
-          <TrustScoreCard userId={userId} accentColor={accent} />
+  const CONTENT_PLATFORM: Record<FeaturedContentItem["platform"], { icon: string; label: string }> = {
+    youtube: { icon: "▶️", label: "YouTube" },
+    tiktok: { icon: "🎵", label: "TikTok" },
+    instagram: { icon: "📷", label: "Instagram" },
+  };
+
+  function FeaturedContentBlock({ blockKey, config }: { blockKey: string; config: FeaturedContentConfig }) {
+    const items = (config?.items ?? []).filter((i) => i.url?.trim());
+    if (items.length === 0) return null;
+    return (
+      <section key={blockKey} style={{ marginBottom: "24px" }}>
+        <p style={labelStyle}>Watch &amp; Follow</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {items.map((item) => {
+            const meta = CONTENT_PLATFORM[item.platform] ?? CONTENT_PLATFORM.youtube;
+            return (
+              <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", gap: "14px", textDecoration: "none", ...cardBoxStyle, padding: "16px 18px" }}>
+                <div style={{ width: "42px", height: "42px", borderRadius: "12px", background: `linear-gradient(135deg, ${accent}18, ${accent}42)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>{meta.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: "0 0 2px", fontSize: "14px", fontWeight: 700, color: t.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title?.trim() || meta.label}</p>
+                  <p style={{ margin: 0, fontSize: "12px", color: t.subText }}>{meta.label}</p>
+                </div>
+                <span style={{ fontSize: "13px", color: accent, fontWeight: 700, flexShrink: 0 }}>Watch →</span>
+              </a>
+            );
+          })}
         </div>
+      </section>
+    );
+  }
 
-        {/* Social links */}
-        {showSocial && (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-            {Object.entries(socialLinks).filter(([, v]) => v).map(([platform, url]) => (
-              <a key={platform} href={url.startsWith("http") ? url : `https://${url}`} target="_blank" rel="noopener noreferrer"
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: "36px", height: "36px", borderRadius: "10px",
-                  background: t.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                  color: t.subText, textDecoration: "none",
-                  transition: "opacity 0.15s",
-                }}
-                title={platform}
-                dangerouslySetInnerHTML={{ __html: socialIcons[platform] ?? socialIcons.website }}
-              />
+  function NewsletterBlock({ blockKey, config }: { blockKey: string; config: NewsletterConfig }) {
+    const headline = config?.headline?.trim() || "Stay in the loop";
+    const subtext = config?.subtext?.trim() || `Get notified when ${brandName} drops new products and offers.`;
+    return (
+      <div key={blockKey} style={{
+        background: t.isDark ? `${accent}12` : `${accent}09`,
+        border: `1px solid ${accent}28`,
+        borderRadius: "20px",
+        padding: "28px 28px",
+        marginBottom: "24px",
+        textAlign: "center",
+      }}>
+        <p style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: 800, color: t.text, letterSpacing: "-0.4px" }}>{headline}</p>
+        <p style={{ margin: "0 0 20px", fontSize: "14px", color: t.subText, lineHeight: "1.6" }}>{subtext}</p>
+        <Link href={`/subscribe/${userId}`} style={{
+          display: "inline-flex", alignItems: "center", gap: "8px",
+          padding: "13px 28px", borderRadius: "100px",
+          background: accent, color: "#fff",
+          fontSize: "15px", fontWeight: 700, textDecoration: "none",
+          boxShadow: `0 4px 20px ${accent}55`,
+          letterSpacing: "-0.2px",
+        }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Subscribe for free
+        </Link>
+      </div>
+    );
+  }
+
+  function CurrentlyBuildingBlock({ blockKey, config }: { blockKey: string; config: CurrentlyBuildingConfig }) {
+    const text = config?.text?.trim();
+    if (!text) return null;
+    return (
+      <section key={blockKey} style={{ ...cardBoxStyle, marginBottom: "24px" }}>
+        <p style={labelStyle}>🛠️ Currently Building</p>
+        <p style={{ margin: 0, fontSize: "14px", color: t.subText, lineHeight: "1.65" }}>{text}</p>
+      </section>
+    );
+  }
+
+  function CustomSectionBlock({ blockKey, config }: { blockKey: string; config: CustomConfig }) {
+    const title = config?.title?.trim();
+    const body = config?.body?.trim();
+    const links = (config?.links ?? []).filter((l) => l.url?.trim());
+    if (!title && !body && links.length === 0) return null;
+    return (
+      <section key={blockKey} style={{ ...cardBoxStyle, marginBottom: "24px" }}>
+        {title && <h3 style={{ margin: "0 0 10px", fontSize: "17px", fontWeight: 800, color: t.text, letterSpacing: "-0.3px" }}>{title}</h3>}
+        {body && <p style={{ margin: links.length ? "0 0 16px" : 0, fontSize: "14px", color: t.subText, lineHeight: "1.65", whiteSpace: "pre-wrap" }}>{body}</p>}
+        {links.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            {links.map((l, i) => (
+              <a key={i} href={l.url.startsWith("http") ? l.url : `https://${l.url}`} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: "13px", fontWeight: 700, color: "#fff", background: accent, padding: "9px 16px", borderRadius: "100px", textDecoration: "none" }}>
+                {l.label?.trim() || "Link"}
+              </a>
             ))}
           </div>
         )}
+      </section>
+    );
+  }
 
-        {!showSocial && <div style={{ marginBottom: bio ? "20px" : "14px" }} />}
+  function renderSection(section: (typeof sections)[number]) {
+    switch (section.type) {
+      case "products":
+        return <ProductsAndBundlesBlock key={section.id} />;
+      case "featured_product":
+        return <FeaturedProductBlock key={section.id} blockKey={section.id} config={section.config as FeaturedProductConfig} />;
+      case "social_links":
+        return <SocialLinksBlock key={section.id} blockKey={section.id} />;
+      case "featured_content":
+        return <FeaturedContentBlock key={section.id} blockKey={section.id} config={section.config as FeaturedContentConfig} />;
+      case "newsletter":
+        return <NewsletterBlock key={section.id} blockKey={section.id} config={section.config as NewsletterConfig} />;
+      case "currently_building":
+        return <CurrentlyBuildingBlock key={section.id} blockKey={section.id} config={section.config as CurrentlyBuildingConfig} />;
+      case "custom":
+        return <CustomSectionBlock key={section.id} blockKey={section.id} config={section.config as CustomConfig} />;
+      default:
+        return null;
+    }
+  }
 
+  function ProductsAndBundlesBlock() {
+    return (
+      <>
         {/* ── Products ── */}
         {publishedProducts.length > 0 && (
           <section style={{ marginBottom: "24px" }}>
-            <p style={{ margin: "0 0 16px", fontSize: "11px", fontWeight: "700", color: t.mutedText, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+            <p style={labelStyle}>
               Products
             </p>
 
@@ -564,7 +565,7 @@ export default async function CreatorProfilePage({
         {/* ── Bundles ── */}
         {activeBundles.length > 0 && (
           <section style={{ marginBottom: "24px" }}>
-            <p style={{ margin: "0 0 16px", fontSize: "11px", fontWeight: "700", color: t.mutedText, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+            <p style={labelStyle}>
               Bundles
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -632,32 +633,181 @@ export default async function CreatorProfilePage({
             ))}
           </div>
         )}
+      </>
+    );
+  }
 
-        {/* ── Subscribe section ── */}
-        <div style={{
-          background: t.isDark ? `${accent}12` : `${accent}09`,
-          border: `1px solid ${accent}28`,
-          borderRadius: "20px",
-          padding: "28px 28px",
-          marginBottom: "24px",
-          textAlign: "center",
-        }}>
-          <p style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: "800", color: t.text, letterSpacing: "-0.4px" }}>Stay in the loop</p>
-          <p style={{ margin: "0 0 20px", fontSize: "14px", color: t.subText, lineHeight: "1.6" }}>
-            Get notified when {brandName} drops new products and offers.
-          </p>
-          <Link href={`/subscribe/${userId}`} style={{
-            display: "inline-flex", alignItems: "center", gap: "8px",
-            padding: "13px 28px", borderRadius: "100px",
-            background: accent, color: "#fff",
-            fontSize: "15px", fontWeight: "700", textDecoration: "none",
-            boxShadow: `0 4px 20px ${accent}55`,
-            letterSpacing: "-0.2px",
-          }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            Subscribe for free
-          </Link>
+  return (
+    <main style={{ minHeight: "100vh", background: t.isDark
+        ? `radial-gradient(ellipse 160% 60% at 50% -5%, ${accent}70 0%, transparent 55%), radial-gradient(ellipse 100% 50% at 85% 100%, ${accent}50 0%, transparent 55%), ${t.page}`
+        : `radial-gradient(ellipse 160% 55% at 50% -5%, ${accent}55 0%, transparent 52%), radial-gradient(ellipse 100% 45% at 85% 95%, ${accent}38 0%, transparent 55%), linear-gradient(180deg, ${t.page} 0%, #fff 100%)`,
+      fontFamily: pageFontFamily }}>
+      <style>{`
+        .cf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
+        .cf-avatar-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 12px; margin-bottom: 12px; }
+        @media (max-width: 420px) {
+          .cf-grid-2 { grid-template-columns: 1fr; }
+          .cf-avatar-row { align-items: flex-start; }
+        }
+      `}</style>
+      {/* Announcement bar */}
+      {announcementText && (
+        <div style={{ background: accent, padding: "9px 16px", textAlign: "center", fontSize: "13px", fontWeight: "700", color: "#fff", letterSpacing: "0.01em" }}>
+          📢 {announcementText}
         </div>
+      )}
+
+      {/* ── Hero banner ── */}
+      <div style={{ position: "relative", height: bannerImageUrl ? "260px" : "200px", overflow: "hidden" }}>
+
+        {bannerImageUrl ? (
+          /* Photo banner — full bleed image pinned to top */
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={bannerImageUrl}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: bannerImagePosition, display: "block" }}
+          />
+        ) : bannerGradient ? (
+          /* Custom gradient set by creator */
+          <div style={{ width: "100%", height: "100%", background: `linear-gradient(${bannerGradient})` }} />
+        ) : (
+          /* ── Designed default banner ── */
+          <div style={{
+            width: "100%", height: "100%", position: "relative", overflow: "hidden",
+            background: t.isDark
+              ? `linear-gradient(135deg, ${accent}ee 0%, ${accent}99 40%, #0a0a0c 100%)`
+              : `linear-gradient(135deg, ${accent} 0%, ${accent}cc 50%, ${accent}88 100%)`,
+          }}>
+            {/* Decorative circles */}
+            <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "200px", height: "200px", borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+            <div style={{ position: "absolute", bottom: "-60px", right: "15%", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
+            <div style={{ position: "absolute", top: "20px", left: "-30px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
+            {/* Grid dots pattern */}
+            <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px)", backgroundSize: "28px 28px", opacity: 0.6 }} />
+            {/* Brand text */}
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", flexDirection: "column",
+              alignItems: "flex-start", justifyContent: "flex-end",
+              padding: "0 28px 32px",
+            }}>
+              <p style={{ margin: "0 0 6px", fontSize: "28px", fontWeight: "900", color: "#fff", letterSpacing: "-0.8px", lineHeight: 1.1, textShadow: "0 2px 12px rgba(0,0,0,0.2)" }}>
+                {brandName}
+              </p>
+              {tagline && (
+                <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "rgba(255,255,255,0.85)", letterSpacing: "-0.1px" }}>
+                  {tagline}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Gradient fade into page */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "70px", background: `linear-gradient(to bottom, transparent 0%, ${t.page}cc 70%, ${t.page} 100%)` }} />
+      </div>
+
+      {/* ── Content ── */}
+      <div style={{ maxWidth: "620px", margin: "0 auto", padding: "0 24px 56px" }}>
+
+        {/* Avatar — sits below banner with a gap */}
+        <div className="cf-avatar-row">
+          {profileImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profileImageUrl} alt={brandName} style={{
+              width: "108px", height: "108px", borderRadius: "50%", objectFit: "cover",
+              border: `5px solid ${t.page}`,
+              boxShadow: `0 0 0 1px ${t.cardBorder}, 0 8px 32px rgba(0,0,0,0.15)`,
+              flexShrink: 0,
+            }} />
+          ) : (
+            <div style={{
+              width: "108px", height: "108px", borderRadius: "50%", flexShrink: 0,
+              background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "38px", fontWeight: "800", color: "#fff", letterSpacing: "-1.5px",
+              border: `5px solid ${t.page}`,
+              boxShadow: `0 0 0 1px ${t.cardBorder}, 0 8px 32px ${accent}55`,
+            }}>
+              {initials}
+            </div>
+          )}
+          {/* Follow + Subscribe buttons */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+            <FollowButton creatorId={userId} initialFollowerCount={followerCount} accentColor={accent} />
+            <Link href={`/subscribe/${userId}`} style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "10px 18px", borderRadius: "100px",
+              background: "transparent",
+              border: `2px solid ${accent}55`,
+              color: t.text,
+              fontSize: "13px", fontWeight: "700", textDecoration: "none",
+              letterSpacing: "-0.2px",
+              transition: "all 0.15s",
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              {buttonText}
+            </Link>
+          </div>
+        </div>
+
+        {/* Name + tagline + bio */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "4px" }}>
+          <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "800", color: t.text, letterSpacing: "-0.8px", lineHeight: 1.15 }}>
+            {brandName}
+          </h1>
+          {/* Creator level badge — only show earned levels, not "New Creator" */}
+          {creatorLevel.id !== "new" && (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: "4px",
+              padding: "3px 10px", borderRadius: "999px",
+              background: t.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+              border: `1px solid ${t.cardBorder}`,
+              fontSize: "12px", fontWeight: "700", color: t.subText,
+              letterSpacing: "0.01em", whiteSpace: "nowrap",
+            }}>
+              {creatorLevel.emoji} {creatorLevel.label}
+            </span>
+          )}
+        </div>
+        {tagline && (
+          <p style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: "600", color: accent }}>
+            {tagline}
+          </p>
+        )}
+        {bio && (
+          <p style={{ margin: "0 0 16px", fontSize: "15px", color: t.subText, lineHeight: "1.65", maxWidth: "480px" }}>
+            {bio}
+          </p>
+        )}
+
+        {/* Stats row */}
+        {(publishedProducts.length > 0 || activeBundles.length > 0) && (
+          <div style={{ display: "flex", alignItems: "center", gap: "20px", marginBottom: "14px" }}>
+            {publishedProducts.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <span style={{ fontSize: "15px", fontWeight: "800", color: t.text }}>{publishedProducts.length}</span>
+                <span style={{ fontSize: "13px", color: t.subText }}>{publishedProducts.length === 1 ? "product" : "products"}</span>
+              </div>
+            )}
+            {activeBundles.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <span style={{ fontSize: "15px", fontWeight: "800", color: t.text }}>{activeBundles.length}</span>
+                <span style={{ fontSize: "13px", color: t.subText }}>{activeBundles.length === 1 ? "bundle" : "bundles"}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Trust Score — only renders if creator has opted in publicly */}
+        <div style={{ marginBottom: "16px" }}>
+          <TrustScoreCard userId={userId} accentColor={accent} />
+        </div>
+
+        {/* ── Creator Hub blocks — ordered & toggled from the Page Builder ── */}
+        <div style={{ marginBottom: bio || showSocial ? "4px" : "0" }} />
+        {sections.map(renderSection)}
 
         {/* ── Browse marketplace (hidden when the marketplace feature is disabled) ── */}
         {marketplaceEnabled && (
