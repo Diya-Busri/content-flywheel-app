@@ -106,8 +106,8 @@ export default function Sidebar({ profile, userEmail, disabledFeatures = [], onO
     {
       label: "Sell",
       items: [
-        { href: "/dashboard/store", icon: <Store size={18} />, label: "Creator Hub", activeWhenStartsWith: true },
-        { href: "/dashboard/store/blocks", icon: <Layers size={18} />, label: "Page Builder", activeWhenStartsWith: true },
+        { href: "/dashboard/store", icon: <Store size={18} />, label: "Creator Hub", activeWhenStartsWith: true, parentToggle: "store" },
+        { href: "/dashboard/store/blocks", icon: <Layers size={18} />, label: "Page Builder", activeWhenStartsWith: true, parentKey: "store", subItem: true },
         { href: "/dashboard/marketplace", icon: <ShoppingBag size={18} />, label: "Marketplace", activeWhenStartsWith: true, featureKey: "marketplace" },
         { href: "/dashboard/print-on-demand", icon: <Shirt size={18} />, label: "Print on Demand", activeWhenStartsWith: true, featureKey: "print_on_demand" },
         { href: "/dashboard/drop-campaign", icon: <Gift size={18} />, label: "Drop Campaign", activeWhenStartsWith: true, featureKey: "drop_campaign" },
